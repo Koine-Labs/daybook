@@ -2,7 +2,12 @@
 
 **Date:** 2026-05-16 / 2026-05-17
 
-**Approach:** **Approach A** — selective copy from the legacy `Repo/Lullaby/` project into the new `Repo/daybook/` monorepo. The Lullaby source tree is preserved untouched as a historical reference and is intentionally not deleted.
+**Approach:** **Approach A** — selective copy from the legacy Lullaby project into the new `Repo/daybook/` monorepo. The Lullaby source is preserved as an archived GitHub repository (not deleted, just retired).
+
+**Lullaby archival location (2026-05-17):**
+- Original GitHub: `Aakash-a18/Lullaby` (private personal account)
+- Transferred to: **`github.com/Koine-Labs/lullaby`** (under the org, marked **Archived**)
+- Local `Repo/Lullaby/` directory: **deleted** (~549 MB freed). Clone from the archived repo if you need a local reference.
 
 ---
 
