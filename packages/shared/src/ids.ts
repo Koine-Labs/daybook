@@ -27,6 +27,9 @@ export type SleepStageClassificationID = Brand<string, "SleepStageClassification
 export type EmbeddingID = Brand<string, "EmbeddingID">;
 export type IntentID = Brand<string, "IntentID">;
 export type MoodReportID = Brand<string, "MoodReportID">;
+export type RegisObservationID = Brand<string, "RegisObservationID">;
+export type RegisTraitHistoryID = Brand<string, "RegisTraitHistoryID">;
+export type UserStateEstimateID = Brand<string, "UserStateEstimateID">;
 
 // Unchecked-cast helpers. Use only at trust boundaries (DB reads, API inputs).
 export const asUserID = (s: string): UserID => s as UserID;
@@ -41,3 +44,6 @@ export const asSleepStageClassificationID = (s: string): SleepStageClassificatio
 export const asEmbeddingID = (s: string): EmbeddingID => s as EmbeddingID;
 export const asIntentID = (s: string): IntentID => s as IntentID;
 export const asMoodReportID = (s: string): MoodReportID => s as MoodReportID;
+export const asRegisObservationID = (s: string): RegisObservationID => s as RegisObservationID;
+export const asRegisTraitHistoryID = (s: string): RegisTraitHistoryID => s as RegisTraitHistoryID;
+export const asUserStateEstimateID = (s: string): UserStateEstimateID => s as UserStateEstimateID;

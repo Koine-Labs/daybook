@@ -82,3 +82,9 @@ apps/inference/analysis/data/walch_apple_watch/
 # Generated analysis outputs (regenerable from notebooks)
 apps/inference/analysis/data/*.png
 apps/inference/analysis/data/*.jpg
+
+# Classifier training artifacts — large + regenerable; DO commit the production model
+apps/inference/classifier/runs/
+apps/inference/classifier/cache/
+!apps/inference/classifier/models/production_binary_rem.json
+!apps/inference/classifier/models/production_binary_rem.meta.json

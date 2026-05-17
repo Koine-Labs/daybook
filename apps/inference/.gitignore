@@ -1,4 +1,6 @@
-models/
+# Anchor with leading slash so this only matches apps/inference/models/
+# (the old Lullaby joblib dir), not apps/inference/classifier/models/.
+/models/
 logs/
 __pycache__/
 *.pyc

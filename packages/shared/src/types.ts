@@ -26,10 +26,13 @@ import type {
   IModelID,
   IntentID,
   MoodReportID,
+  RegisObservationID,
+  RegisTraitHistoryID,
   SensorReadingID,
   SleepSessionID,
   SleepStageClassificationID,
   UserID,
+  UserStateEstimateID,
   WispUtteranceID,
 } from "./ids";
 
@@ -325,6 +328,15 @@ export interface Embedding {
 }
 
 /**
+ * Who owns the cluster. There are three distinct I-Models in the system:
+ *  - user_self       : the system's model of the user (what we know about you)
+ *  - regis_of_user   : Regis's model of the user (what Regis has noticed about you)
+ *  - regis_self      : Regis's evolving self-model (used sparingly; most
+ *                      Regis-self state lives in regis_trait_history)
+ */
+export type IModelOwner = "user_self" | "regis_of_user" | "regis_self";
+
+/**
  * A discovered I-Model cluster. Populated by ML clustering on accumulated
  * embeddings + biometric signatures. v1 doesn't actively classify; the
  * schema is present from day 1 per the I-Model architectural commitment.
@@ -332,6 +344,7 @@ export interface Embedding {
 export interface IModelCluster {
   id: IModelID;
   userId: UserID;
+  modelOwner: IModelOwner;
   /** User-given name once discovered ("Student-Aakash", "Tired-Aakash"). Null while unnamed. */
   label: string | null;
   /** Centroid of the cluster in embedding space. */
@@ -368,4 +381,87 @@ export interface MoodReport {
   arousal: number;
   notes: string | null;
   iModelId: IModelID | null;
+}
+
+// =============================================================================
+// REGIS — observations, drifting traits, empathic state
+// =============================================================================
+
+/**
+ * What Regis has noticed about the user. Each row is a discrete, embeddable
+ * observation. Retrieved by similarity at utterance-composition time so Regis's
+ * voice reflects what he remembers about THIS user, not generic context.
+ *
+ * v1: empty (scripted utterances don't observe).
+ * v1.5+: populated by a regis_observer job after each interaction or session.
+ */
+export interface RegisObservation {
+  id: RegisObservationID;
+  userId: UserID;
+  observedAt: ISODateTime;
+  /** Natural language note Regis would "remember" about the user. */
+  observation: string;
+  /** Snapshot of relevant sensor/state context at observation time. */
+  context: Record<string, unknown>;
+  /** Embedding for similarity retrieval. Null until embedded. */
+  embedding: number[] | null;
+  /** 0.0 (forgotten) to 1.0 (fresh). Decays over time to deprioritize old observations. */
+  weight: number;
+  /** Where the observation came from: 'regis_inference', 'user_feedback', etc. */
+  source: string;
+}
+
+/**
+ * Regis's drifting personality traits over time. Each row is a snapshot of one
+ * trait at one moment. Latest row per (userId, traitName) is the current value;
+ * older rows form the lineage of how Regis evolved through this relationship.
+ *
+ * Common traits (not enforced at the type level):
+ *   - 'playfulness' — 0.0 reverent, 1.0 teasing
+ *   - 'reverence'   — 0.0 casual, 1.0 ceremonious
+ *   - 'chattiness'  — 0.0 silent, 1.0 verbose
+ *   - 'directness'  — 0.0 hedged, 1.0 blunt
+ *   - 'familiarity' — 0.0 formal, 1.0 intimate
+ *   - 'humor'       — 0.0 dry, 1.0 absurd
+ */
+export interface RegisTrait {
+  id: RegisTraitHistoryID;
+  userId: UserID;
+  traitName: string;
+  /** 0.0 to 1.0. */
+  value: number;
+  changedAt: ISODateTime;
+  /** Signed delta from the prior value, if known. */
+  delta: number | null;
+  /** Free-form note: why this trait drifted. */
+  reason: string | null;
+}
+
+/**
+ * Continuous empathic read of the user, produced by RealtimeClassifier every
+ * 30s during a session. v1 fills stage_proba; v1.5+ (with EEG) fills
+ * arousal/valence/presence.
+ *
+ * This is the substrate Regis queries to "know" what the user is feeling
+ * without being told.
+ */
+export interface UserStateEstimate {
+  id: UserStateEstimateID;
+  userId: UserID;
+  sessionId: SleepSessionID | null;
+  estimatedAt: ISODateTime;
+  /** Probabilities over sleep stages. Binary REM: {"REM": 0.7}. Multi-class: full dict. */
+  stageProba: Record<string, number> | null;
+  /** -1 (deeply calm) to 1 (highly activated). Null until EEG online. */
+  arousal: number | null;
+  /** -1 (negative affect) to 1 (positive). Null until EEG online. */
+  valence: number | null;
+  /** 0.0 to 1.0 — how strongly the user is "in" the estimated state. */
+  presence: number | null;
+  /** 0.0 to 1.0 — model's confidence in the estimate as a whole. */
+  confidence: number | null;
+  /** Which model produced this estimate: 'realtime_v1', 'realtime_v1_5_eeg', etc. */
+  source: string;
+  /** Snapshot of feature vector for debugging. Stripped from production reads. */
+  features: Record<string, number> | null;
 }
