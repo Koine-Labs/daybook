@@ -27,34 +27,42 @@ The product is not a wearable. The product is the **intelligence and interventio
 
 ### Customer
 
-**Anki-using Whoop / Oura / Apple Watch wearers.** Specifically:
+**Dream-curious people who already wear a 24/7 biometric tracker.** Specifically:
 
-- Already wears a 24/7 biometric tracker (or accepts wearing one)
-- Already uses spaced-repetition for serious learning (Anki, Mochi, RemNote)
-- Accepts subscriptions for cognitive tools
-- Cares about measurable retention, not vague "better sleep"
-- Reachable through high-density learning communities (r/Anki, r/medicalschool, r/lawschool, r/languagelearning, language-learning Discord servers)
+A behavior-defined segment broader than lucid-dream hobbyists but narrower than "everyone interested in sleep":
 
-This is a behavior-defined segment with measurable baselines. Not lucid-dream hobbyists. Not generic "knowledge workers." Not biohackers shopping for sleep gadgets. **Specifically:** people who study daily and have a number — their Anki retention rate — they want to move.
+- **Dream-curious creatives** — writers, artists, designers, musicians who treat dreams as raw material
+- **Inner-life-oriented readers** — Jung-influenced, IFS-aware, depth-psychology curious
+- **Vivid dreamers without recall** — people who know they dream intensely but lose it on waking
+- **Self-knowledge seekers** — therapy-curious, journalers, meditation practitioners
+- **Quantified-self folks** with a phenomenological bent (not just biometric optimization)
+
+Not lucid-dream hobbyists as the lead — though they're an adjacent and welcomed audience. Not generic "knowledge workers." The dream-recall framing is broader than Anki users were (Anki was ~hundreds of thousands of serious users globally; dream-curious people are millions).
 
 ### Problem
 
-The brain consolidates a fraction of what you encountered during the day during slow-wave sleep. Targeted memory reactivation (TMR) cueing — playing audio related to studied content during slow-wave sleep — has been shown in peer-reviewed research (Paller, Stickgold, Konkoly) to measurably increase next-day recall. **No consumer product currently delivers TMR.** Anki users feel the gap viscerally — they know they're losing material between study session and next review.
+Most people forget their dreams within minutes of waking. The unconscious produces content every night — emotional integration, creative recombination, memory consolidation — that the waking self has no access to. **A third of human life is lived inaccessible to the person living it** (this is also the constitution's framing of the "value trapped in the sleep layer").
+
+The existing tools to address this are weak: a paper journal by the bed, vague "set an intention" practice, the occasional vivid morning recall by luck. No consumer product actively intervenes during the right sleep moments to enhance recall.
 
 ### Solution at v1
 
-Daybook v1 plays subtle audio cues of your Anki review content during your slow-wave sleep, on hardware you already own, and measures your next-day Anki retention improvement on its own dashboard.
+Daybook + Regis intervene at the right sleep moments (late REM, the transitional wake window) with gentle audio cues that prime recall without inducing arousal. Each morning, Regis prompts you to recall what you remember — verbally or typed — and stores the recalled dreams as part of your personal model. Over time, dream content becomes a searchable archive: recurring themes, emotional patterns, creative material, all embedded into pgvector and queryable by you.
+
+The wisp becomes a *dream companion*. The morning ritual is no longer "did I sleep well" but "what did I dream, and what does it tell me."
 
 ### Success criterion
 
-Across N=5–10 users running Daybook for 30 nights each, **average Anki retention improves measurably vs. each user's pre-Daybook baseline**. Target: ≥15% relative improvement in retention rate. Validated on the user's own Anki performance, not on Daybook's internal scoring.
+Across N=5–10 users running Daybook for 30 nights each, **average weekly dream recall frequency increases measurably vs. each user's pre-Daybook 14-day baseline**. Target: ≥50% relative improvement in dream recall frequency (e.g., baseline of 2 dreams/week → ≥3 dreams/week). Self-reported, but verifiable through the user's own dream-log dashboard. Personal baselines vary widely (some recall 0/week, some 4+/week) — the *relative* improvement is the signal, not an absolute count.
+
+**Honest note on adjacency to lucid dreaming:** dream recall is the foundation skill for lucid dreaming. Enhanced recall may naturally enable lucidity in some users as an *emergent* capability. Daybook does not promise lucidity — Daybook delivers recall. Users who develop lucidity from the practice are a downstream benefit, not a marketing claim.
 
 ## 4. Architecture — the integration layer
 
 ```
    WEARABLE (user owns)             WAKING-DAY INPUTS              DAYBOOK INTELLIGENCE             NEXT-DAY OUTPUT
    ───────────────                  ─────────────────              ──────────────────────            ──────────────
-   Whoop, Oura, Apple Watch  ───┐                                                                  ┌──▶  Anki retention rate
+   Whoop, Oura, Apple Watch  ───┐                                                                  ┌──▶  Dream recall frequency
                                 ├─▶  HR / HRV / temp / SpO2  ───┐                                  ├──▶  Recall test
    iPhone (existing Lullaby      │                              │                                  │
    app: sonar, audio,            ├─▶  Breathing / motion / ─────┤                                  │
@@ -62,9 +70,9 @@ Across N=5–10 users running Daybook for 30 nights each, **average Anki retenti
                                  │                              ├─▶  Sleep stage classifier  ──┐  │
    EEG (EXG Pill, optional)  ───┘                              │   (per-user, calibrated)     │  │
                                                                 │                              │   │
-   Anki (export, or API)     ──────────▶  Today's review cards  ├─▶  TMR cue selector  ────────┤   │
-   Calendar (optional)       ──────────▶  Day context           │   (which audio, when)        │   │
-   Journal (optional)        ──────────▶  Intent / topics       │                              │   │
+   Dream journal (typed/voice) ────────▶  Recall archive        ├─▶  Recall-cue selector  ─────┤   │
+   Calendar (optional)        ────────▶  Day context           │   (when in REM to cue,       │   │
+   Journal (optional)         ────────▶  Intent / topics       │    what content to anchor)   │   │
                                                                 │                              ▼   ▼
                                                                 │                      During-sleep
                                                                 │                      audio cue delivery
@@ -145,7 +153,7 @@ To keep v1 sharp, the following are deferred:
 
 - **Lucid dream induction** as the lead use case. Option preserved for v2; not pursued at v1. We will not build features that specifically target lucid dreaming.
 - **Pre-sleep neurostimulation** (Somnee's territory). Deferred to v2+. Audio cues are not stimulation; we are not competing on Somnee's mechanism.
-- **Sleep quality improvement as the primary outcome.** Sleep quality is a secondary metric. The primary outcome is cognitive output (Anki retention).
+- **Sleep quality improvement as the primary outcome.** Sleep quality is a secondary metric. The primary outcome is dream recall frequency (and the personal-model archive of recalled content that accumulates as a result).
 - **Building a new wearable.** Use what the user owns. Custom hardware is a v3+ question.
 - **Subscription-locked features at v1.** Free for the prototype users. Subscription model is a later decision.
 - **Mass-consumer onboarding.** v1 is for technical, motivated early adopters who tolerate jankiness.
@@ -154,7 +162,7 @@ To keep v1 sharp, the following are deferred:
 
 ## 8. The platform expansion path (v2 and beyond)
 
-v1 ships one specific feature: TMR for memory consolidation, measured by Anki retention.
+v1 ships one specific feature: REM-targeted recall cueing, measured by dream recall frequency.
 
 Once that ships and works, the platform expands:
 
@@ -237,11 +245,11 @@ Two repos under the `Koine-Labs` GitHub org. Not polyrepo per-component.
 
 ## 9. Brand line — for external use
 
-> *Daybook. Your sleep, working for you.*
+> *Daybook. The companion to your inner life.*
 
 Or:
 
-> *You already wear a Whoop or Apple Watch. You already use Anki. Daybook is the cognitive companion that makes the sleep you already get into measurable cognitive gains tomorrow.*
+> *Your dreams are content your mind produces every night that you almost never remember. Daybook (with Regis, your wisp) intervenes at the right sleep moments so you can hold onto them — and helps you make sense of what your sleeping self has been working through.*
 
 (The shorter line is for hero copy. The longer line is for an investor or first-customer 30-second pitch.)
 
@@ -265,8 +273,10 @@ A forthcoming PRD v2.0 will operationalize these changes against the existing co
 
 | Decision | Rationale | Date |
 |---|---|---|
-| v1 customer = Anki users on existing wearables | Behavior-defined segment with measurable baseline; sharpest competitive gap | 2026-05-16 |
-| v1 success metric = Anki retention improvement | Falsifiable; user can verify on their own Anki | 2026-05-16 |
+| v1 customer = Anki users on existing wearables | Behavior-defined segment with measurable baseline; sharpest competitive gap | 2026-05-16 (superseded 2026-05-17) |
+| v1 success metric = Anki retention improvement | Falsifiable; user can verify on their own Anki | 2026-05-16 (superseded 2026-05-17) |
+| **v1 customer pivot → dream-curious people on existing wearables** | Aakash declined Anki substrate. Dream recall is broader audience, aligned with REM-focused Lullaby code, warmer wisp narrative | **2026-05-17** |
+| **v1 success metric pivot → dream recall frequency (≥50% relative improvement vs. baseline)** | Self-reported but verifiable; richer content for personal model than Anki cards would be | **2026-05-17** |
 | Daybook positioning replaces Lullaby lucid-dream positioning | Lucid dreaming market too narrow; TMR scientifically defensible and serves broader audience | 2026-05-16 |
 | Multi-wearable integration over building new hardware | Hardware is fungible; the personal model is the moat | 2026-05-16 |
 | EEG (EXG Pill) is optional enhancement, not required | Keeps v1 reachable without prerequisite hardware purchase; EEG validates the consumer-sensor pipeline | 2026-05-16 |
