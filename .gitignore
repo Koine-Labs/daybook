@@ -1,0 +1,76 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+.turbo/
+.vercel/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# Xcode
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Arduino / firmware
+*.hex
+*.elf
+*.bin
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Coverage / tooling
+coverage/
+.nyc_output/
+
+# Runtime / generated
+apps/inference/logs/
+apps/server/.wrangler/
+apps/server/dev.db
+*.tsbuildinfo
+
+# Datasets (downloaded separately — see apps/inference/analysis/data/DATA.md)
+apps/inference/analysis/data/walch_apple_watch/
+
+# Generated analysis outputs (regenerable from notebooks)
+apps/inference/analysis/data/*.png
+apps/inference/analysis/data/*.jpg

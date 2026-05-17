@@ -1,0 +1,20 @@
+name = "lullaby-server"
+main = "src/index.ts"
+compatibility_date = "2024-06-20"
+
+# D1 database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "lullaby-db"
+database_id = "64c8f4c1-129c-4782-81e5-70fbf46a7ac1"
+
+# R2 bucket binding
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "lullaby-sessions"
+
+# Environment variables (non-secret)
+[vars]
+CORS_ORIGIN = "*"
+ACCESS_TOKEN_TTL = "900"
+REFRESH_TOKEN_TTL = "2592000"
