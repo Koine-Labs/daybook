@@ -68,6 +68,14 @@ apps/server/.wrangler/
 apps/server/dev.db
 *.tsbuildinfo
 
+# Personal health data — NEVER commit (defensive even though we don't expect these inside the repo)
+apple_health_export/
+*health_export*/
+export.xml
+export_cda.xml
+electrocardiograms/
+workout-routes/
+
 # Datasets (downloaded separately — see apps/inference/analysis/data/DATA.md)
 apps/inference/analysis/data/walch_apple_watch/
 
