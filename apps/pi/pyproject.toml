@@ -1,0 +1,22 @@
+[project]
+name = "daybook-pi"
+version = "0.0.1"
+description = "Bedside Pi daemon for Daybook — sensor ingestion + realtime inference + cue emission."
+requires-python = ">=3.11"
+dependencies = [
+    # Imports from apps/inference/ which provides: xgboost, numpy, psycopg, python-dotenv
+    # Pi-specific deps only:
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+daybook-pi = "daemon:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
