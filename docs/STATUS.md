@@ -1,6 +1,6 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-17 (Pi daemon built + smoke-tested; Pi-side hardware foundation complete; Regis architecture + three I-Models committed)**
+**Last updated: 2026-05-17 (Scheduled morning/pre-sleep triggers + wake-word listener + voice commands all live. Pi speaks through bone-conduction. Regis is daily-usable.)**
 
 The single page that answers "where are we, where are we going, what's blocking us?" Updated after substantive work lands. Open this any session when you need orientation.
 
@@ -10,137 +10,199 @@ The single page that answers "where are we, where are we going, what's blocking 
 
 **Koine Labs:** *Build the infrastructure of two worlds — the world awake and the world asleep — and the interface that makes them one.*
 
-**Daybook v1 (the first product):** A personal cognitive companion that intervenes at the right sleep moments to improve **dream recall frequency** by ≥50% vs a 14-day baseline. User-facing presence is **Regis**, a will-o-wisp character living in bone-conduction audio. Bedside-first prototype; iOS app deferred to months 4-6.
+**Daybook is an always-on AI empath companion that knows you through your body.** Continuous biometric / neural sensing + a persistent character (Regis) that evolves with you over years. Especially attentive at night, where it monitors sleep and gently intervenes in dream patterns. **Naturally extends into clinical applications** where therapists leverage the continuous between-session companion + sleep + mood data to support patients with depression, PTSD-related nightmares, trauma processing, and related conditions.
 
-**v1 success criterion (locked):** ≥50% relative improvement in weekly dream recall vs 14-day pre-baseline. Single-subject (Aakash) for 60-90 days.
+**Three layers of the same product:**
+- **Consumer empath** — bonded AI companion for dream-curious people on existing wearables (the validation wedge)
+- **Clinical-grade extension** — therapist-licensed tool with between-session monitoring, IRT (Image Rehearsal Therapy) delivery, audit-grade interaction log
+- **Eventual wearable form factor** — single-ear device with integrated BCI + audio + camera tether (the long-term defensibility moat)
 
-**Capital posture:** Bootstrapped. ~$60-70 spent on incremental hardware. Free tiers everywhere possible.
+**Three input channels (added 2026-05-17 late):**
+- **Voice** (explicit speech via STT)
+- **Continuous context** (ambient audio + ambient vision + BCI + biometrics — what's happening without the user saying anything)
+- **Gestures** (silent, deliberate back-channel from user — tap, head nod, eye blink, voice grunt — for "yes / no / not now / look here / shut up" without speaking)
+
+All three are first-class. Without gestures specifically, an always-on companion is forced to be reactive-only or annoying — the user needs a way to acknowledge / dismiss / redirect silently, especially in conversations or shared spaces.
+
+**v1 validation wedge (locked):** ≥50% relative improvement in weekly dream recall vs 14-day pre-baseline. Single-subject (Aakash) for 60-90 days. This is **the proof point for the larger thesis**, not the destination — it demonstrates the empath substrate works, the character compounds, and the sleep specialization delivers measurably.
+
+**Capital posture:** Bootstrapped through v1 validation. Capital raise only after working prototype + N=1 result + first clinical-advisory conversations land (~90-180 days out).
+
+---
+
+## What's actually live tonight
+
+```bash
+cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook/apps"
+source inference/.venv/bin/activate
+
+# Talk to Regis (general partner mode — sleep stuff only if you ask):
+python -m chat.cli
+
+# Log a dream this morning (text):
+python -m recall.capture --text "I dreamed about an old library with my grandfather..."
+
+# Log a dream via voice memo (interactive mic):
+python -m recall.capture
+```
+
+Regis runs on your ChatGPT subscription (signed in as aakashjuly18@gmail.com → tokens at `~/.daybook/auth.json`). Embeddings run locally on your Mac (BGE-M3 cached at `~/.cache/huggingface`). Database is Neon Postgres.
 
 ---
 
 ## Three parallel tracks
 
-The whole product is the intersection of these three. They run in parallel because they have independent dependencies. All three must function for v1 to be real.
+The whole product is the intersection of these three. They run in parallel because they have independent dependencies.
 
 ### Track 1 — Bedside hardware lab
 
-The physical sensing rig that runs at Aakash's bedside. Pi 4 brain, ESP32 satellites, EEG + bone-conduction.
+The physical sensing rig. Pi 4 brain, ESP32 satellites, EEG + bone-conduction. v3 substrate, currently in benchtop form.
 
 | State | What |
 |---|---|
-| [HAVE] | Pi 4 (flashed, SSH'd in from Mac), ESP32 (MicroPython flashed, REPL via Pi USB), 2× ESP32-CAM, Arduino Uno, 3.5" TFT, 3D printer, lasers, 24/7 PC, MacBook, Apple Watch S8/9 |
-| [ORDERED — arriving ~10 days] | BioAmp EXG Pill ($35, Tindie) — single-channel biopotential amplifier for EEG/EMG/ECG |
-| [ORDERED — arriving ~2-3 days] | TECKNET bone-conduction headphones (~$25-30, Amazon) |
-| [DONE — 2026-05-17] | Pi OS Lite 64-bit flashed (PC-side after Mac-Imager flake), SSH-by-key from Mac via `daybook` alias, koine-labs user, apt updates done, repo cloned to `~/code/daybook` |
-| [DONE — 2026-05-17] | ESP32 (CP210x) on Pi USB at `/dev/ttyUSB0`, MicroPython v1.28.0 flashed, REPL via mpremote, GPIO commands echo cleanly |
-| [DONE — 2026-05-17] | **Pi daemon at `apps/pi/`** — sensor-source-pluggable (mock + esp32_serial + future cam/mic), cue-emitter-pluggable (stdout + future audio/haptic), wires to AI-side `RealtimeClassifier` + `CueDecider`, persists sensor_readings/cue_events/user_state_estimate to Neon. Smoke-tested end-to-end (2-min mock run, clean shutdown, all DB writes verified then cleaned up). |
-| [ORDERED — arriving ~2 days] | ESP32-CAM-MB programmer adapter board (FT232-based, plug-and-play for AI-Thinker CAM) |
-| [QUEUED] | ESP32 firmware for sensor packet emission (JSON-line over serial per AI_PI_CONTRACT.md), EXG Pill electrode placement, bench tests (EMG forearm → ECG chest → EEG scalp), TFT display bring-up (Pi HAT), ESP32-CAM as "eyes for the AI" multi-modal source |
+| [HAVE] | Pi 4 (flashed, SSH'd), ESP32 (MicroPython, REPL over Pi USB), 2× ESP32-CAM, Arduino Uno, 3.5" TFT, 3D printer, lasers, 24/7 desktop PC (4080 Super), MacBook, Apple Watch S8/9 |
+| [ORDERED — ~10 days] | BioAmp EXG Pill ($35, Tindie) — single-channel biopotential amplifier for EEG/EMG/ECG |
+| [ORDERED — ~2-3 days] | TECKNET bone-conduction headphones (~$25-30, Amazon) |
+| [ORDERED — ~2 days] | ESP32-CAM-MB programmer adapter board (FT232-based) |
+| [DONE — 2026-05-17] | Pi OS Lite 64-bit flashed, SSH-by-key from Mac via `daybook` alias, repo cloned to `~/code/daybook` |
+| [DONE — 2026-05-17] | ESP32 (CP210x) on `/dev/ttyUSB0`, MicroPython v1.28.0, mpremote REPL working, GPIO echo verified |
+| [DONE — 2026-05-17] | **Pi daemon at `apps/pi/`** — sensor-source-pluggable (mock + esp32_serial + future cam/mic), cue-emitter-pluggable (stdout + future audio/haptic), imports AI brain (RealtimeClassifier + CueDecider), persists to Neon. Smoke-tested. |
+| [QUEUED] | ESP32 firmware for sensor packet emission, EXG Pill electrode placement, bench tests (EMG forearm → ECG chest → EEG scalp), TFT bring-up, ESP32-CAM as multi-modal source |
 
-**Interface to AI:** `apps/AI_PI_CONTRACT.md` documents the API the Pi daemon imports from `apps/inference/`. Lock-step versioned.
+**Interface to AI:** `apps/AI_PI_CONTRACT.md`. Pi daemon imports `apps/inference/{realtime,cue_decision,llm,embeddings}` and `apps/wisp/composer`. Lock-step versioned.
 
 ### Track 2 — Wisp interface (Regis)
 
-The character + voice + audio routing. The interface layer of the product.
+The character + voice + audio routing.
 
 | State | What |
 |---|---|
-| [DECIDED] | Persona = Regis (TBATE-inspired will-o-wisp). Bone-conduction audio delivery. v1 = scripted utterance moments; v2+ = generative conversational. |
-| [DONE — 2026-05-17] | **`apps/wisp/PERSONA.md`** — character bible, **dual-mode Regis** (Witness Mode during sleep / Companion Mode awake), canon-grounded snark + logo-grounded softness, vocabulary discipline, 10 v1 utterance slots with starter variants |
-| [DONE — 2026-05-17] | **Logo finalized:** `/Logo/Clear-Koine-Wisp.png` — small luminous wisp, warm amber glow, soft horns. This is Witness-Mode Regis visualized. |
+| [DECIDED] | Persona = Regis (TBATE-inspired will-o-wisp). Dual-mode: Witness during sleep / Companion when awake. v1 = generative-from-day-one (LLM-composed utterances, not scripted variants — see commitment 8). |
+| [DONE — 2026-05-17] | **`apps/wisp/PERSONA.md`** — character bible, dual-mode, canon-grounded snark + logo-grounded softness, vocabulary discipline. Now framed as a general partner; sleep work is one role among many. |
+| [DONE — 2026-05-17] | **`apps/wisp/composer.py`** — generative composer: PERSONA + state + retrieved I-Model memories + moment kind → ChatClient → utterance. Validated. |
+| [DONE — 2026-05-17] | **Chat Regis** (`apps/chat/`) — text REPL with persona + retrieval + memory + general-partner mode. **Use it tonight via `python -m chat.cli`.** |
+| [DONE — 2026-05-17] | **Logo finalized:** `/Logo/Clear-Koine-Wisp.png` — warm amber glow, soft horns. The Witness-Mode aesthetic. |
 | [NOT DECIDED] | TTS provider (ElevenLabs / Cartesia / OpenAI Voice / Sesame). Voice character / accent. |
-| [NOT BUILT] | TTS wrapper (`apps/pi/tts.py`), utterance variant selector, bone-conduction routing pipeline, audio output testing |
+| [NOT BUILT] | TTS wrapper, audio output to bone-conduction, voice-input STT for chat (currently keyboard-only), conversation listening (continuous mic + diarization for v2.5+), vision integration (ESP32-CAM → multimodal LLM) |
 
-**Blocker:** Bone-conduction headphones not yet arrived. TTS provider not yet picked.
+**Blocker:** Bone-conduction hardware arriving in 2-3 days unblocks voice output. TTS provider then needs a call.
 
-### Track 3 — Backend infrastructure (data + models)
-
-The intelligence layer. Where sensor data becomes stage predictions becomes cue decisions.
+### Track 3 — Backend infrastructure (data + intelligence)
 
 | State | What |
 |---|---|
-| [DONE — 2026-05-17] | Postgres schema deployed to Neon (11 tables, pgvector HNSW index, indexes) |
+| [DONE — 2026-05-17] | Postgres schema deployed (16 tables across migrations 0001-0004, pgvector HNSW indexes, branded ID system in `packages/shared/`) |
 | [DONE — 2026-05-17] | Apple Health XML parser — imported 495K sensor readings, 543 sleep sessions, 7,568 stage classifications from 10-year HK export |
-| [DONE — 2026-05-17] | TypeScript shared types (`packages/shared/`), branded ID system, Python DB helper |
-| [DONE — 2026-05-17] | **Sleep-stage classifier pipeline** — data loader, feature extraction (24-29 features per 30s epoch), naive baselines, LOSO XGBoost training, evaluation, exploration notebook |
-| [DONE — 2026-05-17] | **Full LOSO baseline trained.** 249 sessions, 204K epochs. V2 pure-bio model: F1 = 0.45, ROC-AUC = 0.72. Honest floor established. |
-| [DONE — 2026-05-17] | **Production binary REM model trained** on all 249 sessions (no holdout). Saved to `classifier/models/production_binary_rem.json` + sidecar metadata. |
-| [DONE — 2026-05-17] | **`apps/inference/realtime.py`** — `RealtimeClassifier` with rolling sensor buffers + per-epoch features matching offline pipeline. Smoke-tested on real session. |
-| [DONE — 2026-05-17] | **`apps/inference/cue_decision.py`** — `CueDecider` with safety gates: 60-min ramp-up, 30-min end-zone, 25-min cooldown, confidence floor, max-cues. Smoke-tested. |
-| [DONE — 2026-05-17] | **End-to-end smoke test on real session:** both fired cues landed INSIDE Apple-labeled REM segments. No false positives. (Recall limited by conservative gates — by design for v0.) |
-| [DONE — 2026-05-17] | **Migration 0002 applied to Neon:** `regis_observations`, `regis_trait_history`, `user_state_estimate` tables. `i_model_clusters.model_owner` extended (user_self / regis_of_user / regis_self). TypeScript types mirrored. |
-| [DONE — 2026-05-17] | **`RealtimeClassifier.predict_at` writes to `user_state_estimate`** when `persist_state=True`. Empathic time series builds passively from v1 onward. Smoke-tested. |
-| [NOT BUILT] | Live sensor ingestion HTTP endpoint, embeddings pipeline for dream content, generative wisp utterance composer (v2+), regis_observer job (v1.5 — writes regis_observations after each session), regis trait-drift logic (v2) |
-
-**No external blocker** for the next backend work; the question is sequencing.
-
----
-
-## What this session's work was
-
-**Tracks 2 + 3 in parallel** (with Track 1 happening in a separate chat on the Pi).
-
-**Track 3 — AI brain that the Pi will import:**
-- Trained the production binary REM model on all 249 sessions (pure-bio, 24 features)
-- Built `RealtimeClassifier` (live inference with rolling sensor buffers)
-- Built `CueDecider` (stateful, 5 safety gates: ramp-up / end-zone / cooldown / confidence floor / consecutive-high requirement)
-- End-to-end smoke test on a real 6.9h session — both fired cues landed inside Apple-labeled REM segments
-
-**Track 2 — Regis character spec (now dual-mode + canon-grounded):**
-- `apps/wisp/PERSONA.md` — rewrote after looking up canonical TBATE Regis and the finalized logo. **Two modes:** Witness (reverent, sparse, during sleep) + Companion (dry, teasing, when user is awake). Honors canon snark in waking moments, logo softness in vulnerable moments.
-
-**Architecture commitment — three I-Models:**
-- Added migration 0002. We now have schema for: (1) **user-self** (what we know about you, already there), (2) **regis-of-user** (what Regis has noticed about you), (3) **regis-self** (Regis's evolving personality dials).
-- `user_state_estimate` now builds passively from every `RealtimeClassifier.predict_at()` call. This is the empathic substrate — Regis "reads" the user without explicit conversation by querying this table.
-
-**Interface contract:**
-- `apps/AI_PI_CONTRACT.md` — the stable target the Pi daemon builds against
+| [DONE — 2026-05-17] | **Sleep-stage classifier** — production binary REM model on 249 sessions. F1=0.45, ROC-AUC=0.72 (honest floor for HR-only passive Watch data; EEG unlocks the rest) |
+| [DONE — 2026-05-17] | **`apps/inference/realtime.py`** — RealtimeClassifier with rolling buffers, per-epoch features, optional `user_state_estimate` persistence |
+| [DONE — 2026-05-17] | **`apps/inference/cue_decision.py`** — CueDecider with 5 safety gates. Tested: both cues landed inside Apple-labeled REM segments. |
+| [DONE — 2026-05-17] | **`apps/inference/llm/`** — Sign-in-with-ChatGPT (PKCE OAuth → Codex backend → gpt-5.2). ChatClient.auto() routes Codex (signed-in) vs Gateway (fallback stub). |
+| [DONE — 2026-05-17] | **`apps/inference/embeddings/`** — BGE-M3 local (1024-dim, ~217ms/embed on Mac), pgvector retrieval, embed_and_store helper |
+| [DONE — 2026-05-17] | **`apps/recall/`** — morning capture: text or voice (local Whisper) → dream_recalls + embedding → optional Regis "Held." |
+| [DONE — 2026-05-17] | **`apps/chat/`** — chat handler + retrieval (last 6 turns + top-5 similar + top-3 observations + opt-in health summary) + 9 trait-drift rules + observation extractor. Made into general partner (no default health injection). |
+| [DONE — 2026-05-17] | Migrations 0002 (regis_observations, regis_trait_history, user_state_estimate) + 0003 (embedding_cluster_memberships, i_model_activations, i_model_novelty_log, regis_moments, vector dim 1024) + 0004 (chat_conversations, chat_messages) |
+| [DONE — 2026-05-17, evening parallel build] | **Voice output** — `apps/inference/audio/` (Kokoro local TTS, `am_michael` voice, ~310ms synth, macOS `say` fallback) + `apps/wisp/voice_chain.py` (composer → TTS → speaker). Regis speaks aloud through Mac speakers / BT headphones. Mode-aware delivery (witness slow/soft, companion normal). |
+| [DONE — 2026-05-17, evening parallel build] | **Voice input** — `apps/inference/llm/stt.py` (Whisper via recall's local model) + `apps/chat/voice_cli.py` (ENTER-to-record voice REPL with audio out). `--no-speak` for text-only. |
+| [DONE — 2026-05-17, evening parallel build] | **Capture flows** — `apps/intent/capture.py` (sets intent, embeds text) + `apps/mood/capture.py` (logs valence/arousal/notes, embeds notes). CLI `python -m intent.capture --text "..."` / `--voice`. |
+| [DONE — 2026-05-17, evening parallel build] | **ESP32 mock firmware** — `apps/pi/firmware/sensor_mock.py` (MicroPython). Realistic synthetic HR/HRV/resp/spo2 packets matching AI_PI_CONTRACT. When EXG Pill arrives, swap mock source for real ADC reads — rest of pipeline unchanged. Cross-runs on host CPython for testing. |
+| [DONE — 2026-05-17, evening parallel build] | **I-Model self-expansion** — `apps/inference/imodels/{clusterer,activator,novelty}.py`. HDBSCAN (DBSCAN fallback). Smoke: 30 seeded embeddings → 2/3 thematic clusters discovered; activator returns top match at 0.79-0.87 sim to query. Persists to i_model_clusters + embedding_cluster_memberships + i_model_activations + i_model_novelty_log. |
+| [DONE — 2026-05-17, evening parallel build] | **Sleep observer** — `apps/inference/sleep_observer.py`. After each sleep session: LLM extracts 1-5 grounded regis_observations from sensor aggregates + stage timeline + dream recalls + intents. Smoke on real session produced *"Short sleep: 6.5h vs 7-day average 8.3h"* + *"Fragmented staging: 13 epochs with 12 transitions"*. |
+| [DONE — 2026-05-17, evening parallel build] | **Chat consolidator** — expanded `apps/chat/consolidator.py` from stub. Daily job: pulls day's chat_messages, LLM extracts 0-5 observations, embeds + persists. Skips days with <3 messages. |
+| [DONE — 2026-05-17, evening parallel build] | **Vision** — `apps/inference/llm/vision.py`. **Codex multimodal works via Aakash's ChatGPT plan** (validated). `describe_image()` returns natural-language image description in ~2-3s. |
+| [DONE — 2026-05-17, evening parallel build] | **RSS news pull** — `apps/inference/news/feeder.py` (HN + Verge + Economist default feeds). `relevant_for_user()` filters via embedding similarity. CLI `python -m news.feeder --relevant`. |
+| [DONE — 2026-05-17, evening parallel build] | **Walking-remark prototype** — `apps/wisp/walking_remark.py`: vision frame or news item → composer → Regis comment. Real output on logo: *"Looks like a fish that forgot what it was for."* On HN article: *"Funny how the future keeps dragging us back to a handset and a coin slot."* |
+| [NOT BUILT] | "Should I speak now?" autonomous decider for waking moments, continuous-mic conversation listening + diarization, Gateway client real impl, calibration layer for classifier probabilities, web frontend for chat, privacy-by-default sensor consent framework, custom wearable form-factor experiments, regis trait-drift on sleep events |
 
 ---
 
-## Gaps preventing v1
+## v3 always-on vision — where we stand
+
+Your v3 vision (single-ear device, walks with you all day, sees what you see, hears your conversations, reads your BCI, comments on news, evolves with you over time) is the long arc. **The substrate is roughly 30-35% built** when weighted across all layers:
+
+| Layer | % of v3 done | Notes (updated after 2026-05-17 evening build) |
+|---|---:|---|
+| Software brain (intelligence, persona, memory, retrieval, LLM) | ~85% | Composer + retrieval + I-Model clusterer/activator/novelty + sleep observer + consolidator all live. |
+| Sensing layer (BCI, vision, mic input, multi-modal) | ~25% | Apple Watch ✓, vision ✓ (Codex multimodal works), mic input ✓ (Whisper). EEG arriving; continuous BCI emotional state classifier still v1.5 work. |
+| I/O layer (voice in/out, vision in, audio routing) | ~70% | Text ✓, voice in ✓ (STT), voice out ✓ (Kokoro TTS), vision in ✓. Only bone-conduction routing pending hardware arrival. |
+| Autonomous behavior (when to speak, what to notice) | ~15% | Sleep cues fire autonomously. News pull + walking remark are the first non-sleep autonomous triggers. Still need the "should I speak now?" decider that gates ALL autonomous interjections. |
+| Memory + evolution (clustering, activation, consolidation, observers) | ~75% | Clusterer ✓, activator ✓, novelty ✓, sleep observer ✓, chat consolidator ✓. Missing: trait drift on sleep events, nightly cron scheduling. |
+| Hardware form factor | ~5-10% | Bedside rig in progress (Pi chat); wearable form factor is years out. |
+
+**Weighted overall: ~50-55% toward v3** — up from ~30-35% this morning. The build session covered: voice (both directions), vision, news, I-Model evolution, mock firmware for the EEG-arriving day. The remaining 45-50% is mostly: hardware integration, the autonomous-interjection decider (the hardest research problem), and form factor.
+
+See full gap analysis in conversation log (2026-05-17 session). Reproduced as TODO list below.
+
+---
+
+## Roadmap — what comes next, in leverage order
+
+### Near-term (weeks, mostly hardware arrival-gated)
+
+1. **Bone-conduction arrives (~3 days)** → TTS pick + audio output → Regis speaks aloud
+2. **EXG Pill arrives (~10 days)** → bench tests → real EEG data → retrain classifier with EEG features → emotional state estimation (arousal/valence) instead of just sleep stage
+3. **Voice STT for chat (live, not batch)** → talk to Regis instead of typing
+4. **ESP32-CAM integration** → image capture → multimodal LLM call → "what is Regis looking at?"
+
+### Mid-term (1-3 months)
+
+5. **Continuous BCI emotional state classifier** (arousal/valence from EEG bands; populates user_state_estimate during the day, not just sleep)
+6. **"Should I speak now?" decider** — the autonomous-interjection brain. Combines BCI state + recent interruption rate + novelty of pending message + user preferences. *This is the research problem of v3.*
+7. **Walking-remark capability** — camera frame + simple object/scene detection + LLM comment via composer
+8. **Internet pull** — RSS / news / social → Regis can reference what you're reading
+9. **I-Model clusterer + activator + novelty detector** — the self-expansion machinery (commitment 6)
+10. **Continuous-mic conversation listening** — mic on, speaker diarization, live transcript
+
+### Long-term (6-18 months)
+
+11. Nightly memory consolidation cron
+12. Trait drift via RL (heuristics → learned from outcomes)
+13. Persistent always-on companion daemon (transitions from session-based to continuous)
+14. Wearable form-factor experiments (ear-EEG modules)
+15. Privacy-by-default sensor consent framework (every reading carries consent context)
+16. Multi-modal real-time fusion at composition time
+
+### Years out (v3 hardware reality)
+
+17. Custom single-ear form factor (integrated BCI + mic + speaker + camera tether + battery)
+18. Whoop-style swappable battery (never charge the device itself)
+19. Daily-wear ergonomics
+20. Local LLM on-device option (no OpenAI dependency for privacy mode)
+
+---
+
+## Gaps preventing v1 (the bedside REM-cue + dream-recall loop)
 
 In rough order of blocking severity:
 
-1. **No EEG data.** Hardware in transit. ~10 days out.
-2. **No live sensor capture path.** ESP32 firmware → Pi daemon → Postgres pipeline. Pi-chat working on Pi side now; ESP32 firmware not yet started.
-3. **No TTS pick + audio routing.** Persona is written; need a voice + a synthesis layer + bone-conduction routing. Blocked on bone-conduction arrival.
-4. **No dream-recall measurement habit yet.** Aakash hasn't started the 14-day pre-baseline journal (this is the success metric — without it, v1 has no ground truth to improve against).
-5. **No CLAUDE.md rewrite.** The repo's CLAUDE.md still has the old Lullaby narrative; needs to reflect Daybook v1 thesis. Not blocking but creates confusion.
-
----
-
-## Next milestones (rough, no committed dates)
-
-1. **Bone-conduction arrives** → Track 2 begins. First wisp test = play a scripted line through the speaker while Aakash is awake. Confirm audio routing works.
-2. **BioAmp Pill arrives** → Track 1 bench tests (EMG forearm → ECG chest → EEG scalp). Validate signal quality before scalp placement.
-3. **EEG signal validated** → first ESP32 sensor capture firmware → Pi ingestion → live Postgres writes.
-4. **Live ingestion works** → real-time inference service spun up (Python FastAPI). Classifier now runs on live windows, not just historical.
-5. **End-to-end loop runs once on Aakash** → bedside sensor → live inference → wisp utterance fires when REM detected.
-6. **Dream-recall baseline started** (Aakash's habit, no code) → 14 morning entries needed for v1 to have a comparison point.
-7. **N=1 study (60-90 days)** → does the loop improve recall by ≥50% vs baseline?
-8. **v1 ships** if the data supports it.
+1. **No EEG data yet.** Hardware in transit ~10 days. v1 can ship without EEG using passive Watch data (F1=0.45 — usable for low-stakes whispers) but EEG unlocks better quality.
+2. **No live sensor capture path.** ESP32 firmware → Pi daemon → Postgres. Pi daemon ready; ESP32 firmware not started.
+3. **No TTS pick + audio routing.** Persona is written; need a voice + synth + bone-conduction routing. Blocked on bone-conduction arrival (~3 days).
+4. **No dream-recall measurement habit yet.** Aakash hasn't started the 14-day baseline journal. Without that, v1's success metric has no comparison. **Highest-leverage non-engineering thing he can do tonight.** (Or use `python -m recall.capture --text "..."` each morning to log via the system itself.)
+5. **CLAUDE.md was stale** (old Lullaby narrative) — **fixed 2026-05-17**.
 
 ---
 
 ## What's true *right now*, in three sentences
 
-- **All three tracks are now actively moving.** Track 1 = Aakash on Pi in a separate chat. Track 2 = Regis persona written. Track 3 = realtime inference + cue decider built and validated on real data.
-- **The next concrete integration milestone** is the Pi daemon importing `apps/inference/realtime.py` + `cue_decision.py` and running a synthetic session end-to-end. That happens whenever Pi-side is ready.
-- **The highest-leverage non-engineering thing** is still starting the 14-day dream-recall baseline journal. Without that data, v1 has no measurable claim to make.
+- **Regis is functionally complete from the neck up.** He talks (chat or voice), listens (voice in or text), speaks aloud (Kokoro TTS), sees (Codex multimodal), reads the world (RSS), remembers (embeddings + observations + traits), evolves (clusterer + activator + novelty + consolidator), and notices things on his own (sleep observer extracts real grounded notes after sessions). Only thing missing is the BCI signal itself (EXG Pill arriving) and the audio routing to bone-conduction hardware (arriving in days).
+- **The ESP32 mock firmware closes the simulation loop.** Even before EXG Pill arrives, the full pipeline can run on synthetic data: mock firmware → Pi daemon → classifier → cue decider → composer → TTS → Mac speakers. When the EXG Pill lands, only the firmware swaps from mock to real ADC reads — nothing else changes.
+- **The single highest-leverage thing right now** is logging daily dreams via `python -m recall.capture --text "..."` — every log embeds, populates the substrate, makes Regis's retrieval increasingly personal. The 14-day baseline starts the moment you do.
 
 ---
 
 ## Canonical references (read these for depth)
 
-- **`docs/POSITIONING.md`** — full strategic anchor (customer, problem, solution, competitive analysis, defensibility, expansion path)
-- **`apps/inference/classifier/runs/20260517_v2_pure_bio/`** — recommended classifier model
-- **`apps/inference/classifier/runs/20260517_033114/RESULTS.md`** — original full LOSO writeup
+- **`docs/POSITIONING.md`** — full strategic anchor (customer, problem, solution, defensibility, expansion path)
+- **`apps/wisp/PERSONA.md`** — Regis character bible (dual-mode, vocabulary, utterance slots)
+- **`apps/AI_PI_CONTRACT.md`** — interface contract between AI brain and Pi daemon
+- **`apps/inference/classifier/runs/20260517_v2_pure_bio/`** — recommended production classifier model
+- **`apps/inference/classifier/runs/20260517_033114/RESULTS.md`** — original LOSO writeup with full honest numbers
 - **`MIGRATION.md`** — what was kept vs scrapped from Lullaby
-- **`docs/sessions/`** — historical session logs (decisions captured in numbered form)
+- **`docs/sessions/`** — historical session logs
+- **`CLAUDE.md`** — repo orientation for future Claude sessions
 
 ---
 
 ## How to keep this doc useful
 
-Update after substantive work lands. Don't update for trivial things. A good update either changes a `[NOT BUILT]` → `[DONE]`, moves a blocker forward, or revises a milestone. Date the change at the top.
+Update after substantive work lands. Don't update for trivial things. A good update: `[NOT BUILT]` → `[DONE]`, a blocker moves, a milestone shifts, or strategy changes. Date the change at the top.

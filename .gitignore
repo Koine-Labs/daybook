@@ -88,3 +88,12 @@ apps/inference/classifier/runs/
 apps/inference/classifier/cache/
 !apps/inference/classifier/models/production_binary_rem.json
 !apps/inference/classifier/models/production_binary_rem.meta.json
+apps/inference/wake_word/models/*.onnx
+
+# Model weights — too large for git, re-download as needed
+*.pt
+*.pth
+*.safetensors
+
+# iOS DerivedData, archives
+apps/ios/screenshots/

@@ -7,6 +7,28 @@
 
 This document is the strategic anchor for the v1 product. It exists so that when we are deep in implementation and the next pivot temptation arrives, we can come back here and remember what we decided to build, for whom, against what, and how we will know it worked. Edits to this document are intentional, dated, and visible.
 
+**2026-05-17 amendment — continuous build, not phased.** v1 (bedside REM + dream-recall loop) is the *seed* of a longer arc: an always-on personal companion that walks with the user through the day (BCI + camera + mic + bone-conduction speaker, single-ear form factor at v3). The same codebase grows; form factor shrinks separately from the software. Build v3-substrate features (three I-Models, generative Regis, moment polymorphism, multi-modal sensor abstraction, empathic state estimation) into v1 even when the matching hardware lags. The v1 success metric still anchors near-term shipping decisions, but architectural commitments are made against the v3 endpoint.
+
+**2026-05-17 second amendment — thesis reframe.** After 24 hours of intensive parallel build (voice, vision, news, walking remarks, sleep observer, chat consolidator, I-Model self-expansion, ESP32 mock firmware), it became clear that what's being built is no longer a "dream-recall companion that happens to have a character" — it's an **always-on AI empath companion that happens to specialize in the sleep dimension first.** This amendment renames the thesis explicitly to match what's being built.
+
+**The new framing in one paragraph:**
+
+> Daybook is the AI empath that walks with you through your day and watches over you at night — built on continuous biometric / neural sensing + persistent character bonding. Especially attentive at night, where it can monitor and gently intervene in sleep and dream patterns. Naturally extends into clinical applications where therapists leverage the continuous between-session companion + sleep + mood data to support patients with depression, PTSD-related nightmares, trauma processing, and related conditions.
+
+**Three concentric product layers:**
+
+1. **Consumer empath (v1 wedge, 60-90 days):** Bonded AI companion for dream-curious people on existing wearables. v1 N=1 study on Aakash himself proves the empath substrate works, the character compounds, and dream recall improves measurably. This is the *demoable, fundable* milestone.
+
+2. **Clinical-grade extension (v2, ~6-18 months):** Therapist-licensed tool that provides between-session monitoring + AI companionship + sleep/dream intervention support. Specific clinical wedges to explore: PTSD-related nightmare disorder (where Image Rehearsal Therapy is evidence-based), depression with disordered sleep architecture, trauma processing. The same architecture; a therapist-facing dashboard + HIPAA compliance + outcome scoring (PHQ-9, PCL-5) layered on top. Wellness positioning until clinical evidence supports SaMD filing.
+
+3. **Wearable form factor (v3+, 18-36 months):** Custom or near-custom single-ear device with integrated BCI + bone-conduction audio + camera tether. **This is the long-term defensibility moat** — software gets commoditized; integrated hardware doesn't. Apple / Whoop / Oura playbook.
+
+**Why this framing is more honest:** what's been built is the always-on architecture, not a dream-recall app. The v1 success metric (dream recall) is the *visible proof point* — concrete, measurable, demoable in 60-90 days — but the substrate underneath (continuous empath via BCI + persistent character + multi-modal sensing + clinical-grade audit trail) is what makes the thesis defensible.
+
+**Why this framing helps fundraising later:** A working bedside prototype + N=1 dream-recall result + initial clinical-advisory conversations + already-built always-on architecture is a much stronger pitch than "I built a dream-recall app." Same work; better narrative.
+
+**The original POSITIONING.md framing below remains valid for the v1 wedge.** Read it as describing the *first product surface* of the broader empath companion thesis above.
+
 ---
 
 ## 1. What Koine Labs is
@@ -19,9 +41,11 @@ Daybook is the first product. It is one specific product within Koine Labs' broa
 
 ## 2. What Daybook is
 
+*(Note: see the 2026-05-17 second amendment above. The text below describes the v1 consumer wedge; the broader thesis is "always-on AI empath companion with sleep specialization and clinical extension.")*
+
 Daybook is a **24/7 multi-modal personal cognitive companion**. It sits on top of the wearable you already own (Whoop, Oura, Apple Watch), integrates with your existing cognitive tools (Anki, journal, calendar), and optionally adds neural-grade sensing (EEG) for users who want it. Daybook closes the loop between what you do during the day and what your brain consolidates during the night, with measurable next-day output as the outcome.
 
-The product is not a wearable. The product is the **intelligence and intervention layer** above the wearables.
+The product is not (yet) a wearable. The product at v1 is the **intelligence and intervention layer** above the wearables. At v3 the product is the dedicated wearable + intelligence layer (vertical integration = the moat).
 
 ## 3. The v1 wedge — sharp, narrow, defensible
 

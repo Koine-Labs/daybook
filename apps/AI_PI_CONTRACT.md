@@ -4,6 +4,16 @@ The interface between the AI brain (`apps/inference/`) and the bedside Pi daemon
 
 **Last updated: 2026-05-17.** When this changes, update both this doc AND the version constant in `apps/inference/realtime.py`.
 
+## What the Pi can import today (as of 2026-05-17)
+
+Beyond `realtime` and `cue_decision`, the following AI-brain modules are now built and importable from the Pi daemon:
+
+- **`from llm import ChatClient`** — unified LLM access. `ChatClient.auto()` routes to Codex (via Aakash's ChatGPT login at `~/.daybook/auth.json`) or Gateway (stub for now). `chat(system, user) -> str`. Default model `gpt-5.2`.
+- **`from embeddings import embed, embed_batch, embed_and_store, retrieve_similar`** — BGE-M3 local embeddings (1024-dim) + pgvector retrieval. First call loads model (~30s); subsequent ~200ms each.
+- **`from wisp.composer import compose_utterance`** — generative Regis. Pass `moment_kind` ('rem_whisper' / 'wake_greeting' / 'morning_recall_prompt' / etc) → returns `ComposedUtterance` with text + mode + retrieved context. Optionally persists to `regis_moments`. This is the v1+ replacement for scripted variant lookup.
+
+The Pi daemon's cue emitter should call `compose_utterance` to generate the actual utterance text at fire time, then send the text to TTS (when TTS is wired) for audio playback. For v0 pre-TTS testing, the stdout emitter prints the composed text.
+
 ---
 
 ## Architecture in one diagram

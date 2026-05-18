@@ -23,14 +23,19 @@ import type {
   CueEventID,
   DreamRecallID,
   EmbeddingID,
+  IModelActivationID,
   IModelID,
+  IModelNoveltyLogID,
+  InterjectDecisionID,
   IntentID,
   MoodReportID,
+  RegisMomentID,
   RegisObservationID,
   RegisTraitHistoryID,
   SensorReadingID,
   SleepSessionID,
   SleepStageClassificationID,
+  UserActionID,
   UserID,
   UserStateEstimateID,
   WispUtteranceID,
@@ -320,9 +325,9 @@ export interface Embedding {
     | "custom";
   /** ID of the source entity (a DreamRecallID, WispUtteranceID, etc.). */
   sourceId: UUID;
-  /** The vector itself. Typically 1536 dimensions for OpenAI text-embedding-3-small. */
+  /** The vector itself. 1024 dimensions for BGE-M3 (current production model). */
   embedding: number[];
-  /** Model identifier, e.g. "text-embedding-3-small". */
+  /** Model identifier, e.g. "BAAI/bge-m3". */
   model: string;
   createdAt: ISODateTime;
 }
@@ -464,4 +469,190 @@ export interface UserStateEstimate {
   source: string;
   /** Snapshot of feature vector for debugging. Stripped from production reads. */
   features: Record<string, number> | null;
+}
+
+// =============================================================================
+// REGIS MOMENTS + I-MODEL SELF-EXPANSION (migration 0003)
+// =============================================================================
+
+/**
+ * Generalized "any context where Regis ever speaks or acts" log. Subsumes
+ * CueEvent for the always-on companion architecture. Sleep cues, morning
+ * recall prompts, walking remarks, conversation teases, news-pull comments —
+ * all land here.
+ *
+ * CueEvent stays for backward compat; new code writes RegisMoment.
+ */
+export type RegisMomentKind =
+  | "rem_whisper"
+  | "pre_sleep_greeting"
+  | "intent_setting"
+  | "wake_greeting"
+  | "morning_recall_prompt"
+  | "capture_ack"
+  | "walking_remark"
+  | "conversation_tease"
+  | "news_pull_comment"
+  | "mood_check"
+  | (string & {}); // permissive: new kinds can be added at runtime
+
+export type RegisMode = "witness" | "companion" | "neutral";
+
+export type RegisContentSource = "scripted_variant" | "generative_llm" | "system";
+
+export interface RegisMoment {
+  id: RegisMomentID;
+  userId: UserID;
+  sessionId: SleepSessionID | null;
+  occurredAt: ISODateTime;
+  kind: RegisMomentKind;
+  mode: RegisMode;
+  content: string;
+  contentSource: RegisContentSource;
+  audioRef: string | null;
+  audioDurationMs: number | null;
+  triggeringContext: Record<string, unknown>;
+  /** Which I-Models were active when this moment was composed. */
+  activeIModelIds: IModelID[];
+  /** Primary I-Model link (legacy single-link pattern). */
+  iModelId: IModelID | null;
+  /** Observed reaction (dismissed, lingered, captured, etc.) — null if not yet observed. */
+  userResponse: Record<string, unknown> | null;
+  createdAt: ISODateTime;
+}
+
+/**
+ * Many-to-many membership: one embedding can belong to multiple I-Model
+ * clusters with different similarity scores. Honors the "neurons fire across
+ * multiple I-Models" insight.
+ */
+export interface EmbeddingClusterMembership {
+  embeddingId: EmbeddingID;
+  clusterId: IModelID;
+  /** Cosine similarity to cluster centroid. */
+  similarity: number;
+  assignedAt: ISODateTime;
+  /** What process made this assignment: 'clusterer', 'novelty_detector', 'manual', etc. */
+  assignmentSource: string;
+}
+
+/**
+ * One row per "this I-Model was active at this moment." Written by the
+ * activator job at decision time. Lets us query "what context was the system
+ * in when Regis composed this utterance?" retrospectively.
+ */
+export interface IModelActivation {
+  id: IModelActivationID;
+  clusterId: IModelID;
+  activatedAt: ISODateTime;
+  /** 0.0 (faint) to 1.0 (strongly active). */
+  activationStrength: number;
+  source: string;
+  context: Record<string, unknown>;
+}
+
+/**
+ * Pre-clustering buffer. When current state doesn't fit any existing I-Model
+ * well, it lands here. Enough accumulated novelty triggers a new clustering
+ * run that may crystallize a new I-Model.
+ */
+export interface IModelNoveltyLog {
+  id: IModelNoveltyLogID;
+  userId: UserID;
+  observedAt: ISODateTime;
+  stateSnapshot: Record<string, unknown>;
+  embedding: number[] | null;
+  nearestClusterId: IModelID | null;
+  nearestSimilarity: number | null;
+  flaggedForClustering: boolean;
+  clusteredIntoId: IModelID | null;
+}
+
+// =============================================================================
+// USER ACTIONS — gestures + explicit commands (silent back-channel to Regis)
+// =============================================================================
+
+/**
+ * Polymorphic kind for user_actions rows. Captures non-speech inputs from the
+ * user (gestures, taps, grunts) plus explicit commands. Distinct from
+ * chat_messages (voice/text speech) and sensor_readings (continuous context).
+ */
+export type UserActionKind =
+  | "gesture_tap"
+  | "gesture_nod"
+  | "gesture_shake"
+  | "gesture_wave"
+  | "gesture_thumbs_up"
+  | "gesture_thumbs_down"
+  | "gesture_blink"
+  | "voice_grunt"
+  | "explicit_command"
+  | (string & {});
+
+/** Input device that produced the action. */
+export type UserActionSource =
+  | "headphone_button"
+  | "apple_watch"
+  | "camera"
+  | "mic"
+  | "cli"
+  | "phone"
+  | (string & {});
+
+/** Inferred user intent — populated where determinable. */
+export type UserActionIntent =
+  | "acknowledge"
+  | "dismiss"
+  | "see"
+  | "listen"
+  | "expand"
+  | "silence"
+  | "yes"
+  | "no"
+  | "not_now"
+  | "unknown"
+  | (string & {});
+
+export interface UserAction {
+  id: UserActionID;
+  userId: UserID;
+  occurredAt: ISODateTime;
+  kind: UserActionKind;
+  source: UserActionSource;
+  intent: UserActionIntent | null;
+  context: Record<string, unknown>;
+  /** If this action was a response to a specific Regis output, link to it. */
+  triggeredBy: RegisMomentID | null;
+  createdAt: ISODateTime;
+}
+
+// =============================================================================
+// INTERJECT DECISIONS — auto-interject decider log
+// =============================================================================
+
+/** Which trigger fired the decider. New trigger kinds can be added at runtime. */
+export type InterjectTriggerKind =
+  | "post_recall"
+  | "mood_shift"
+  | "novel_scene"
+  | "post_conversation"
+  | (string & {});
+
+/** Observed outcome of the decision, inferred from a following user action. */
+export type InterjectUserOutcome = "positive" | "neutral" | "negative";
+
+export interface InterjectDecision {
+  id: InterjectDecisionID;
+  userId: UserID;
+  decidedAt: ISODateTime;
+  triggerKind: InterjectTriggerKind;
+  /** Snapshot of inputs the decider considered. */
+  contextSnapshot: Record<string, unknown>;
+  /** TRUE = spoke, FALSE = held silence. */
+  decision: boolean;
+  reason: string | null;
+  /** If decision = true, links to the resulting regis_moments row. */
+  resultingMomentId: RegisMomentID | null;
+  userOutcome: InterjectUserOutcome | null;
+  createdAt: ISODateTime;
 }

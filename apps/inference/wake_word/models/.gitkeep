@@ -1,0 +1,7 @@
+# Custom-trained wake-word models go here.
+# See ../training/README.md for the training process.
+# Drop trained .onnx files here as <wake_word_name>.onnx.
+# Example: hey_regis.onnx
+#
+# These files are not in source control — they're large binaries
+# and contain your voice fingerprint in subtle ways.

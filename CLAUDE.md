@@ -1,236 +1,267 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file orients Claude Code sessions working in this repo. Read this first, then read `docs/STATUS.md` for current state.
 
-## Project Overview
+## What this project is
 
-Project Lullaby is a lucid dream induction system for the Apple ecosystem. It uses Apple Watch + iPhone as a sensor fusion platform to detect REM sleep in near-real-time and deliver haptic cues through the watch to promote lucid dreaming. The system streams feature vectors to a cloud inference server for sleep stage classification and calibrates nightly against Apple's HealthKit sleep stage data.
+**Daybook is an always-on AI empath companion that knows you through your body.** Continuous biometric / neural sensing (Apple Watch today, BCI via BioAmp EXG Pill in days, custom wearable later) + a persistent character (**Regis**, a will-o-wisp TBATE-inspired) that evolves with the user over years.
 
-**PRD:** `Project_Lullaby_PRD_v1.1.docx` at the project root contains the full product requirements document. Refer to it for detailed specifications on sensor data, model architecture, cue delivery protocol, and development phases.
+Three concentric product layers, all sharing the same underlying architecture:
 
-## Repository Structure
+1. **Consumer empath** — the bonded AI companion. v1 wedge: dream-curious people on existing wearables.
+2. **Clinical-grade extension** — therapist-licensed tool for between-session monitoring + sleep/dream intervention (PTSD nightmare disorder, depression with disordered sleep, trauma processing).
+3. **Wearable form factor (v3+)** — eventual single-ear device with integrated BCI + audio + camera tether. The long-term defensibility moat.
+
+Especially attentive at night, where it monitors sleep and gently intervenes in dream patterns. The same codebase grows from v1 (bedside rig) → v3 (wearable). Form factor shrinks separately from software.
+
+Owner: **Aakash Agrawal** (founder, Koine Labs). Solo developer, bootstrapped, vibe-coding via AI tooling. Prefers Python and TypeScript; explicitly does NOT separate "v1 prototype" from "v3 vision" — they are one continuous build.
+
+**v1 validation wedge (NOT the destination):** ≥50% improvement in weekly dream recall vs 14-day pre-baseline, N=1 (Aakash), 60-90 days. This is the *demoable, fundable* milestone that proves the empath substrate works and the character compounds. The broader thesis (always-on empath + clinical extension + wearable moat) is what the v1 win opens the door to.
+
+For full strategic anchor see `docs/POSITIONING.md` (especially the 2026-05-17 second amendment). For current state see `docs/STATUS.md`.
+
+---
+
+## Repository layout
+
+This is a pnpm + turborepo monorepo, but most of the active work is Python under `apps/`.
 
 ```
-Lullaby/                              # Project root (not a git repo)
-├── Project_Lullaby_PRD_v1.1.docx     # Product Requirements Document
-├── .claude/                          # Claude Code settings
-├── analysis/                         # Python analysis suite (Phase 2)
-│   ├── lullaby/                      # Python package
-│   │   ├── loader.py                 # JSON session loading + mock generation
-│   │   ├── features.py              # 30-second epoch alignment
-│   │   ├── temporal_features.py     # Rolling stats, deltas, time-of-night
-│   │   ├── pipeline.py              # Multi-session ML pipeline
-│   │   ├── model.py                 # XGBoost training + CV
-│   │   ├── evaluation.py            # Metrics, SHAP, success criteria
-│   │   ├── export.py                # Model serialization (joblib + CoreML)
-│   │   ├── remote.py                # Server API client + CLI for downloading sessions
-│   │   ├── statistics.py            # REM vs non-REM comparisons
-│   │   ├── quality.py               # Data quality assessment
-│   │   └── visualization.py         # Plotting (hypnogram, heatmaps, etc.)
-│   ├── tests/                        # 233 tests (pytest)
-│   └── notebooks/                    # Jupyter notebooks
-│       ├── explore_night.ipynb       # Single-night analysis
-│       ├── compare_nights.ipynb      # Multi-night comparison
-│       └── train_classifier.ipynb    # XGBoost training workflow
-├── server/                           # Cloudflare Workers data collection server (Phase 2.5)
-│   ├── src/                          # TypeScript source (Hono framework)
-│   │   ├── routes/                   # auth, sessions, users endpoints
-│   │   ├── middleware/               # JWT auth, CORS
-│   │   ├── services/                 # Business logic
-│   │   └── utils/                    # Crypto, JWT, OAuth helpers
-│   ├── migrations/                   # D1 SQL schema
-│   ├── wrangler.toml                 # Cloudflare bindings (D1 + R2)
-│   └── package.json                  # hono, jose, wrangler
-└── Lullaby/                          # Git repository root (Xcode project)
-    ├── Lullaby.xcodeproj/            # Xcode project (3 targets)
-    ├── Lullaby/                      # iOS app source (~25 Swift files)
-    │   ├── LullabyApp.swift          # @main entry point → MainTabView (auth gate)
-    │   ├── PhoneSessionCoordinator.swift  # Orchestrates sonar + audio + connectivity
-    │   ├── Audio/                    # SonarEngine, PassiveAudioAnalyzer
-    │   ├── Auth/                     # AuthManager, KeychainHelper, AppleSignInHelper, GoogleSignInHelper
-    │   ├── Connectivity/             # PhoneConnectivityManager
-    │   ├── Health/                   # MorningSyncManager (HealthKit sync)
-    │   ├── Networking/               # APIClient, SessionUploader, UploadQueue
-    │   ├── Storage/                  # SleepSessionStore, JSONExporter
-    │   ├── Views/                    # 4-tab architecture
-    │   │   ├── Tabs/                 # MainTabView (root)
-    │   │   ├── Sleep/                # SleepTabView, PreSessionView, ActiveSessionView
-    │   │   ├── History/              # HistoryTabView, SessionDetailView
-    │   │   ├── Insights/             # InsightsTabView
-    │   │   ├── Profile/              # ProfileTabView
-    │   │   ├── DashboardView.swift   # (deprecated, replaced by tab views)
-    │   │   └── AccountView.swift     # (deprecated, absorbed into ProfileTabView)
-    │   ├── Components/               # GlassCard, SessionOrb, Starfield, CircularProgressRing, MetricTile, etc.
-    │   │   └── Charts/              # SimpleLineChart, SimpleBarChart, HypnogramView
-    │   └── Theme/                    # LullabyTheme, GlowModifier
-    ├── Lullaby Watch App/            # watchOS app source (12 Swift files)
-    │   ├── LullabyWatchApp.swift     # @main entry point → WatchSessionView
-    │   ├── WatchSessionCoordinator.swift  # Orchestrates sensors + batching
-    │   ├── Sensors/                  # WorkoutSession, HR, HRV, Accelerometer collectors
-    │   ├── Connectivity/             # WatchConnectivityManager + WatchDataBuffer
-    │   ├── Views/                    # WatchSessionView
-    │   ├── Components/               # HeartRateRing, WatchGlassButton
-    │   └── Theme/                    # WatchTheme
-    ├── Shared/                       # Shared between iOS + watchOS
-    │   ├── Models/                   # SleepSession, SensorPacket, SleepStage, ConnectivityMessage
-    │   └── Utilities/                # SensorConstants, TimestampUtilities
-    └── LullabyTests/                 # Swift unit tests (7 files)
+daybook/
+├── CLAUDE.md                       # this file
+├── README.md
+├── package.json                    # workspace root
+├── pnpm-workspace.yaml
+├── turbo.json
+├── MIGRATION.md                    # what was kept vs scrapped from prior 'Lullaby' project
+│
+├── docs/
+│   ├── POSITIONING.md              # strategic anchor — customer, problem, solution, defensibility
+│   ├── STATUS.md                   # operational big picture — read after this file
+│   ├── sessions/                   # historical session logs (numbered decisions)
+│   ├── learning/                   # teaching docs (databases, etc.)
+│   └── historical/
+│
+├── Logo/
+│   └── Clear-Koine-Wisp.png        # the Regis visual — warm wisp, soft horns
+│
+├── packages/
+│   └── shared/                     # TypeScript shared types (source of truth for entity shapes)
+│       └── src/{types,ids}.ts      # branded IDs + entity interfaces
+│
+├── apps/
+│   ├── AI_PI_CONTRACT.md           # interface between AI brain and Pi daemon
+│   │
+│   ├── inference/                  # the AI brain (Python; venv lives here)
+│   │   ├── .venv/                  # Python 3.11 venv (uv-managed)
+│   │   ├── .env.local              # DATABASE_URL (gitignored, live Neon creds)
+│   │   ├── pyproject.toml
+│   │   ├── db.py                   # psycopg connection helper — import this, not raw psycopg
+│   │   ├── parse_apple_health.py   # one-shot HK XML importer (already run for Aakash's 10yr data)
+│   │   │
+│   │   ├── migrations/
+│   │   │   ├── 0001_initial.sql            # original 11-table schema
+│   │   │   ├── 0002_regis_imodels.sql      # regis_observations + traits + user_state_estimate
+│   │   │   ├── 0003_self_expanding_imodels.sql  # vector(1024) + cluster memberships + regis_moments
+│   │   │   └── 0004_chat_messages.sql      # chat_conversations + chat_messages
+│   │   │
+│   │   ├── classifier/             # sleep-stage classifier (built + trained)
+│   │   │   ├── data.py             # Neon loaders
+│   │   │   ├── features.py         # per-epoch feature extraction (24 features, pure bio)
+│   │   │   ├── baselines.py        # majority / HR-threshold / random baselines
+│   │   │   ├── train.py            # LOSO CV training
+│   │   │   ├── train_production.py # final model on all data, saves to models/
+│   │   │   ├── evaluate.py         # F1 / ROC / per-session metrics
+│   │   │   ├── models/             # production_binary_rem.json + sidecar
+│   │   │   ├── runs/               # LOSO runs + cached features parquet
+│   │   │   └── notebooks/explore.ipynb
+│   │   │
+│   │   ├── realtime.py             # RealtimeClassifier (rolling buffers, predict_at, writes user_state_estimate)
+│   │   ├── cue_decision.py         # CueDecider (5 safety gates; for sleep cue firing)
+│   │   │
+│   │   ├── llm/                    # Sign-in-with-ChatGPT + Codex backend
+│   │   │   ├── auth/{oauth,jwt,storage,session,sign_in}.py  # PKCE flow vs auth.openai.com
+│   │   │   ├── codex_client.py     # calls chatgpt.com/backend-api/codex/responses with SSE
+│   │   │   ├── chat.py             # ChatClient.auto() unified interface
+│   │   │   └── smoke_test.py
+│   │   │
+│   │   └── embeddings/             # BGE-M3 local embeddings
+│   │       ├── model.py            # lazy-loaded sentence-transformers (MPS/CUDA/CPU auto)
+│   │       ├── store.py            # embed_and_store helper
+│   │       ├── retrieve.py         # retrieve_similar via pgvector HNSW
+│   │       └── smoke_test.py
+│   │
+│   ├── wisp/                       # Regis character + generative composer
+│   │   ├── PERSONA.md              # character bible (dual-mode Witness/Companion)
+│   │   ├── composer.py             # compose_utterance(): persona + state + retrieval → ChatClient
+│   │   └── smoke_test.py
+│   │
+│   ├── recall/                     # morning dream-recall capture
+│   │   ├── capture.py              # CLI: --text or interactive mic; writes dream_recalls + embedding
+│   │   ├── whisper_client.py       # local Whisper base model
+│   │   ├── recorder.py             # sounddevice mic recorder
+│   │   └── smoke_test.py
+│   │
+│   ├── chat/                       # chat Regis (general partner, sleep is one role of many)
+│   │   ├── handler.py              # handle_user_message() — full turn
+│   │   ├── retrieval.py            # gather_context() — last 6 turns + similar past + observations + opt-in health
+│   │   ├── health_summary.py       # heuristic health-data slice (ONLY on sleep/HR keyword queries)
+│   │   ├── trait_drift.py          # 9 heuristic rules updating regis_trait_history
+│   │   ├── observer.py             # extracts regis_observations from notable exchanges (≥20 words gated)
+│   │   ├── consolidator.py         # nightly memory consolidation stub
+│   │   ├── conversation.py         # lifecycle helpers
+│   │   ├── cli.py                  # interactive REPL: python -m chat.cli
+│   │   └── smoke_test.py
+│   │
+│   └── pi/                         # Pi-side daemon (sensor capture, cue delivery, persistence)
+│       └── ...                     # owned by a separate Pi chat; imports apps/inference/* and apps/wisp/composer
+│
+└── (other usual workspace files)
 ```
 
-Note the nested directory structure: the git repo is at `Lullaby/Lullaby/`, and source files are one level deeper in `Lullaby/Lullaby/Lullaby/`.
+---
 
-### Targets
+## Quick start — running the live system
 
-The Xcode project has **three** targets:
+All Python work runs from `apps/` with the venv activated:
 
-1. **Lullaby (iOS)** — Main iPhone app. 4-tab architecture (Sleep, History, Insights, Profile) with auth gate. SonarEngine (19kHz), PassiveAudioAnalyzer, WatchConnectivity relay, HealthKit morning sync, JSON export, server upload.
-2. **Lullaby Watch App (watchOS)** — Apple Watch companion. Runs HKWorkoutSession, collects HR/HRV/accelerometer via dedicated collectors, streams 30-second batched SensorPackets to iPhone via WatchConnectivity. Includes persistent WatchDataBuffer for offline resilience.
-3. **LullabyTests** — Swift unit tests (7 test files).
-
-**Lullaby Server** (Cloudflare Workers, TypeScript) handles data collection, user auth, and session storage. See `server/` directory. A separate Python inference server for real-time classification is planned for Phase 3.
-
-## Build & Development
-
-- **Xcode version:** 26.3+
-- **Swift version:** 6.2 (Approachable Concurrency, strict MainActor isolation enabled)
-- **Bundle ID:** `Neovasky.Lullaby` (iOS), `Neovasky.Lullaby.watchkitapp` (watchOS)
-- **iOS deployment target:** iOS 18.0+ (minimum for reliable HealthKit sleep stage access)
-- **watchOS deployment target:** watchOS 10.0+ (minimum for current CoreMotion + HKWorkoutSession APIs)
-- **Minimum hardware:** Apple Watch Series 4+ (required for HealthKit sleep stage data)
-
-### Build Commands
 ```bash
-# Build iOS target
-xcodebuild -project Lullaby/Lullaby/Lullaby.xcodeproj -scheme Lullaby -sdk iphonesimulator build
-
-# Build watchOS target
-xcodebuild -project Lullaby/Lullaby/Lullaby.xcodeproj -scheme "Lullaby Watch App" -sdk watchsimulator build
-
-# Clean build
-xcodebuild -project Lullaby/Lullaby/Lullaby.xcodeproj -scheme Lullaby clean
-
-# Run Python analysis tests
-cd analysis && python3 -m pytest -v
-
-# Run data collection server (local dev)
-cd server && npm run dev
-
-# Deploy data collection server
-cd server && npm run deploy
+cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook/apps"
+source inference/.venv/bin/activate
 ```
 
-Prefer building and running via Xcode when possible, as the project uses automatic code signing and simulator destinations.
-
-## Entitlements & Permissions Required
-
-Both iOS and watchOS targets need specific entitlements configured before sensor work begins:
-
-### iOS Target
-- **HealthKit** — Read: sleep analysis, heart rate, HRV, respiratory rate, wrist temperature, SpO2. Write: sleep analysis.
-- **Microphone** — Required for sonar emission analysis and passive audio capture.
-- **Background Modes** — Audio (for continuous sonar/mic during sleep), Background processing, Remote notifications.
-- **App Groups** — For shared data between iOS and watchOS targets.
-- **Info.plist keys:** `NSHealthShareUsageDescription`, `NSHealthUpdateUsageDescription`, `NSMicrophoneUsageDescription`, `NSMotionUsageDescription`.
-
-### watchOS Target
-- **HealthKit** — Read: heart rate, HRV. Write: workout sessions.
-- **Motion & Fitness** — Required for CoreMotion accelerometer/gyroscope access.
-- **Background Modes** — Workout processing (keeps sensors alive during sleep).
-- **App Groups** — Shared with iOS target.
-
-## Architecture
-
-**Current state:** Phase 1 (data collection) and Phase 2 (offline ML classification) are implemented. Both iOS and watchOS targets build successfully. The Python analysis suite has 233 passing tests.
-
-**Three-tier system** (per PRD):
-- **Apple Watch (watchOS):** Primary biometric sensor (HR, HRV, accelerometer via HKWorkoutSession + CoreMotion). Streams 30-second batched SensorPackets to iPhone via WatchConnectivity. Persistent WatchDataBuffer handles connectivity drops.
-- **iPhone (iOS):** Secondary sensor platform (19kHz ultrasonic sonar for breathing detection via vDSP FFT, passive audio classification for snore/breathing/movement/silence). Aggregates all data in SleepSessionStore, exports JSON for offline analysis. Morning sync pulls Apple sleep stages from HealthKit.
-- **Data Collection Server (Phase 2.5):** Cloudflare Workers + D1 (SQLite) + R2 (blob storage). Handles user auth (email/password, Google, Apple Sign-In), session upload/download, multi-user data isolation. TypeScript with Hono framework. This is the data transport layer — not the inference server.
-- **Inference Server (Phase 3, future):** Real-time sleep stage inference (XGBoost → LSTM/Transformer), per-user calibration loop, cue delivery decision logic via WebSocket. Will be Python (FastAPI). Reads session data from the same R2 storage.
-
-### Key Apple Frameworks
-| Framework | Target | Purpose |
-|-----------|--------|---------|
-| HealthKit | iOS + watchOS | Sleep stages, HR, HRV, respiratory rate, wrist temp, SpO2 |
-| WatchConnectivity | iOS + watchOS | Watch ↔ iPhone bidirectional data relay |
-| CoreMotion | watchOS | Accelerometer, gyroscope, CMSensorRecorder (36hr buffer) |
-| AVFoundation | iOS | Ultrasonic sonar tone generation + microphone capture |
-| Accelerate (vDSP) | iOS | FFT and signal processing for sonar analysis |
-| CoreML | iOS + watchOS | On-device fallback classifier when server unreachable |
-| CoreHaptics / WKInterfaceDevice | watchOS | Haptic cue pattern delivery |
-
-### Data Flow (Nighttime Loop)
-```
-Watch sensors → WatchConnectivity → iPhone combines with sonar/audio features
-→ WebSocket → Cloud classifier → If REM detected with high confidence
-→ Cue command back → iPhone → WatchConnectivity → Watch delivers haptic
-→ Post-cue sensor data streams back for wake monitoring
+### Talk to Regis (general partner)
+```bash
+python -m chat.cli              # interactive REPL
+# /quit to exit, /new for fresh conversation, /help for commands
 ```
 
-### Calibration Flow (Morning)
-```
-iPhone pulls Apple sleep stages from HealthKit (ground truth)
-→ Uploads labeled timeline to server
-→ Server aligns predictions vs Apple labels
-→ Computes accuracy metrics (REM precision, recall, onset latency)
-→ Updates per-user model weights
-→ User logs dream journal → server correlates cues with lucidity reports
+### Log a dream
+```bash
+python -m recall.capture --text "I dreamed about..."   # text input
+python -m recall.capture                                # interactive mic (ENTER to start/stop)
+python -m recall.capture --text "..." --no-ack          # skip Regis "Held." (saves a few seconds)
 ```
 
-## Current Development Phase
+### Sign in to ChatGPT (already done for Aakash, persists in `~/.daybook/auth.json`)
+```bash
+python -m llm.auth.sign_in       # OAuth-PKCE flow → opens browser → callback on :1455
+python -m llm.smoke_test         # 3-test validation of LLM path
+```
 
-### Phase 1: Data Collection Prototype — COMPLETE
+### Smoke tests (after changes)
+```bash
+python -m llm.smoke_test
+python -m embeddings.smoke_test
+python -m wisp.smoke_test        # full composer end-to-end
+python -m chat.smoke_test        # full chat handler end-to-end
+python -m recall.smoke_test
+```
 
-All five Phase 1 deliverables are implemented and building:
-1. **watchOS app** — HKWorkoutSession + HeartRateCollector + HRVCollector + AccelerometerCollector (100Hz→10Hz decimation), 30-second batch timer, persistent WatchDataBuffer.
-2. **iOS app** — SonarEngine (19kHz tone, vDSP FFT, autocorrelation breathing detection), PassiveAudioAnalyzer (RMS, ZCR, spectral centroid, 5-class classification).
-3. **WatchConnectivity** — WatchConnectivityManager (watch→phone via transferUserInfo with sequence tracking) + PhoneConnectivityManager (phone-side packet routing).
-4. **Morning sync** — MorningSyncManager queries HKCategoryValueSleepAnalysis, filters Apple Watch sources, converts to session-relative SleepStageLabels.
-5. **Data export** — SleepSessionStore persists to Documents/sessions/, JSONExporter encodes with .iso8601 + .sortedKeys matching the Python loader format.
+---
 
-### Phase 2: Offline Classification — COMPLETE
+## Conventions — read before writing code
 
-Python analysis suite in `analysis/` with 233 passing tests:
-- Temporal feature engineering (32 new features: rolling stats, deltas, time-of-night, audio one-hot)
-- Multi-session ML pipeline with session-level splitting (prevents temporal leakage)
-- XGBoost training (5-class + binary REM), leave-one-session-out CV, hyperparameter tuning
-- Evaluation: confusion matrix, SHAP importance, REM onset latency, success criteria gate (REM F1 ≥ 0.65)
-- Model export: joblib for Python server, CoreML for iOS/watchOS fallback
+### Python
+- Python 3.11+, full type hints, `from __future__ import annotations`
+- `pathlib.Path`, never `os.path`
+- One-line docstrings max. **No comments unless explaining non-obvious *why*.**
+- Use `from db import get_conn` after `sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "inference"))` — never re-implement DB connection logic.
+- `DEFAULT_USER_ID = "61c18d4c-1c20-408a-bd5f-f5f88fd9922f"` (Aakash, the only user for now).
+- Always tz-aware datetimes (UTC). Never strip timezone info.
 
-### Phase 2.5: Data Collection Server — IMPLEMENTED
+### Database
+- Neon Postgres (PG 17, pgvector). DATABASE_URL in `apps/inference/.env.local` (gitignored).
+- Migrations are append-only and additive when possible. Apply via psycopg in a Python smoke test, NOT via `psql` (Neon connection string has special chars that break `psql` arg parsing).
+- All event entities have `i_model_id UUID NULL` per the I-Model commitment.
+- All vector columns are **`vector(1024)`** for BGE-M3 (not 1536 — that was the OpenAI default we moved off of).
+- Polymorphic content via `kind TEXT` + `payload JSONB` (sensor_readings, regis_moments).
 
-Cloudflare Workers server deployed at `https://lullaby-server.aakashjuly18.workers.dev`:
-- **Server:** Hono (TypeScript) on Cloudflare Workers, D1 for user/session metadata, R2 for session JSON blobs
-- **Auth:** Email+password (PBKDF2), Google Sign-In, Sign in with Apple — supports friends/family contributing data
-- **iOS integration:** APIClient + AuthManager + SessionUploader added to the app, auth gate on launch
-- **Python CLI:** `lullaby.remote` module for downloading sessions to local analysis pipeline
-- **Deviation from PRD:** PRD planned a Python FastAPI server in Phase 3 for real-time inference. This Phase 2.5 server is a simpler data transport layer built earlier to unblock multi-user data collection. The Phase 3 inference server will be built separately and can read from the same R2 storage.
+### LLM access
+- Use `from llm import ChatClient` then `ChatClient.auto()` — never call the Codex API directly.
+- `chat(system, user) -> str` for free-form. `chat_structured(system, user, schema)` for Pydantic-validated output.
+- Default model: `gpt-5.2` via Codex (free, uses Aakash's ChatGPT subscription). Override per call or via env var.
+- Gateway fallback path is stubbed (raises NotImplementedError until an API key is wired).
 
-### Next: Real-World Validation
+### Embeddings
+- Use `from embeddings import embed, embed_batch, embed_and_store, retrieve_similar` — never call sentence-transformers directly.
+- Model is BGE-M3 (1024-dim), local on the Mac via `sentence-transformers`. Auto-picks MPS on Mac / CUDA on PC / CPU fallback.
+- First call loads the model (~30-40s); subsequent calls are ~200ms each.
+- HuggingFace warning about unauthenticated requests is cosmetic — inference runs 100% locally, model is cached at `~/.cache/huggingface/`.
 
-Deploy to real devices, collect several nights of data, and validate that the ML pipeline achieves success criteria on real sensor data. Then:
-- **Phase 3:** Real-time inference server (FastAPI, WebSocket), live classification, haptic cue delivery
-- **Phase 4:** Per-user calibration loop, dream journal correlation
+### Regis utterances
+- `from wisp.composer import compose_utterance` — assembles persona + state + retrieval, returns `ComposedUtterance`.
+- Pass `moment_kind` to set mode (witness vs companion). See `WITNESS_KINDS` / `COMPANION_KINDS` in composer.
+- Persona file at `apps/wisp/PERSONA.md` becomes the system prompt. Edit it, no rebuild needed.
 
-## Key Constraints
+### TypeScript types
+- `packages/shared/src/types.ts` is the conceptual source of truth for entity shapes.
+- `packages/shared/src/ids.ts` defines branded ID types (compile-time only, zero runtime cost).
+- DB schema in `apps/inference/migrations/*.sql` is the DB source of truth. Keep both in sync when changing.
 
-- **Privacy:** Raw audio NEVER leaves the device. Only numeric feature vectors are transmitted to the server. All audio processing (breathing analysis, snore detection, sonar) is on-device only.
-- **Battery:** Watch runs HKWorkoutSession all night — battery impact is a key open question. Recommend user charge to 40%+ before sleep.
-- **Background execution:** iOS app must maintain sonar + audio processing for ~8 hours without OS termination. Use Background Audio mode and keep AVAudioEngine running.
-- **WatchConnectivity reliability:** Messages between watch and phone can be delayed or dropped. Design for eventual consistency, not guaranteed real-time delivery. Buffer data on watch if phone connection drops.
-- **Sensor sampling rates:** Watch HR is every few seconds during active workout session. CoreMotion accelerometer up to 100Hz via CMMotionManager. CMSensorRecorder provides 36-hour historical buffer with ~3 second delay.
-- **App Sandbox:** Enabled. App Groups registered for Watch ↔ iPhone shared state.
-- **Concurrency:** MainActor isolation enforced by default (Swift 6.2). All background sensor work must use explicit actor/task isolation. HealthKit queries and CoreMotion updates run on background threads — never block the main actor.
+---
 
-## Future Considerations
+## Architectural commitments (locked, do not violate)
 
-- **AirPods Pro 3** heart rate sensing is currently workout-only with no HRV access. Architecture should support pluggable sensor sources so AirPods can be added later without rearchitecting.
-- **Core body temperature** via AirPods ear canal sensors may become available in future — would provide superior circadian phase indicator compared to wrist temperature.
-- **Audio cue delivery** via AirPods during sleep is a potential complement/alternative to haptic wrist cues in future phases.
+These are decisions made over the development arc that future code must honor. See `memory/project_daybook.md` in the auto-memory system for the full lineage.
 
-## Git
+1. **I-Model polymorphism.** Every event entity has `i_model_id UUID NULL`. Schema + retrieval hooks present from day 1.
+2. **Content polymorphism.** `regis_moments.kind` is a pluggable discriminator; cue selection is content-agnostic.
+3. **Wisp-as-interface.** Audio output (eventually bone-conduction TTS) is the primary surface. Screens are for setup/debug.
+4. **Three distinct I-Models.** `user_self` (what we know about the user) + `regis_of_user` (what Regis has noticed) + `regis_self` (Regis's drifting personality dials). Schema in migrations 0002 + 0003.
+5. **Regis is dual-mode, not flat-toned.** Witness Mode during sleep (reverent, sparse). Companion Mode when awake (dry, teasing — canon TBATE energy). Same character, different posture based on user consciousness state.
+6. **Self-expanding I-Models.** I-Models are DISCOVERED from data, not pre-defined. The three top-level categories are containers; sub-I-Models emerge via clustering. Embeddings are many-to-many with clusters (`embedding_cluster_memberships`).
+7. **Moment polymorphism.** `regis_moments` is the generalized any-context Regis action log. Sleep cue, morning prompt, walking remark, conversation tease — all live here.
+8. **Generative Regis from day one (not scripted variants).** PERSONA.md is the system prompt; LLM composes utterances dynamically. Scripted variants in PERSONA.md serve as few-shot examples, not the output bank.
+9. **Continuous build, not phased.** v1 prototype IS the v3 substrate. Don't defer features by phase; build them when foundational, even if the matching hardware lags.
+10. **Multi-channel input/output (added 2026-05-17 late).** Regis has two kinds of input channels: voice (explicit speech), continuous context (ambient audio + vision + BCI + biometrics), and gestures (silent back-channel — tap / nod / grunt / blink). All three are first-class. Output channels are voice, future haptic, future visual indicator. Schema captures gestures + explicit commands in `user_actions` table; continuous context flows through polymorphic `sensor_readings`. Gestures must be available before always-on companion can be tolerable — the user needs to dismiss / acknowledge / redirect silently.
+11. **Semantic-first continuous sensing (added 2026-05-17 late).** All continuous context streams (audio, video) use semantic-first architecture: continuous low-bandwidth meaningful extraction (VAD, diarization, prosody for audio; YOLO, scene class, OCR for visual) → semantic packets stored as `sensor_readings` rows. Raw pixels and raw audio are discarded after processing. Cloud LLM calls (multimodal vision, full STT) are *triggered escalation only* — never continuous. This is the only viable architecture for always-on awareness on battery / privacy / cost grounds, and aligns with how biological attention actually works (subconscious feature extraction + occasional conscious focus).
 
-- Repository is at `Lullaby/Lullaby/` (not the project root)
-- Single initial commit (d932855)
-- No remote configured yet
-- Commit frequently with descriptive messages referencing PRD sections where applicable
+---
+
+## Hardware — current and pending
+
+**On hand (Aakash):**
+- Pi 4 (flashed, SSH-able as `daybook` alias from Mac, MicroPython on ESP32 over USB)
+- ESP32 (one in use, more available), 2× ESP32-CAM, Arduino Uno
+- 3.5" TFT touchscreen (Pi HAT), 3D printer, lasers
+- Apple Watch S8/9 (continuous wear)
+- MacBook (dev) + 24/7 desktop PC (NVIDIA 4080 Super; future heavy-compute station)
+
+**Ordered:**
+- BioAmp EXG Pill (~10 days) — single-channel biopotential amplifier for EEG/EMG/ECG
+- TECKNET bone-conduction headphones (~2-3 days) — Regis's audio output for v1
+- ESP32-CAM-MB programmer adapter board (~2 days)
+
+**Embedding compute today:** Mac (MPS or CPU). When the Pi is running 24/7, embedding calls will route to the desktop's 4080 (not set up yet).
+
+---
+
+## Where Regis runs vs where the model lives
+
+- **Persona / behavior** = `PERSONA.md` (text). Read on every LLM call as system prompt.
+- **Memory of you** = pgvector embeddings (BGE-M3, 1024-dim, local) + structured tables (`dream_recalls`, `regis_observations`, `intents`, `mood_reports`). Stored in Neon Postgres.
+- **Speaking voice** = Codex backend (gpt-5.2) via Aakash's ChatGPT login. No fine-tuned model. The LLM doesn't "know" anything about Daybook — it's directed entirely by system prompt + retrieved context per call.
+- **Empathic substrate** = `user_state_estimate` table. Realtime classifier writes a row every 30s during a sleep session. v1.5+ will also write from chat/walking context.
+
+---
+
+## Things NOT to do
+
+- **Don't preach about credentials in chat.** Aakash explicitly opted out — flag once briefly, then continue. (See auto-memory `feedback_credentials_in_chat.md`.)
+- **Don't trust documentation claims about migrated/inherited code.** Always verify by running. (See `feedback_dont_assume_migrated_code_works.md`.)
+- **Don't run `next build` while `next dev` is running** in the same dir — chunk conflicts. (See `feedback_nextjs_dev_vs_build.md`.)
+- **Don't apply additive migrations without checking if existing tables are empty** — vector column ALTERs require dropping/recreating HNSW indexes.
+- **Don't store embeddings from different models in the same column.** Vector space is model-specific; mixing is meaningless.
+- **Don't inject health/sleep data into Regis's chat context by default.** Chat is general-partner mode — health data only on explicit keyword (`apps/chat/health_summary.py` is keyword-gated).
+- **Don't simulate ratification on architecture decisions** without writing them to `STATUS.md` / `PERSONA.md` / `CLAUDE.md` / memory. The doc system IS the spec.
+
+---
+
+## When making code changes
+
+1. Run the relevant smoke test before declaring done (`python -m {module}.smoke_test`).
+2. If schema changed: write a new numbered migration, apply via psycopg from a smoke test, update the TS types in `packages/shared/`, update `STATUS.md`.
+3. If persona changed: re-run `python -m wisp.smoke_test` and `python -m chat.smoke_test` to see if Regis's voice drifted.
+4. If a new architectural commitment is being made: add it to the numbered list above + `memory/project_daybook.md`.
+5. Always update `docs/STATUS.md` after substantive work lands. Date the change at the top.

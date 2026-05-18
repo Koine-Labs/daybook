@@ -30,6 +30,11 @@ export type MoodReportID = Brand<string, "MoodReportID">;
 export type RegisObservationID = Brand<string, "RegisObservationID">;
 export type RegisTraitHistoryID = Brand<string, "RegisTraitHistoryID">;
 export type UserStateEstimateID = Brand<string, "UserStateEstimateID">;
+export type RegisMomentID = Brand<string, "RegisMomentID">;
+export type IModelActivationID = Brand<string, "IModelActivationID">;
+export type IModelNoveltyLogID = Brand<string, "IModelNoveltyLogID">;
+export type UserActionID = Brand<string, "UserActionID">;
+export type InterjectDecisionID = Brand<string, "InterjectDecisionID">;
 
 // Unchecked-cast helpers. Use only at trust boundaries (DB reads, API inputs).
 export const asUserID = (s: string): UserID => s as UserID;
@@ -47,3 +52,9 @@ export const asMoodReportID = (s: string): MoodReportID => s as MoodReportID;
 export const asRegisObservationID = (s: string): RegisObservationID => s as RegisObservationID;
 export const asRegisTraitHistoryID = (s: string): RegisTraitHistoryID => s as RegisTraitHistoryID;
 export const asUserStateEstimateID = (s: string): UserStateEstimateID => s as UserStateEstimateID;
+export const asRegisMomentID = (s: string): RegisMomentID => s as RegisMomentID;
+export const asIModelActivationID = (s: string): IModelActivationID => s as IModelActivationID;
+export const asIModelNoveltyLogID = (s: string): IModelNoveltyLogID => s as IModelNoveltyLogID;
+export const asUserActionID = (s: string): UserActionID => s as UserActionID;
+export const asInterjectDecisionID = (s: string): InterjectDecisionID =>
+  s as InterjectDecisionID;
