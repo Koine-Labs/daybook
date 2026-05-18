@@ -11,7 +11,7 @@ import logging
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Type, TypeVar
+from typing import Any, AsyncIterator, Type, TypeVar
 
 import httpx
 from pydantic import BaseModel
@@ -34,6 +34,16 @@ class CodexError(Exception):
         super().__init__(f"Codex API error {status}: {body[:500]}")
         self.status = status
         self.body = body
+
+
+class CodexStreamError(Exception):
+    """Raised when the streaming SSE call fails mid-flight (network, parse,
+    or upstream error). Callers should catch this and fall back to the
+    non-streaming path."""
+
+    def __init__(self, message: str, *, partial_text: str = "") -> None:
+        super().__init__(message)
+        self.partial_text = partial_text
 
 
 @dataclass
@@ -116,6 +126,99 @@ def call_codex_structured(
     validated = schema_model.model_validate(parsed)
     usage = _extract_usage(final_response)
     return CodexStructuredResult(data=validated, model=model, raw_usage=usage)
+
+
+async def call_codex_stream(
+    *,
+    system: str,
+    user: str,
+    model: str,
+    reasoning_effort: str = "low",
+    verbosity: str = "low",
+    timeout: float = 120.0,
+) -> AsyncIterator[str]:
+    """Yields each text delta as it arrives from Codex SSE.
+
+    Use this for real-time speech generation. For non-streaming (validation,
+    structured outputs), keep using call_codex_text / call_codex_structured.
+    """
+    body = _build_body(
+        system=system,
+        user=user,
+        model=model,
+        schema_block=None,
+        reasoning_effort=reasoning_effort,
+        verbosity=verbosity,
+    )
+    token = get_valid_access_token()
+    headers = {
+        "Authorization": f"Bearer {token.access_token}",
+        "chatgpt-account-id": token.identity.account_id,
+        "OpenAI-Beta": "responses=experimental",
+        "originator": "codex_cli_rs",
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    }
+
+    accumulated = ""
+    any_yielded = False
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream(
+                "POST", CODEX_URL, headers=headers, json=body
+            ) as res:
+                if res.status_code != 200:
+                    full_body = (await res.aread()).decode(
+                        "utf-8", errors="replace"
+                    )
+                    raise CodexStreamError(
+                        f"Codex API error {res.status_code}: {full_body[:500]}",
+                        partial_text="",
+                    )
+
+                async for raw_line in res.aiter_lines():
+                    if not raw_line:
+                        continue
+                    line = raw_line.strip()
+                    if not line.startswith("data:"):
+                        continue
+                    payload = line[5:].strip()
+                    if not payload:
+                        continue
+                    try:
+                        evt = json.loads(payload)
+                    except json.JSONDecodeError:
+                        continue
+                    evt_type = evt.get("type")
+                    if evt_type == "response.output_text.delta":
+                        delta = evt.get("delta")
+                        if isinstance(delta, str) and delta:
+                            accumulated += delta
+                            any_yielded = True
+                            yield delta
+                    elif evt_type == "response.output_text.done":
+                        final_text = evt.get("text")
+                        if isinstance(final_text, str) and not any_yielded:
+                            accumulated = final_text
+                            yield final_text
+                            any_yielded = True
+                    elif evt_type in ("response.failed", "error"):
+                        err_msg = "Codex stream returned an error event"
+                        if isinstance(evt.get("error"), dict):
+                            msg = evt["error"].get("message")
+                            if msg:
+                                err_msg = f"Codex error: {msg}"
+                        raise CodexStreamError(err_msg, partial_text=accumulated)
+    except CodexStreamError:
+        raise
+    except httpx.HTTPError as e:
+        raise CodexStreamError(
+            f"HTTP error during Codex stream: {e}", partial_text=accumulated
+        ) from e
+    except Exception as e:
+        raise CodexStreamError(
+            f"Unexpected error during Codex stream: {e}", partial_text=accumulated
+        ) from e
 
 
 def _build_body(

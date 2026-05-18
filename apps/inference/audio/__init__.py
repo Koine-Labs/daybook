@@ -11,7 +11,12 @@ Pick at module init via env var DAYBOOK_TTS=kokoro|say|none (default kokoro).
 from __future__ import annotations
 
 from .player import play, AudioPlaybackError
-from .streaming import speak_streaming, speak_streaming_async
+from .streaming import (
+    speak_streaming,
+    speak_streaming_async,
+    is_speaking,
+    stop_speaking,
+)
 from .tts_router import (
     synthesize,
     speak,
@@ -27,6 +32,8 @@ __all__ = [
     "speak",
     "speak_streaming",
     "speak_streaming_async",
+    "is_speaking",
+    "stop_speaking",
     "get_active_backend",
     "MODE_WITNESS",
     "MODE_COMPANION",

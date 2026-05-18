@@ -35,7 +35,7 @@ DEFAULT_CHUNK_SECONDS = 1.5
 # typical room noise on the MacBook internal mic; override per call if needed.
 DEFAULT_SILENCE_RMS = 0.012
 
-_FASTER_WHISPER_MODEL = os.environ.get("DAYBOOK_FASTER_WHISPER_MODEL", "base.en")
+_FASTER_WHISPER_MODEL = os.environ.get("DAYBOOK_FASTER_WHISPER_MODEL", "small.en")
 _FASTER_WHISPER_COMPUTE = os.environ.get("DAYBOOK_FASTER_WHISPER_COMPUTE", "int8")
 
 
@@ -69,14 +69,20 @@ def _get_faster_whisper_model():
 
 
 def _transcribe_array_faster_whisper(audio: np.ndarray, *, language: str | None) -> str:
-    """faster-whisper path: takes float32 mono audio, returns text."""
+    """faster-whisper path: takes float32 mono audio, returns text.
+
+    vad_filter=True dramatically helps with short utterances by stripping silence
+    + low-energy padding before the model sees it. beam_size=5 modestly improves
+    accuracy at small latency cost (worth it for conversational use).
+    """
     model = _get_faster_whisper_model()
     segments, _info = model.transcribe(
         audio,
         language=language,
-        beam_size=1,  # greedy for streaming latency
+        beam_size=5,
         condition_on_previous_text=False,
-        vad_filter=False,
+        vad_filter=True,
+        vad_parameters={"min_silence_duration_ms": 250},
     )
     return "".join(seg.text for seg in segments).strip()
 

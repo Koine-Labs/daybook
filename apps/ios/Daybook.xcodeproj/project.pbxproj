@@ -42,11 +42,11 @@
 			);
 			sourceTree = "<group>";
 		};
-		54F6E91EDCAAE0F5BBAFEC0A /* Components */ = {
+		327200A3D55EE983059FE0C4 /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
-			path = Components;
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		7BF66FDB3BA4308C054E250E /* DesignSystem */ = {
@@ -94,9 +94,9 @@
 		BE90138026AF541F8B9B3390 /* Daybook */ = {
 			isa = PBXGroup;
 			children = (
-				54F6E91EDCAAE0F5BBAFEC0A /* Components */,
 				7BF66FDB3BA4308C054E250E /* DesignSystem */,
 				B50A57348BFAEB8944C89672 /* Networking */,
+				327200A3D55EE983059FE0C4 /* Resources */,
 				A7D70584C457882F795C3B79 /* Screens */,
 				FE87D52CDC8498AEC14421A9 /* State */,
 				65060ACA9837799D681BCC0E /* Assets.xcassets */,

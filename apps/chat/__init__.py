@@ -7,7 +7,11 @@ Public surface:
 """
 from __future__ import annotations
 
-from .handler import AssistantResponse, handle_user_message
+from .handler import (
+    AssistantResponse,
+    handle_user_message,
+    handle_user_message_streaming,
+)
 from .retrieval import gather_context
 from .conversation import (
     create_conversation,
@@ -18,6 +22,7 @@ from .conversation import (
 __all__ = [
     "AssistantResponse",
     "handle_user_message",
+    "handle_user_message_streaming",
     "gather_context",
     "create_conversation",
     "most_recent_conversation",

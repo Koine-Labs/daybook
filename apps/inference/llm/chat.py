@@ -7,12 +7,16 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Type, TypeVar
+from typing import AsyncIterator, Type, TypeVar
 
 from pydantic import BaseModel
 
 from .auth.session import get_sign_in_status
-from .codex_client import call_codex_structured, call_codex_text
+from .codex_client import (
+    call_codex_stream,
+    call_codex_structured,
+    call_codex_text,
+)
 
 
 # Default Codex model used by funda — same default here for consistency.
@@ -64,6 +68,29 @@ class ChatClient:
         raise NotImplementedError(
             f"Gateway backend not yet implemented (model={self.model}). "
             "Sign in with ChatGPT via `python -m llm.auth.sign_in` to use Codex."
+        )
+
+    async def chat_stream(
+        self,
+        *,
+        system: str,
+        user: str,
+        reasoning_effort: str = "low",
+        verbosity: str = "low",
+    ) -> AsyncIterator[str]:
+        """Yields tokens as they arrive. Codex backend only; Gateway raises."""
+        if self.backend == "codex":
+            async for delta in call_codex_stream(
+                system=system,
+                user=user,
+                model=self.model,
+                reasoning_effort=reasoning_effort,
+                verbosity=verbosity,
+            ):
+                yield delta
+            return
+        raise NotImplementedError(
+            "Streaming not yet implemented for Gateway backend"
         )
 
     def chat_structured(

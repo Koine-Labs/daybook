@@ -6,12 +6,13 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, AsyncIterator
 
 from . import _paths  # noqa: F401
 from db import get_conn  # noqa: E402
 from embeddings import embed, embed_and_store  # noqa: E402
 from llm import ChatClient  # noqa: E402
+from llm.codex_client import CodexStreamError  # noqa: E402
 
 from . import observer, trait_drift
 from .retrieval import gather_context
@@ -296,6 +297,223 @@ def _build_prompt(*, user_text: str, context: dict[str, Any]) -> str:
         ]
     )
     return "\n".join(parts)
+
+
+async def handle_user_message_streaming(
+    *,
+    user_id: str,
+    conversation_id: str,
+    user_text: str,
+    client: ChatClient | None = None,
+    extract_observation: bool = True,
+    apply_drift: bool = True,
+    reasoning_effort: str = "low",
+    verbosity: str = "low",
+) -> AsyncIterator[str]:
+    """Streaming variant of handle_user_message.
+
+    Yields assistant text deltas as they arrive from the LLM. Same DB writes,
+    observer, and trait drift as the sync path — the assistant row is written
+    after the stream completes (or on early termination).
+    """
+    t0 = time.monotonic()
+    user_text = user_text.strip()
+    if not user_text:
+        raise ValueError("user_text is empty")
+
+    user_vec = embed(user_text)
+
+    user_msg_id = _insert_message(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        role="user",
+        content=user_text,
+        metadata={},
+    )
+    _embed_and_link(
+        user_id=user_id,
+        message_id=user_msg_id,
+        vector=user_vec,
+        text=user_text,
+    )
+
+    prior_user_msgs = _prior_user_messages(
+        conversation_id=conversation_id, exclude_id=user_msg_id, limit=10
+    )
+
+    context = gather_context(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        user_text=user_text,
+        user_embedding=user_vec,
+    )
+
+    persona = _load_persona()
+    user_prompt = _build_prompt(user_text=user_text, context=context)
+
+    if client is None:
+        client = ChatClient.auto()
+
+    full_text = ""
+    stream_error: Exception | None = None
+    first_delta_ms: int | None = None
+    llm_t0 = time.monotonic()
+
+    try:
+        async for delta in client.chat_stream(
+            system=persona,
+            user=user_prompt,
+            reasoning_effort=reasoning_effort,
+            verbosity=verbosity,
+        ):
+            if first_delta_ms is None:
+                first_delta_ms = int((time.monotonic() - llm_t0) * 1000)
+                logger.info("first_delta_ms=%s", first_delta_ms)
+            full_text += delta
+            yield delta
+    except CodexStreamError as e:
+        stream_error = e
+        partial = getattr(e, "partial_text", "") or ""
+        if partial and not full_text:
+            full_text = partial
+        logger.warning("codex stream failed: %s (partial=%d chars)", e, len(full_text))
+    except GeneratorExit:
+        stream_error = RuntimeError("consumer closed stream early")
+        logger.info("stream consumer closed early (likely barge-in)")
+        _finalize_assistant_turn(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            user_text=user_text,
+            user_msg_id=user_msg_id,
+            assistant_text=full_text,
+            client=client,
+            context=context,
+            llm_t0=llm_t0,
+            first_delta_ms=first_delta_ms,
+            t0=t0,
+            stream_error=stream_error,
+            extract_observation=extract_observation,
+            apply_drift=apply_drift,
+            prior_user_msgs=prior_user_msgs,
+        )
+        raise
+    except Exception as e:
+        stream_error = e
+        logger.exception("unexpected error during streaming chat")
+
+    if not full_text and stream_error is not None:
+        full_text = (
+            "I'm having trouble reaching the language layer right now. "
+            "Try me again in a moment."
+        )
+        yield full_text
+
+    _finalize_assistant_turn(
+        user_id=user_id,
+        conversation_id=conversation_id,
+        user_text=user_text,
+        user_msg_id=user_msg_id,
+        assistant_text=full_text.strip(),
+        client=client,
+        context=context,
+        llm_t0=llm_t0,
+        first_delta_ms=first_delta_ms,
+        t0=t0,
+        stream_error=stream_error,
+        extract_observation=extract_observation,
+        apply_drift=apply_drift,
+        prior_user_msgs=prior_user_msgs,
+    )
+
+
+def _finalize_assistant_turn(
+    *,
+    user_id: str,
+    conversation_id: str,
+    user_text: str,
+    user_msg_id: str,
+    assistant_text: str,
+    client: ChatClient,
+    context: dict[str, Any],
+    llm_t0: float,
+    first_delta_ms: int | None,
+    t0: float,
+    stream_error: Exception | None,
+    extract_observation: bool,
+    apply_drift: bool,
+    prior_user_msgs: list[str],
+) -> None:
+    """Write assistant row + embedding, fire observer + drift. Best-effort."""
+    if not assistant_text:
+        return
+
+    llm_ms = int((time.monotonic() - llm_t0) * 1000)
+    assistant_meta: dict[str, Any] = {
+        "model": client.model,
+        "backend": client.backend,
+        "retrieval_ms": context.get("_retrieval_ms"),
+        "llm_ms": llm_ms,
+        "streaming": True,
+    }
+    if first_delta_ms is not None:
+        assistant_meta["first_delta_ms"] = first_delta_ms
+    if stream_error is not None:
+        assistant_meta["streaming_interrupted"] = True
+        assistant_meta["stream_error"] = str(stream_error)[:300]
+
+    try:
+        assistant_msg_id = _insert_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role="assistant",
+            content=assistant_text,
+            metadata=assistant_meta,
+        )
+        _embed_and_link(
+            user_id=user_id,
+            message_id=assistant_msg_id,
+            vector=embed(assistant_text),
+            text=assistant_text,
+        )
+    except Exception:
+        logger.exception("failed to persist assistant message; skipping observer/drift")
+        return
+
+    if extract_observation:
+        try:
+            observer.maybe_extract_observation(
+                user_id=user_id,
+                user_message=user_text,
+                assistant_message=assistant_text,
+                client=client,
+                context={
+                    "conversation_id": conversation_id,
+                    "user_message_id": user_msg_id,
+                    "assistant_message_id": assistant_msg_id,
+                },
+            )
+        except Exception as e:
+            logger.warning("observer failed: %s", e)
+
+    if apply_drift:
+        try:
+            trait_drift.maybe_apply_heuristics(
+                user_id=user_id,
+                user_message=user_text,
+                assistant_message=assistant_text,
+                prior_user_messages=prior_user_msgs,
+            )
+        except Exception as e:
+            logger.warning("trait drift failed: %s", e)
+
+    total_ms = int((time.monotonic() - t0) * 1000)
+    logger.info(
+        "streaming turn complete: total=%dms first_delta=%s llm=%dms interrupted=%s",
+        total_ms,
+        first_delta_ms,
+        llm_ms,
+        stream_error is not None,
+    )
 
 
 def _context_for_debug(

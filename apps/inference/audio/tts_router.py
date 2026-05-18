@@ -72,7 +72,17 @@ def synthesize(
     voice: str | None = None,
     speed: float | None = None,
 ) -> bytes:
-    """Route to the active TTS backend. Returns WAV bytes (PCM_16)."""
+    """Route to the active TTS backend. Returns WAV bytes (PCM_16).
+
+    Markdown formatting (`**bold**`, `*italic*`, `# headings`, etc.) is
+    automatically stripped so the synth doesn't read literal asterisks.
+    Callers can pass raw LLM output without preprocessing.
+    """
+    # Strip markdown so we don't pronounce literal asterisks, code ticks, etc.
+    # Import lazily to avoid a circular import with streaming.py.
+    from .streaming import strip_markdown_for_tts
+    text = strip_markdown_for_tts(text)
+
     if _ACTIVE_BACKEND == "none":
         raise TTSBackendUnavailableError(
             "No TTS backend active. Install kokoro-onnx + models, or run on macOS for `say` fallback."
