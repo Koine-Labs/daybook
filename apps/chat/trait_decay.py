@@ -44,9 +44,9 @@ logger = logging.getLogger(__name__)
 
 
 TRAIT_DECAY_HALF_LIFE_DAYS = 90
-# per-day decay rate: distance-to-baseline shrinks by this fraction each night.
-# 1 - 0.5**(1/90) ≈ 0.007675
-_DECAY_RATE = 1.0 - 0.5 ** (1.0 / TRAIT_DECAY_HALF_LIFE_DAYS)
+# The per-day decay rate (1 - 0.5**(1/half_life_days)) is computed per call from
+# half_life_days so simulate_days() and tests can override it. With the default
+# half-life of 90d, rate ≈ 0.007675.
 
 MIN_DELTA_MAGNITUDE = 0.001  # below this, skip the write — noise
 DECAY_SOURCE = "decay"

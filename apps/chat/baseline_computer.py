@@ -26,7 +26,11 @@ logger = logging.getLogger(__name__)
 
 
 BASELINE_DRIFT_HALF_LIFE_DAYS = 180
-BASELINE_WINDOW_DAYS = 90  # how far back to look at all (older rows have ~0 weight anyway)
+# SQL-efficiency cutoff for the history scan; NOT the shaping knob. The EWMA
+# is shaped entirely by BASELINE_DRIFT_HALF_LIFE_DAYS=180 — rows older than
+# ~3 half-lives (540d) contribute negligible weight (<12.5%), so we can drop
+# them from the scan without changing the result meaningfully.
+MAX_LOOKBACK_DAYS = 540
 BASELINE_REASON = "nightly baseline snapshot"
 BASELINE_SOURCE = "baseline"
 
@@ -36,7 +40,6 @@ def compute_baseline(
     trait_name: str,
     *,
     half_life_days: int = BASELINE_DRIFT_HALF_LIFE_DAYS,
-    window_days: int = BASELINE_WINDOW_DAYS,
     now: datetime | None = None,
 ) -> float | None:
     """Exponentially-weighted average of trait_name over the user's history.
@@ -45,6 +48,10 @@ def compute_baseline(
     Excludes rows where source IN ('decay', 'baseline') so the baseline is
     grounded in real signal only — otherwise it would drift toward whatever
     the decay engine wrote last night, creating a feedback loop.
+
+    The scan window is hard-capped at MAX_LOOKBACK_DAYS (~3 half-lives) for
+    SQL efficiency; older rows would weigh <12.5% and don't move the average
+    meaningfully.
 
     Returns None if no history exists for this trait."""
     now = now or datetime.now(timezone.utc)
@@ -65,7 +72,7 @@ def compute_baseline(
             (
                 user_id,
                 trait_name,
-                now - _days(window_days * 6),  # generous lookback; weights die off fast
+                now - _days(MAX_LOOKBACK_DAYS),
             ),
         )
         rows = cur.fetchall()
@@ -92,7 +99,6 @@ def compute_all_baselines(
     user_id: str,
     *,
     half_life_days: int = BASELINE_DRIFT_HALF_LIFE_DAYS,
-    window_days: int = BASELINE_WINDOW_DAYS,
     now: datetime | None = None,
 ) -> dict[str, float]:
     """Compute EWMA baseline for every distinct trait_name in the user's history.
@@ -119,7 +125,6 @@ def compute_all_baselines(
             user_id,
             t,
             half_life_days=half_life_days,
-            window_days=window_days,
             now=now,
         )
         if b is not None:

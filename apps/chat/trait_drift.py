@@ -137,9 +137,20 @@ def _enforce_daily_cap(
     Sum of absolute deltas for signal rows (source NOT IN ('decay','baseline'))
     written since 00:00 UTC today must not exceed DAILY_CAP_PER_TRAIT. Returns
     0.0 to mean "drop the write entirely".
+
+    Concurrency: acquires a transaction-scoped pg advisory lock keyed by
+    (user_id, trait) BEFORE the SELECT so two overlapping turns can't both read
+    remaining=0.20 and both insert deltas. The lock is released automatically
+    on transaction commit/rollback. We chose advisory locking over SELECT ...
+    FOR UPDATE because the empty-rows case (first signal of the day) has
+    nothing to lock with FOR UPDATE; advisory locks work uniformly.
     """
     now = now or datetime.now(timezone.utc)
     day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    cur.execute(
+        "SELECT pg_advisory_xact_lock(hashtext(%s))",
+        (f"trait_daily_cap:{user_id}:{trait}",),
+    )
     cur.execute(
         """
         SELECT COALESCE(SUM(ABS(delta)), 0)
