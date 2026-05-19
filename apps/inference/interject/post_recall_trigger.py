@@ -47,6 +47,9 @@ RECEPTIVITY_MIN_SAMPLES = 3
 # Novelty: how many prior recalls to average similarity against.
 NOVELTY_TOP_K = 5
 
+# Silence fallback when no prior moment is found / DB query fails.
+SILENCE_FALLBACK_SECONDS = 30 * 60  # 30 min — assume a healthy gap if unknown
+
 
 @register("post_recall")
 def post_recall_trigger(
@@ -194,9 +197,6 @@ def _active_traits(user_id: str) -> dict:
         return {}
 
 
-SILENCE_FALLBACK_SECONDS = 30 * 60  # 30 min — assume a healthy gap if unknown
-
-
 def _derive_novelty(*, user_id: str, dream_recall_id: str) -> float:
     """Novelty = 1 - mean(top-5 cosine similarities to prior dream_recalls).
 
@@ -242,6 +242,10 @@ def _derive_novelty(*, user_id: str, dream_recall_id: str) -> float:
                 "[post_recall_trigger] no prior recalls — novelty=1.0",
             )
             return 1.0
+        # Use mean rather than max: mean rewards "mostly new with one repeated
+        # theme" (e.g., a recurring lucid-flying motif inside an otherwise
+        # novel recall) as genuinely novel. Max would treat one close prior
+        # as a duplicate and suppress the trigger.
         mean_sim = sum(prior) / len(prior)
         novelty = max(0.0, min(1.0, 1.0 - mean_sim))
         logger.info(
