@@ -34,6 +34,8 @@ Env-var overrides (passed through to component defaults):
   DAYBOOK_DORMANCY_MIN             default 45
   DAYBOOK_REM_HOUR                 default 5    (associative dream-recombination)
   DAYBOOK_REM_MIN                  default 0
+  DAYBOOK_REGIS_SELF_HOUR          default 5    (regis_self projection refresh)
+  DAYBOOK_REGIS_SELF_MIN           default 30
   DAYBOOK_INNER_PULSE_INTERVAL_MIN default 25   (proactive thought cadence, 24/7 smart-gated)
   DAYBOOK_LEARNED_DECIDER          default off  (set to 1 to route decider through Thompson bandit)
 
@@ -70,6 +72,7 @@ def _make_scheduler(*, user_id: str):
     from chat.dreamer import run_rem_dreaming
     from chat.trait_decay import apply_nightly_decay
     from inference.imodels.cluster_dormancy import sweep_dormancy
+    from inference.imodels.regis_self_projector import refresh_regis_self
     from inference.interject.clustering_trigger import run_nightly_clustering
     from inference.interject.inner_pulse_trigger import fire_inner_pulse
     from inference.interject.morning_brief_trigger import fire_morning_brief
@@ -85,6 +88,8 @@ def _make_scheduler(*, user_id: str):
     nrem_m = int(os.environ.get("DAYBOOK_NREM_MIN", "0"))
     rem_h = int(os.environ.get("DAYBOOK_REM_HOUR", "5"))
     rem_m = int(os.environ.get("DAYBOOK_REM_MIN", "0"))
+    regis_self_h = int(os.environ.get("DAYBOOK_REGIS_SELF_HOUR", "5"))
+    regis_self_m = int(os.environ.get("DAYBOOK_REGIS_SELF_MIN", "30"))
     clustering_h = int(os.environ.get("DAYBOOK_CLUSTERING_HOUR", "4"))
     clustering_m = int(os.environ.get("DAYBOOK_CLUSTERING_MIN", "0"))
     decay_h = int(os.environ.get("DAYBOOK_TRAIT_DECAY_HOUR", "4"))
@@ -134,6 +139,11 @@ def _make_scheduler(*, user_id: str):
     sched.register_daily(
         hour=rem_h, minute=rem_m,
         func=run_rem_dreaming, name="rem_dreaming",
+        user_id=user_id,
+    )
+    sched.register_daily(
+        hour=regis_self_h, minute=regis_self_m,
+        func=refresh_regis_self, name="refresh_regis_self",
         user_id=user_id,
     )
     sched.register_interval(
