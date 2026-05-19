@@ -28,6 +28,23 @@ ALTER TABLE i_model_clusters
   ADD COLUMN IF NOT EXISTS last_activated_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS status            TEXT NOT NULL DEFAULT 'active';
 
+-- Constrain `status` to the two valid lifecycle values. Without this a typo
+-- ('Dormant', 'inactive', 'archived', ...) writes silently and disappears
+-- from `get_active_clusters` (which filters status='active') with no error.
+-- Idempotent via the DO block — pg_constraint lookup before adding.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'i_model_clusters_status_check'
+       AND conrelid = 'i_model_clusters'::regclass
+  ) THEN
+    ALTER TABLE i_model_clusters
+      ADD CONSTRAINT i_model_clusters_status_check
+      CHECK (status IN ('active', 'dormant'));
+  END IF;
+END $$;
+
 -- Backfill last_activated_at for existing rows so they start fresh, not stale.
 -- The table has no updated_at / created_at — discovered_at is the only
 -- creation timestamp available.
