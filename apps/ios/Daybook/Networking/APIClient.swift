@@ -1,32 +1,64 @@
 import Foundation
 
 // URLSession client pointed at the FastAPI bridge (apps/api/).
-// Base URL resolves from Info.plist `DaybookAPIBaseURL`, with a localhost
-// fallback for simulator development. For on-device testing edit the plist
-// value to your Mac's LAN IP (e.g. http://192.168.1.42:8000).
+//
+// Two Info.plist keys configure where + how it connects:
+//   DaybookAPIBaseURL — e.g. http://localhost:8000 for simulator,
+//                       https://daybook.koinelabs.com for the public tunnel.
+//   DaybookAPIKey     — paired with the server's DAYBOOK_API_KEY in
+//                       apps/inference/.env.local. Sent as X-API-Key header
+//                       on every request. Skipped server-side for loopback,
+//                       so simulator-on-localhost works with an empty key.
 struct APIClient {
     let baseURL: URL
+    let apiKey: String?
 
     static let shared = APIClient()
 
-    init(baseURL: URL? = nil) {
-        if let baseURL {
-            self.baseURL = baseURL
-        } else {
-            self.baseURL = Self.resolveBaseURL()
-        }
+    init(baseURL: URL? = nil, apiKey: String? = nil) {
+        self.baseURL = baseURL ?? Self.resolveBaseURL()
+        self.apiKey = apiKey ?? Self.resolveAPIKey()
     }
 
     private static func resolveBaseURL() -> URL {
         let fallback = URL(string: "http://localhost:8000")!
-        guard
-            let raw = Bundle.main.object(forInfoDictionaryKey: "DaybookAPIBaseURL") as? String,
-            !raw.trimmingCharacters(in: .whitespaces).isEmpty,
-            let url = URL(string: raw)
-        else {
+        let raw = localOverride(key: "DaybookAPIBaseURL")
+            ?? infoString(key: "DaybookAPIBaseURL")
+        guard let raw, !raw.isEmpty, let url = URL(string: raw) else {
             return fallback
         }
         return url
+    }
+
+    private static func resolveAPIKey() -> String? {
+        let raw = localOverride(key: "DaybookAPIKey")
+            ?? infoString(key: "DaybookAPIKey")
+        guard let raw, !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    // Daybook-Local.plist is a gitignored override bundled with the app.
+    // The cloudflare-tunnel setup script generates it with the public URL
+    // and API key so they don't have to live in committed project.yml.
+    private static func localOverride(key: String) -> String? {
+        guard
+            let url = Bundle.main.url(forResource: "Daybook-Local", withExtension: "plist"),
+            let data = try? Data(contentsOf: url),
+            let plist = try? PropertyListSerialization.propertyList(
+                from: data, options: [], format: nil
+            ) as? [String: Any],
+            let raw = plist[key] as? String
+        else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func infoString(key: String) -> String? {
+        guard
+            let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String
+        else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     enum APIError: Error, CustomStringConvertible, Sendable {
@@ -87,6 +119,9 @@ struct APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Accept")
+        if let apiKey {
+            req.setValue(apiKey, forHTTPHeaderField: "X-API-Key")
+        }
         // Keep things snappy on flaky LAN — better to fail fast and show the
         // offline fallback than hang the chat overlay for 60s.
         req.timeoutInterval = 25

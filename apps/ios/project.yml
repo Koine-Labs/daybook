@@ -29,6 +29,7 @@ targets:
         excludes:
           - "Info.plist"
           - "Daybook.icon"
+          - "Daybook-Local.plist"
     resources:
       - path: Daybook/Assets.xcassets
     info:
@@ -49,6 +50,12 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         UIAppFonts: []
+        # Defaults — overridden at runtime by Daybook-Local.plist (gitignored)
+        # when present. Localhost works for simulator dev. For phone testing
+        # via the Cloudflare Tunnel, bin/cloudflare-tunnel-setup.sh writes
+        # the real URL + key into Daybook-Local.plist.
+        DaybookAPIBaseURL: "http://localhost:8000"
+        DaybookAPIKey: ""
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koinelabs.daybook

@@ -24,28 +24,76 @@ Base URL: `http://localhost:8000`
 
 Interactive docs: `http://localhost:8000/docs`
 
-## Phone testing
+## Auth
 
-When testing the iOS app on a real device (same Wi-Fi as the Mac):
+The `X-API-Key` header gates every non-loopback request. Set
+`DAYBOOK_API_KEY` in `apps/inference/.env.local` (auto-generated; not
+committed). Requests from `127.0.0.1` / `localhost` / `::1` skip the
+check so local Mac dev works without sending the header.
+
+Always-public paths: `/`, `/health`, `/docs`, `/redoc`, `/openapi.json`
+(so Cloudflare edge health-checks and browsable OpenAPI docs work).
+
+The iOS app reads its copy of the key from
+`apps/ios/Daybook/Daybook-Local.plist` (gitignored), written by the
+tunnel setup script below.
+
+## Phone testing — two options
+
+### Option A: LAN (phone on home Wi-Fi only)
 
 1. Start uvicorn with `--host 0.0.0.0` as above.
-2. Find the Mac's LAN IP:
-   ```bash
-   ipconfig getifaddr en0
-   ```
-   (Use `en1` if you're on a USB-C / dock Ethernet adapter.)
-3. Edit `apps/ios/Daybook/Info.plist` and set the `DaybookAPIBaseURL` value to
-   `http://<that-ip>:8000`, e.g. `http://192.168.1.42:8000`.
-4. Build & run on the device from Xcode. The chat overlay will hit the Mac
-   over the LAN.
+2. Find the Mac's LAN IP: `ipconfig getifaddr en0` (or `en1`).
+3. Edit `apps/ios/Daybook/Info.plist` → set `DaybookAPIBaseURL` to
+   `http://<that-ip>:8000`. (You can leave `DaybookAPIKey` empty since
+   LAN counts as loopback-ish — but it doesn't; the Mac's LAN IP isn't
+   in the `_LOCAL_HOSTS` allowlist. Either add the key, or hit the API
+   from a true `127.0.0.1` like the simulator.)
+4. Build & run on the device. App must be on the same Wi-Fi as the Mac.
 
-The simulator can leave `DaybookAPIBaseURL` at the default `http://localhost:8000`
-since it shares the host's loopback.
+Limitation: phone can't reach Mac off home Wi-Fi.
+
+### Option B: Cloudflare Tunnel (phone reachable anywhere) — recommended
+
+One-time setup:
+
+```bash
+brew install cloudflared
+cloudflared tunnel login    # opens browser → pick koinelabs.com
+bin/cloudflare-tunnel-setup.sh
+```
+
+The setup script: creates a tunnel named `daybook`, routes
+`daybook.koinelabs.com` → `localhost:8000`, writes
+`~/.cloudflared/config.yml`, and generates
+`apps/ios/Daybook/Daybook-Local.plist` with the public URL + API key.
+
+Then each session:
+
+```bash
+# In one terminal — start FastAPI
+cd apps && source inference/.venv/bin/activate
+cd api && uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+# In another — start the tunnel
+bin/cloudflare-tunnel-run.sh
+```
+
+Optional: install the tunnel as a launchd service that auto-starts at
+boot: `sudo cloudflared service install`.
+
+Rebuild the iOS app once after `bin/cloudflare-tunnel-setup.sh` (the
+new `Daybook-Local.plist` overrides `DaybookAPIBaseURL` to
+`https://daybook.koinelabs.com` and supplies the API key automatically).
+After that the phone can hit your Mac from anywhere as long as the
+tunnel + uvicorn are running on the Mac.
+
+Verify with: `curl https://daybook.koinelabs.com/`
 
 ## CORS
 
-`http://localhost:*` and `http://127.0.0.1:*` are allowed (regex). Add deployed
-client URL schemes to `app.py` when the iOS app ships.
+`http(s)://localhost:*`, `127.0.0.1:*`, and `*.koinelabs.com` allowed.
+`X-API-Key` is in the allowed headers list.
 
 ## Endpoints
 

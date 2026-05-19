@@ -29,6 +29,7 @@ for _p in (_APPS_DIR, _INFERENCE_DIR):
 from fastapi import FastAPI  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
+from api.auth import APIKeyMiddleware  # noqa: E402
 # Use absolute imports so this works whether uvicorn loads us as `app:app`
 # (from apps/api/ as cwd) or as `api.app:app` (from apps/ as cwd).
 from api.routes import chat as chat_routes  # noqa: E402
@@ -46,12 +47,17 @@ app = FastAPI(
     version="0.1.0",
 )
 
+# X-API-Key gate — required for non-loopback requests (i.e. anything coming
+# through the Cloudflare Tunnel from the public internet). Localhost dev is
+# unaffected.
+app.add_middleware(APIKeyMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.koinelabs\.com)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-API-Key"],
 )
 
 app.include_router(health_routes.router)
