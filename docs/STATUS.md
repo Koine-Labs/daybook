@@ -1,6 +1,6 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-17 (Scheduled morning/pre-sleep triggers + wake-word listener + voice commands all live. Pi speaks through bone-conduction. Regis is daily-usable.)**
+**Last updated: 2026-05-19 (Native iOS + watchOS apps live. FastAPI bridge gated with API key. Cloudflare Tunnel at `https://daybook.koinelabs.com` makes the Mac brain reachable from the phone anywhere on the internet.)**
 
 The single page that answers "where are we, where are we going, what's blocking us?" Updated after substantive work lands. Open this any session when you need orientation.
 
@@ -47,6 +47,24 @@ python -m recall.capture
 ```
 
 Regis runs on your ChatGPT subscription (signed in as aakashjuly18@gmail.com → tokens at `~/.daybook/auth.json`). Embeddings run locally on your Mac (BGE-M3 cached at `~/.cache/huggingface`). Database is Neon Postgres.
+
+### Talk to Regis from the phone (added 2026-05-19)
+
+```bash
+# In one terminal — FastAPI bridge
+cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook/apps"
+source inference/.venv/bin/activate && cd api
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+# In another — Cloudflare Tunnel (foreground)
+bin/cloudflare-tunnel-run.sh
+```
+
+Then open the **Daybook** iOS app on your iPhone → tap "say something to regis" → real chat with `gpt-5.2 / codex` over `https://daybook.koinelabs.com`. Works from anywhere with internet (not just home Wi-Fi). For the tunnel to auto-start at boot: `sudo cloudflared service install`.
+
+The `X-API-Key` gate (server-side: `apps/inference/.env.local`, iOS-side: `apps/ios/Daybook/Daybook-Local.plist`) keeps the tunnel URL from being a free backdoor. Both files are gitignored.
+
+The **DaybookWatch** watch app runs the four-state face (Rest / Listen / Speak / Talk). Currently only Rest + long-press → Talk are real — Listen and Speak need WatchConnectivity wiring next.
 
 ---
 
@@ -113,6 +131,20 @@ The character + voice + audio routing.
 | [DONE — 2026-05-17, evening parallel build] | **Walking-remark prototype** — `apps/wisp/walking_remark.py`: vision frame or news item → composer → Regis comment. Real output on logo: *"Looks like a fish that forgot what it was for."* On HN article: *"Funny how the future keeps dragging us back to a handset and a coin slot."* |
 | [NOT BUILT] | "Should I speak now?" autonomous decider for waking moments, continuous-mic conversation listening + diarization, Gateway client real impl, calibration layer for classifier probabilities, web frontend for chat, privacy-by-default sensor consent framework, custom wearable form-factor experiments, regis trait-drift on sleep events |
 
+### Track 4 — Native apps (added 2026-05-19)
+
+iPhone + Apple Watch as the user's visible surfaces into Regis. Built on the same FastAPI brain.
+
+| State | What |
+|---|---|
+| [DONE — 2026-05-19] | **`apps/api/`** — FastAPI bridge exposing chat / recall / observations / sessions / persona / compose / health. Single-user (hardcoded to Aakash's UUID). 21 routes. |
+| [DONE — 2026-05-19] | **`apps/api/auth.py`** — X-API-Key middleware. Loopback bypass for Mac-local dev, but Cloudflare-proxied requests (detected via `cf-connecting-ip`) always require the key. Public paths (`/`, `/health`, `/docs`) bypass for edge health checks + browsable OpenAPI. |
+| [DONE — 2026-05-19] | **Cloudflare Tunnel** at `https://daybook.koinelabs.com` → `localhost:8000`. Named tunnel `daybook` on Aakash's Cloudflare account. Setup automated by `bin/cloudflare-tunnel-setup.sh`; foreground runner `bin/cloudflare-tunnel-run.sh`; or install as launchd service. |
+| [DONE — 2026-05-19] | **iOS app (`apps/ios/Daybook/`)** — three-room shell from Claude Design (Now / Self / Connections). Regis breathing center, halo + drifting ping bubbles, body whispers + micro-states, talk pill. Self has long-form portrait + body aurora + memory threads + dreams (all in honest empty states). Connections has BCI hero + wearables + apps + tuning + permissions. ChatOverlay wired to real `/chat/conversations` → real Regis replies. |
+| [DONE — 2026-05-19] | **watchOS app (`apps/ios/DaybookWatch Watch App/`)** — single-face, four-state (Rest / Listen / Speak / Talk). Rest is default; long-press → Talk; Listen + Speak are server-push (not wired). HealthKit live HR query (UI shows `—` until Health capability enabled in Xcode + permission granted). Auto-launches alongside the iOS app via scheme post-action. |
+| [DONE — 2026-05-19] | **Daybook app icon** — Icon Composer source bundle preserved at `apps/ios/Daybook/Daybook.icon` (Liquid Glass / layered format, for when actool support stabilizes). Current `AppIcon.appiconset` ships flat PNGs for iOS Default / Dark / Tinted appearance modes + watchOS. |
+| [NOT BUILT] | WatchConnectivity push (phone → watch Listen state when Regis surfaces a ping; phone → watch Speak state when TTS active), audio recording on watch long-press → forward to phone → Mac, voice-mode chat on iOS (text-only for now), HealthKit pull on iOS to feed body whispers, SSE stream from FastAPI for proactive pings on Now, HTTPS-friendly real auth (multi-user later — current X-API-Key is single-key personal). |
+
 ---
 
 ## v3 always-on vision — where we stand
@@ -123,7 +155,7 @@ Your v3 vision (single-ear device, walks with you all day, sees what you see, he
 |---|---:|---|
 | Software brain (intelligence, persona, memory, retrieval, LLM) | ~85% | Composer + retrieval + I-Model clusterer/activator/novelty + sleep observer + consolidator all live. |
 | Sensing layer (BCI, vision, mic input, multi-modal) | ~25% | Apple Watch ✓, vision ✓ (Codex multimodal works), mic input ✓ (Whisper). EEG arriving; continuous BCI emotional state classifier still v1.5 work. |
-| I/O layer (voice in/out, vision in, audio routing) | ~70% | Text ✓, voice in ✓ (STT), voice out ✓ (Kokoro TTS), vision in ✓. Only bone-conduction routing pending hardware arrival. |
+| I/O layer (voice in/out, vision in, audio routing) | ~80% | Text ✓, voice in ✓ (STT), voice out ✓ (Kokoro TTS), vision in ✓. Now also: **native iOS chat ✓, Apple Watch face ✓ (rest + talk)**. Pending: bone-conduction routing, voice-mode in iOS, WatchConnectivity push. |
 | Autonomous behavior (when to speak, what to notice) | ~15% | Sleep cues fire autonomously. News pull + walking remark are the first non-sleep autonomous triggers. Still need the "should I speak now?" decider that gates ALL autonomous interjections. |
 | Memory + evolution (clustering, activation, consolidation, observers) | ~75% | Clusterer ✓, activator ✓, novelty ✓, sleep observer ✓, chat consolidator ✓. Missing: trait drift on sleep events, nightly cron scheduling. |
 | Hardware form factor | ~5-10% | Bedside rig in progress (Pi chat); wearable form factor is years out. |
