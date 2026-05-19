@@ -43,6 +43,7 @@ def run_clusterer(
     min_cluster_size: int = 5,
     min_embeddings: int = 20,
     dry_run: bool = False,
+    client=None,
 ) -> dict:
     """Run HDBSCAN clustering on accumulated embeddings.
 
@@ -133,6 +134,16 @@ def run_clusterer(
     if not dry_run and memberships:
         _upsert_memberships(memberships)
 
+    newly_labeled = 0
+    if not dry_run:
+        try:
+            from .cluster_labeler import label_unlabeled_clusters
+
+            newly_labeled = label_unlabeled_clusters(user_id=user_id, client=client)
+            logger.info("clusterer: labeled %d new cluster(s)", newly_labeled)
+        except Exception as e:
+            logger.warning("clusterer: cluster labeling failed: %s", e)
+
     return {
         "discovered": discovered,
         "updated": updated,
@@ -140,6 +151,7 @@ def run_clusterer(
         "noise_points": int(np.sum(labels == -1)),
         "input_embeddings": len(rows),
         "dry_run": dry_run,
+        "newly_labeled": newly_labeled,
     }
 
 
