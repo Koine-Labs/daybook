@@ -21,6 +21,9 @@ from . import _paths  # noqa: F401
 from db import get_conn  # noqa: E402
 from llm import ChatClient  # noqa: E402
 
+from .baseline_computer import fetch_current_trait_values
+from .trait_drift import _enforce_daily_cap
+
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,7 @@ MAX_DELTA = 0.05
 TRAIT_FLOOR = 0.0
 TRAIT_CEIL = 1.0
 DEFAULT_TRAIT_VALUE = 0.5
+DREAM_SOURCE = "dream"
 
 TraitName = Literal[
     "empathy",
@@ -218,19 +222,14 @@ def _fetch_observations(*, user_id: str, obs_ids: list[str]) -> list[str]:
 
 
 def _fetch_current_traits(*, user_id: str) -> dict[str, float]:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT DISTINCT ON (trait_name) trait_name, value
-            FROM regis_trait_history
-            WHERE user_id = %s
-            ORDER BY trait_name, changed_at DESC
-            """,
-            (user_id,),
-        )
-        rows = cur.fetchall()
+    """Latest signal-sourced value per trait. Defaults to 0.5 for unseen traits.
+
+    Excludes baseline/decay rows via fetch_current_trait_values — see
+    baseline_computer.CURRENT_VALUE_SOURCE_FILTER.
+    """
+    current = fetch_current_trait_values(user_id)
     state = {t: DEFAULT_TRAIT_VALUE for t in KNOWN_TRAITS}
-    for trait_name, value in rows:
+    for trait_name, value in current.items():
         if trait_name in KNOWN_TRAITS:
             state[trait_name] = float(value)
     return state
@@ -244,15 +243,29 @@ def _persist_delta(
     reason: str,
     current: float,
 ) -> None:
-    new_value = max(TRAIT_FLOOR, min(TRAIT_CEIL, current + delta))
+    """Persist a dream-driven trait delta, enforcing the per-UTC-day cap.
+
+    Routes through trait_drift._enforce_daily_cap so dream writes share the
+    same DAILY_CAP_PER_TRAIT budget as heuristic writes (both are signal).
+    Tags the row with source='dream' for auditability.
+
+    If today's budget is exhausted the write is dropped. If only part fits,
+    the delta is clamped down to what's left.
+    """
     with get_conn() as conn, conn.cursor() as cur:
+        effective_delta = _enforce_daily_cap(
+            cur, user_id=user_id, trait=trait, proposed_delta=delta
+        )
+        if effective_delta == 0.0:
+            return
+        new_value = max(TRAIT_FLOOR, min(TRAIT_CEIL, current + effective_delta))
         cur.execute(
             """
             INSERT INTO regis_trait_history
-              (user_id, trait_name, value, delta, reason)
-            VALUES (%s, %s, %s, %s, %s)
+              (user_id, trait_name, value, delta, reason, source)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (user_id, trait, new_value, delta, reason),
+            (user_id, trait, new_value, effective_delta, reason, DREAM_SOURCE),
         )
         conn.commit()
 

@@ -19,6 +19,7 @@ from db import get_conn  # noqa: E402
 from embeddings import embed, retrieve_similar  # noqa: E402
 from imodels.activator import get_active_clusters  # noqa: E402
 
+from .baseline_computer import fetch_current_trait_values
 from .health_summary import summarize_health_for_query
 
 
@@ -280,16 +281,10 @@ def _latest_user_state(user_id: str) -> dict[str, Any] | None:
 
 
 def _current_traits(user_id: str) -> dict[str, float]:
-    """Latest value for each trait_name. Empty dict if no history yet."""
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT DISTINCT ON (trait_name) trait_name, value
-            FROM regis_trait_history
-            WHERE user_id = %s
-            ORDER BY trait_name, changed_at DESC
-            """,
-            (user_id,),
-        )
-        rows = cur.fetchall()
-    return {r[0]: float(r[1]) for r in rows}
+    """Latest value for each trait_name. Empty dict if no history yet.
+
+    Delegates to baseline_computer.fetch_current_trait_values so the
+    source-filter convention (exclude baseline/decay rows) lives in one
+    place. See CURRENT_VALUE_SOURCE_FILTER for the rationale.
+    """
+    return fetch_current_trait_values(user_id)

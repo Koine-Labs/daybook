@@ -28,6 +28,8 @@ Env-var overrides (passed through to component defaults):
   DAYBOOK_NREM_MIN                 default 0
   DAYBOOK_CLUSTERING_HOUR          default 4    (nightly I-Model clustering)
   DAYBOOK_CLUSTERING_MIN           default 0
+  DAYBOOK_TRAIT_DECAY_HOUR         default 4    (nightly trait-decay toward learned baseline)
+  DAYBOOK_TRAIT_DECAY_MIN          default 30
   DAYBOOK_DORMANCY_HOUR            default 4    (cluster dormancy sweep)
   DAYBOOK_DORMANCY_MIN             default 45
   DAYBOOK_REM_HOUR                 default 5    (associative dream-recombination)
@@ -66,6 +68,7 @@ def _make_scheduler(*, user_id: str):
     """Build a BackgroundScheduler with the standard daily triggers registered."""
     from chat.consolidator import consolidate_yesterday
     from chat.dreamer import run_rem_dreaming
+    from chat.trait_decay import apply_nightly_decay
     from inference.imodels.cluster_dormancy import sweep_dormancy
     from inference.interject.clustering_trigger import run_nightly_clustering
     from inference.interject.inner_pulse_trigger import fire_inner_pulse
@@ -84,6 +87,8 @@ def _make_scheduler(*, user_id: str):
     rem_m = int(os.environ.get("DAYBOOK_REM_MIN", "0"))
     clustering_h = int(os.environ.get("DAYBOOK_CLUSTERING_HOUR", "4"))
     clustering_m = int(os.environ.get("DAYBOOK_CLUSTERING_MIN", "0"))
+    decay_h = int(os.environ.get("DAYBOOK_TRAIT_DECAY_HOUR", "4"))
+    decay_m = int(os.environ.get("DAYBOOK_TRAIT_DECAY_MIN", "30"))
     dormancy_h = int(os.environ.get("DAYBOOK_DORMANCY_HOUR", "4"))
     dormancy_m = int(os.environ.get("DAYBOOK_DORMANCY_MIN", "45"))
     labeler_h = int(os.environ.get("DAYBOOK_OUTCOME_LABELER_HOUR", "2"))
@@ -114,6 +119,11 @@ def _make_scheduler(*, user_id: str):
     sched.register_daily(
         hour=clustering_h, minute=clustering_m,
         func=run_nightly_clustering, name="nightly_clustering",
+        user_id=user_id,
+    )
+    sched.register_daily(
+        hour=decay_h, minute=decay_m,
+        func=apply_nightly_decay, name="trait_decay",
         user_id=user_id,
     )
     sched.register_daily(
