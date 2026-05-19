@@ -31,6 +31,7 @@
 		C518A1C40B4532BA82C52A64 /* Daybook-Local.plist in Resources */ = {isa = PBXBuildFile; fileRef = BBE786AEC96BB6ADA4A172B6 /* Daybook-Local.plist */; };
 		D721FED71DE258552D12D948 /* WatchRegis.swift in Sources */ = {isa = PBXBuildFile; fileRef = B664CC1E0DF568827616EC17 /* WatchRegis.swift */; };
 		DFE804EFAE63BEFE1EC11801 /* AmbientParticles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5912536CCAA094AD8DC77C /* AmbientParticles.swift */; };
+		E87AF9888C70ABA7AABAF913 /* HealthKitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70AFB5B86769D0DF72C5127D /* HealthKitClient.swift */; };
 		E894663FB04D1AD26374BBD8 /* WatchBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F749F4F1BFF637650C2E9DA /* WatchBackground.swift */; };
 		F1F8B8A0FADA9C3D39FFD01E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A3269417AAE5C44FE9892C1 /* ContentView.swift */; };
 		F6FE5D3C7B9538D77D844F10 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9058579F36907E126FDDE6 /* ContentView.swift */; };
@@ -51,6 +52,7 @@
 		62CF21D1642E705CDC1F5437 /* GlassPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPanel.swift; sourceTree = "<group>"; };
 		65060ACA9837799D681BCC0E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6BFA405CF5F8D72E4B291DF5 /* SectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionHeader.swift; sourceTree = "<group>"; };
+		70AFB5B86769D0DF72C5127D /* HealthKitClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitClient.swift; sourceTree = "<group>"; };
 		764E71219F6247E4EEC17F50 /* DaybookWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DaybookWatch.entitlements; sourceTree = "<group>"; };
 		8B0EBB65CC96DF28DB209C9A /* Daybook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Daybook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BFCD72AC804BE52F5277998 /* HeartRateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateClient.swift; sourceTree = "<group>"; };
@@ -79,11 +81,12 @@
 			);
 			sourceTree = "<group>";
 		};
-		327200A3D55EE983059FE0C4 /* Resources */ = {
+		49FD9AD60C123110D04E69F5 /* HealthKit */ = {
 			isa = PBXGroup;
 			children = (
+				70AFB5B86769D0DF72C5127D /* HealthKitClient.swift */,
 			);
-			path = Resources;
+			path = HealthKit;
 			sourceTree = "<group>";
 		};
 		54F6E91EDCAAE0F5BBAFEC0A /* Components */ = {
@@ -157,8 +160,8 @@
 			children = (
 				54F6E91EDCAAE0F5BBAFEC0A /* Components */,
 				7BF66FDB3BA4308C054E250E /* DesignSystem */,
+				49FD9AD60C123110D04E69F5 /* HealthKit */,
 				B50A57348BFAEB8944C89672 /* Networking */,
-				327200A3D55EE983059FE0C4 /* Resources */,
 				A7D70584C457882F795C3B79 /* Screens */,
 				FE87D52CDC8498AEC14421A9 /* State */,
 				65060ACA9837799D681BCC0E /* Assets.xcassets */,
@@ -288,6 +291,7 @@
 				F1F8B8A0FADA9C3D39FFD01E /* ContentView.swift in Sources */,
 				5CCBFB4BA5E8EBABE509E5C5 /* DaybookApp.swift in Sources */,
 				27886FDAAD01E6579FCCDF02 /* GlassPanel.swift in Sources */,
+				E87AF9888C70ABA7AABAF913 /* HealthKitClient.swift in Sources */,
 				6DB8CB060590F186741CD171 /* Models.swift in Sources */,
 				77CE104E7B8E3F016A5575BF /* NowRoom.swift in Sources */,
 				7C8DF090769FF8A2146136AF /* RegisCharacter.swift in Sources */,
@@ -353,6 +357,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Daybook/Daybook.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Daybook/Info.plist;
@@ -437,6 +442,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Daybook/Daybook.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Daybook/Info.plist;

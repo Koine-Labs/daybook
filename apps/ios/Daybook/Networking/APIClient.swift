@@ -227,6 +227,84 @@ struct APIClient {
             elapsedMs: reply.elapsed_ms
         )
     }
+
+    // MARK: - State / HealthKit (#13)
+
+    /// Polymorphic payload value for sensor_readings. Mirrors the JSONB
+    /// any-shape on the server. Keep it small — only the cases we actually
+    /// emit from HealthKitClient (Double, Int, String).
+    enum AnyPayloadValue: Encodable, Sendable {
+        case double(Double)
+        case int(Int)
+        case string(String)
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            switch self {
+            case .double(let v): try c.encode(v)
+            case .int(let v):    try c.encode(v)
+            case .string(let v): try c.encode(v)
+            }
+        }
+    }
+
+    struct SensorReadingIn: Encodable, Sendable {
+        let recorded_at: Date
+        let source: String          // "IPHONE" | "APPLE_WATCH"
+        let kind: String            // "heart_rate" | "hrv" | "sleep_stage" | "temperature"
+        let payload: [String: AnyPayloadValue]
+    }
+
+    struct SensorIngestResponse: Decodable, Sendable {
+        let inserted: Int
+        let rejected: Int
+        let last_recorded_at: Date?
+    }
+
+    struct BodySummary: Decodable, Sendable {
+        let line: String?
+        let hrv_avg_ms: Double?
+        let hr_resting_bpm: Int?
+        let last_sleep_duration_minutes: Int?
+        let last_sleep_ended_at: Date?
+        let readings_last_24h: Int
+        let generated_at: Date
+    }
+
+    struct BodySeriesPoint: Decodable, Sendable {
+        let day: String           // "YYYY-MM-DD"
+        let hrv_avg_ms: Double?
+        let hr_avg_bpm: Double?
+        let sleep_minutes: Int?
+    }
+
+    struct BodySeriesResponse: Decodable, Sendable {
+        let days: Int
+        let points: [BodySeriesPoint]
+    }
+
+    private struct SensorBatch: Encodable {
+        let readings: [SensorReadingIn]
+    }
+
+    /// POST a batch of HealthKit readings. Server caps at 200; caller must
+    /// chunk anything larger (HealthKitClient does this).
+    func sendSensorReadings(_ readings: [SensorReadingIn]) async throws -> SensorIngestResponse {
+        try await post("/state/sensor_readings", body: SensorBatch(readings: readings))
+    }
+
+    /// Latest body picture: HRV avg, resting HR, last sleep + a composed
+    /// whisper line ("hrv steady. you slept 7h 12m."). `line` is nil when
+    /// there's no recent data — UI should fall back to its empty state.
+    func bodySummary() async throws -> BodySummary {
+        try await get("/state/body")
+    }
+
+    /// Per-UTC-day series for the BodyAurora visualization. `days` clamped
+    /// server-side to [1, 30]. Empty days have nil fields, not absent.
+    func bodySeries(days: Int = 7) async throws -> BodySeriesResponse {
+        try await get("/state/body/series?days=\(days)")
+    }
 }
 
 private struct EmptyBody: Encodable {}

@@ -39,6 +39,7 @@ from api.routes import observations as observations_routes  # noqa: E402
 from api.routes import persona as persona_routes  # noqa: E402
 from api.routes import recall as recall_routes  # noqa: E402
 from api.routes import sessions as sessions_routes  # noqa: E402
+from api.routes import state as state_routes  # noqa: E402
 
 
 app = FastAPI(
@@ -67,6 +68,7 @@ app.include_router(sessions_routes.router)
 app.include_router(observations_routes.router)
 app.include_router(persona_routes.router)
 app.include_router(compose_routes.router)
+app.include_router(state_routes.router)
 
 
 @app.get("/", tags=["root"])
