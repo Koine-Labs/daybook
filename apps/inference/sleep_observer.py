@@ -29,7 +29,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from db import get_conn  # noqa: E402
-from embeddings import embed_and_store  # noqa: E402
+from embeddings import embed, embed_and_store  # noqa: E402
+from imodels import log_novelty_observation  # noqa: E402
 from llm import ChatClient  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -174,6 +175,24 @@ def observe_sleep_session(
                     text=obs_text,
                 )
                 _link_embedding(obs_id)
+                # Novelty signal: sleep-session observations are user-state
+                # evidence (patterns Regis distilled from one night). Never
+                # block the write path on novelty failure.
+                try:
+                    obs_vec = embed(obs_text)
+                    log_novelty_observation(
+                        user_id=user_id,
+                        state_snapshot={
+                            "source_type": "regis_observation",
+                            "source_id": obs_id,
+                            "source": "sleep_observer",
+                            "session_id": session_id,
+                            "text_preview": obs_text[:200],
+                        },
+                        embedding=obs_vec,
+                    )
+                except Exception as e:
+                    logger.warning("novelty logging failed (sleep_observer): %s", e)
             except Exception as e:
                 logger.warning("sleep_observer persist failed: %s", e)
 

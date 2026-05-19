@@ -21,7 +21,8 @@ for p in (APPS_DIR, INFERENCE_DIR):
         sys.path.insert(0, sp)
 
 from db import get_conn  # noqa: E402
-from embeddings import embed_and_store  # noqa: E402
+from embeddings import embed, embed_and_store  # noqa: E402
+from imodels import log_novelty_observation  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +60,24 @@ def set_intent(
     except Exception as e:
         embed_error = str(e)
         logger.warning("Embedding failed (continuing): %s", e)
+
+    # Novelty signal: intents are direct user-state evidence (what the user
+    # wants Regis to attend to). Never block on failure.
+    if embedding_id is not None:
+        try:
+            intent_vec = embed(text)
+            log_novelty_observation(
+                user_id=user_id,
+                state_snapshot={
+                    "source_type": "intent",
+                    "source_id": intent_id,
+                    "target_session_id": target_session_id,
+                    "text_preview": text[:200],
+                },
+                embedding=intent_vec,
+            )
+        except Exception as e:
+            logger.warning("novelty logging failed (intent): %s", e)
 
     return {
         "intent_id": intent_id,

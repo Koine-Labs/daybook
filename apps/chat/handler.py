@@ -18,6 +18,7 @@ from typing import Any, AsyncIterator
 from . import _paths  # noqa: F401
 from db import get_conn  # noqa: E402
 from embeddings import embed, embed_and_store  # noqa: E402
+from imodels import log_novelty_observation  # noqa: E402
 from llm import ChatClient  # noqa: E402
 from llm.codex_client import CodexStreamError  # noqa: E402
 
@@ -296,6 +297,24 @@ async def handle_user_message_streaming(
         vector=user_vec,
         text=user_text,
     )
+
+    # Novelty signal: user message is direct user-state evidence. Wrap in
+    # try/except — novelty logging failure must NEVER block the chat turn.
+    # Assistant replies are NOT logged here (Regis-side, not user evidence).
+    try:
+        log_novelty_observation(
+            user_id=user_id,
+            state_snapshot={
+                "source_type": "chat_message",
+                "source_id": user_msg_id,
+                "role": "user",
+                "conversation_id": conversation_id,
+                "text_preview": user_text[:200],
+            },
+            embedding=user_vec,
+        )
+    except Exception as e:
+        logger.warning("novelty logging failed (chat user): %s", e)
 
     prior_user_msgs = _prior_user_messages(
         conversation_id=conversation_id, exclude_id=user_msg_id, limit=10

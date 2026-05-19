@@ -7,6 +7,7 @@ I-Model.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import sys
@@ -17,6 +18,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from db import get_conn  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+# Source types that are user-side evidence (per audit item #4 coverage decisions).
+# regis_moment is excluded — Regis's own voice, not user-state.
+USER_SIDE_SOURCE_TYPES = (
+    "chat_message",      # user role only — filtered in backfill SQL
+    "regis_observation",
+    "dream_recall",
+    "intent",
+    "mood",
+)
 
 
 def log_novelty_observation(
@@ -136,3 +147,149 @@ def flag_for_reclustering(user_id: str, min_novelty_count: int = 10) -> int:
 
 def _vec_literal(vec: list[float]) -> str:
     return "[" + ",".join(f"{v:.6f}" for v in vec) + "]"
+
+
+def backfill_novelty_log(
+    *,
+    user_id: str,
+    limit: int = 5000,
+) -> dict[str, int]:
+    """Catch-up: log novelty for existing user-side embeddings that have none.
+
+    Walks the embeddings table for user_id, filters to user-side source_types
+    (chat_message user-role rows, regis_observation, dream_recall, intent,
+    mood), skips any source_id already present in i_model_novelty_log via the
+    embedded state_snapshot.source_id, and calls log_novelty_observation on
+    the rest. Returns counts: scanned, logged, skipped_not_novel, errors.
+    """
+    counts = {"scanned": 0, "logged": 0, "skipped_not_novel": 0, "errors": 0}
+
+    # Build the set of source_ids already represented in the novelty log so
+    # repeated backfills are idempotent. We compare via state_snapshot.source_id.
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT state_snapshot ->> 'source_id'
+            FROM i_model_novelty_log
+            WHERE user_id = %s
+              AND state_snapshot ? 'source_id'
+            """,
+            (user_id,),
+        )
+        already_logged: set[str] = {r[0] for r in cur.fetchall() if r[0]}
+
+    # Pull candidate embeddings.
+    # For chat_message we restrict to role='user'; everything else accepts all rows.
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT e.id::text, e.source_type, e.source_id::text, e.embedding::text,
+                   COALESCE(cm.role, '') AS chat_role,
+                   COALESCE(ro.observation, dr.raw_text, i.intent_text,
+                            mr.notes, '') AS preview_text,
+                   COALESCE(cm.content, '') AS chat_content
+            FROM embeddings e
+            LEFT JOIN chat_messages cm
+              ON e.source_type = 'chat_message' AND cm.id = e.source_id::uuid
+            LEFT JOIN regis_observations ro
+              ON e.source_type = 'regis_observation' AND ro.id = e.source_id::uuid
+            LEFT JOIN dream_recalls dr
+              ON e.source_type = 'dream_recall' AND dr.id = e.source_id::uuid
+            LEFT JOIN intents i
+              ON e.source_type = 'intent' AND i.id = e.source_id::uuid
+            LEFT JOIN mood_reports mr
+              ON e.source_type = 'mood' AND mr.id = e.source_id::uuid
+            WHERE e.user_id = %s
+              AND e.source_type = ANY(%s)
+              AND (e.source_type <> 'chat_message' OR cm.role = 'user')
+            ORDER BY e.created_at ASC
+            LIMIT %s
+            """,
+            (user_id, list(USER_SIDE_SOURCE_TYPES), limit),
+        )
+        rows = cur.fetchall()
+
+    for emb_id, source_type, source_id, emb_str, chat_role, preview, chat_content in rows:
+        counts["scanned"] += 1
+        if source_id in already_logged:
+            continue
+        try:
+            # pgvector text format: "[v1,v2,...]"
+            vec = [float(x) for x in emb_str.strip("[]").split(",")]
+        except Exception as e:
+            counts["errors"] += 1
+            logger.warning("backfill: parse vec failed for %s: %s", emb_id, e)
+            continue
+
+        text_preview = (chat_content or preview or "")[:200]
+        snapshot = {
+            "source_type": source_type,
+            "source_id": source_id,
+            "embedding_id": emb_id,
+            "text_preview": text_preview,
+            "backfilled": True,
+        }
+        if source_type == "chat_message":
+            snapshot["role"] = chat_role
+        try:
+            result = log_novelty_observation(
+                user_id=user_id,
+                state_snapshot=snapshot,
+                embedding=vec,
+            )
+            if result.get("logged"):
+                counts["logged"] += 1
+                already_logged.add(source_id)
+            else:
+                counts["skipped_not_novel"] += 1
+        except Exception as e:
+            counts["errors"] += 1
+            logger.warning("backfill: log_novelty failed for %s: %s", emb_id, e)
+    return counts
+
+
+def _main() -> int:
+    ap = argparse.ArgumentParser(
+        description="Novelty log utilities: backfill existing user-side embeddings."
+    )
+    ap.add_argument("--backfill", action="store_true", help="Run the backfill.")
+    ap.add_argument(
+        "--user-id",
+        default="61c18d4c-1c20-408a-bd5f-f5f88fd9922f",
+        help="User UUID (default: Aakash).",
+    )
+    ap.add_argument("--limit", type=int, default=5000)
+    args = ap.parse_args()
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    if args.backfill:
+        counts = backfill_novelty_log(user_id=args.user_id, limit=args.limit)
+        print(
+            f"Backfill: scanned={counts['scanned']} logged={counts['logged']} "
+            f"skipped_not_novel={counts['skipped_not_novel']} errors={counts['errors']}"
+        )
+        return 0
+
+    # Default: status — show how many rows exist + how many user-side embeddings
+    # don't have a novelty entry yet.
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) FROM i_model_novelty_log WHERE user_id = %s",
+            (args.user_id,),
+        )
+        novelty_total = cur.fetchone()[0]
+        cur.execute(
+            "SELECT COUNT(*) FROM i_model_novelty_log "
+            "WHERE user_id = %s AND clustered_into_id IS NULL "
+            "AND flagged_for_clustering = FALSE",
+            (args.user_id,),
+        )
+        unflagged = cur.fetchone()[0]
+    print(f"novelty rows: {novelty_total}  unflagged: {unflagged}")
+    print("Run with --backfill to catch up from existing embeddings.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(_main())

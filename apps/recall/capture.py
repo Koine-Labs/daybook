@@ -20,7 +20,8 @@ INFERENCE_DIR = Path(__file__).resolve().parent.parent / "inference"
 sys.path.insert(0, str(INFERENCE_DIR))
 
 from db import get_conn  # noqa: E402
-from embeddings import embed_and_store  # noqa: E402
+from embeddings import embed, embed_and_store  # noqa: E402
+from imodels import log_novelty_observation  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,24 @@ def capture(
     except Exception as e:
         embed_error = str(e)
         logger.warning("Embedding failed (continuing): %s", e)
+
+    # Novelty signal: dream recall is direct user-state evidence. Failure
+    # must never block the recall write path.
+    if embedding_id is not None:
+        try:
+            dream_vec = embed(text)
+            log_novelty_observation(
+                user_id=user_id,
+                state_snapshot={
+                    "source_type": "dream_recall",
+                    "source_id": dream_id,
+                    "depth": depth,
+                    "text_preview": text[:200],
+                },
+                embedding=dream_vec,
+            )
+        except Exception as e:
+            logger.warning("novelty logging failed (recall): %s", e)
 
     regis_utterance: str | None = None
     compose_error: str | None = None
