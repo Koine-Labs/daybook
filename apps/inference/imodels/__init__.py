@@ -14,10 +14,12 @@ from .activator import ActiveCluster, get_active_clusters
 from .cluster_labeler import label_cluster, label_unlabeled_clusters
 from .clusterer import run_clusterer
 from .novelty import flag_for_reclustering, log_novelty_observation
+from .regis_self_projector import RegisSelfFingerprint, refresh_regis_self
 from .substrate import SubstrateContext, gather_substrate
 
 __all__ = [
     "ActiveCluster",
+    "RegisSelfFingerprint",
     "SubstrateContext",
     "flag_for_reclustering",
     "gather_substrate",
@@ -25,5 +27,6 @@ __all__ = [
     "label_cluster",
     "label_unlabeled_clusters",
     "log_novelty_observation",
+    "refresh_regis_self",
     "run_clusterer",
 ]

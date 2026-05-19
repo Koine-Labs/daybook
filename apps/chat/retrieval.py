@@ -72,6 +72,7 @@ def gather_context(
         "regis_traits": substrate.regis_traits,
         "current_prosody": substrate.current_prosody,
         "active_i_models": active_imodels_chat_shape,
+        "regis_self": substrate.regis_self,
         "_retrieval_ms": elapsed_ms,
     }
 

@@ -49,6 +49,10 @@ PROSODY_LIMIT = 3
 ACTIVE_IMODEL_TOP_K = 3
 ACTIVE_IMODEL_MIN_SIM = 0.4
 OBSERVATION_TOP_K = 3
+# regis_self fingerprint is refreshed nightly; older than 7 days means the
+# projector hasn't run and the snapshot no longer reflects current shape —
+# better to skip injecting it than to anchor Regis to a stale self-portrait.
+REGIS_SELF_STALE_DAYS = 7
 
 
 @dataclass
@@ -60,6 +64,11 @@ class SubstrateContext:
     current_prosody: list[dict[str, Any]] = field(default_factory=list)
     active_i_models: list[dict[str, Any]] = field(default_factory=list)
     relevant_observations: list[dict[str, Any]] = field(default_factory=list)
+    # regis_self projection: one-paragraph fingerprint Regis reads as
+    # background coloration. Shape: {fingerprint, last_activated_at, stale}.
+    # None when no row exists yet (new user). stale=True means the row is
+    # older than REGIS_SELF_STALE_DAYS; callers should skip injecting it.
+    regis_self: dict[str, Any] | None = None
 
     def as_dict(self) -> dict[str, Any]:
         """Flat dict view (the shape chat's gather_context returns)."""
@@ -69,6 +78,7 @@ class SubstrateContext:
             "current_prosody": self.current_prosody,
             "active_i_models": self.active_i_models,
             "relevant_observations": self.relevant_observations,
+            "regis_self": self.regis_self,
         }
 
     @property
@@ -87,6 +97,7 @@ def gather_substrate(
     *,
     user_id: str,
     query_embedding: list[float] | None = None,
+    include_regis_self: bool = True,
 ) -> SubstrateContext:
     """Assemble the shared substrate for one prompt-building moment.
 
@@ -94,6 +105,11 @@ def gather_substrate(
     query." When None, embedding-dependent reads (active_i_models,
     relevant_observations) are skipped gracefully — the caller still gets
     traits + state + prosody.
+
+    `include_regis_self` (default True) controls whether the regis_self
+    fingerprint is read. Set False for callers that explicitly want the
+    old behavior (e.g. dormancy / housekeeping jobs that shouldn't be
+    coloring their reads with Regis's self-portrait).
     """
     ctx = SubstrateContext(
         regis_traits=_current_traits(user_id),
@@ -107,6 +123,8 @@ def gather_substrate(
         ctx.relevant_observations = _relevant_observations(
             user_id=user_id, qvec=query_embedding, top_k=OBSERVATION_TOP_K
         )
+    if include_regis_self:
+        ctx.regis_self = _regis_self(user_id)
     return ctx
 
 
@@ -234,6 +252,43 @@ def _active_i_models(
             }
         )
     return out
+
+
+def _regis_self(user_id: str) -> dict[str, Any] | None:
+    """Read the single regis_self projection row (model_owner='regis_self').
+
+    Returns None if no row exists (new user — projector hasn't run yet).
+    Sets stale=True when last_activated_at is older than
+    REGIS_SELF_STALE_DAYS; prompt builders should skip injecting stale rows.
+    """
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT label, last_activated_at
+                FROM i_model_clusters
+                WHERE user_id = %s
+                  AND model_owner = 'regis_self'
+                  AND status = 'active'
+                LIMIT 1
+                """,
+                (user_id,),
+            )
+            row = cur.fetchone()
+    except Exception:
+        return None
+    if row is None or not row[0]:
+        return None
+    label, last_activated_at = row[0], row[1]
+    stale = True
+    if last_activated_at is not None:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=REGIS_SELF_STALE_DAYS)
+        stale = last_activated_at < cutoff
+    return {
+        "fingerprint": label,
+        "last_activated_at": last_activated_at.isoformat() if last_activated_at else None,
+        "stale": stale,
+    }
 
 
 def _relevant_observations(
