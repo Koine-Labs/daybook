@@ -5,6 +5,9 @@ import SwiftUI
 struct ConnectionsRoom: View {
     var tweaks: Tweaks
 
+    // MARK: - WatchConnectivity (#14 follow-up)
+    @Environment(AppState.self) private var appState
+
     @State private var proactivity: Double = 0.5
     @State private var warmth: Double = 0.5
     @State private var reach: Double = 0.5
@@ -30,9 +33,14 @@ struct ConnectionsRoom: View {
                 VStack(alignment: .leading, spacing: 14) {
                     SectionHeader(title: "also listening")
                     VStack(spacing: 0) {
+                        // MARK: - WatchConnectivity (#14 follow-up)
+                        // Real status from WCSession via AppState.watchStatus.
+                        // "connected" = watch reachable now; "paired" = pairing
+                        // active but watch asleep; etc.
                         ConnectionRow(icon: "⌚", name: "apple watch",
-                                      status: "not connected",
-                                      accent: Theme.inkLight, active: false)
+                                      status: appState.watchStatus.rowLabel,
+                                      accent: Theme.inkLight,
+                                      active: appState.watchStatus.isActive)
                         ConnectionRow(icon: "W", name: "whoop 4.0",
                                       status: "not connected",
                                       accent: Color(red: 0xC8 / 255.0, green: 0x4C / 255.0, blue: 0x2B / 255.0),

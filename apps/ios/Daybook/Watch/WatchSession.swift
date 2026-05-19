@@ -1,6 +1,39 @@
 import Foundation
 import WatchConnectivity
 
+// MARK: - Connection status (#14 follow-up)
+
+/// Coarse-grained connection state for UI consumption.
+/// `.connected` = watch is reachable RIGHT NOW (app open / wrist up).
+/// `.paired`    = session activated + watch + app installed, but watch asleep.
+/// `.notInstalled` = paired watch exists but the Daybook watch app isn't on it.
+/// `.notPaired` = no Apple Watch paired with this iPhone.
+/// `.unsupported` = WCSession not supported (shouldn't happen on iPhones).
+/// `.unknown` = session not yet activated.
+enum WatchConnectionStatus: Equatable {
+    case unknown
+    case unsupported
+    case notPaired
+    case notInstalled
+    case paired
+    case connected
+
+    /// Short label rendered in the iOS ConnectionsRoom's Apple Watch row.
+    var rowLabel: String {
+        switch self {
+        case .unknown:      return "checking…"
+        case .unsupported:  return "not supported"
+        case .notPaired:    return "not paired"
+        case .notInstalled: return "install daybook on watch"
+        case .paired:       return "paired"
+        case .connected:    return "connected"
+        }
+    }
+
+    /// Whether the row should render in the "active/connected" visual style.
+    var isActive: Bool { self == .connected }
+}
+
 // WatchSession (iOS) — singleton WCSessionDelegate for the phone side.
 //
 // Wire rules:
@@ -20,6 +53,10 @@ final class WatchSession: NSObject, WCSessionDelegate {
     var onTalkPressed: ((Double) -> Void)?
     var onHeartbeat: (() -> Void)?
 
+    /// Fires whenever connection state changes (activation completed,
+    /// reachability flipped, etc.). Always called on main.
+    var onStatusChange: ((WatchConnectionStatus) -> Void)?
+
     private let session: WCSession? = WCSession.isSupported() ? WCSession.default : nil
     private var heartbeatTimer: Timer?
 
@@ -38,6 +75,23 @@ final class WatchSession: NSObject, WCSessionDelegate {
     }
 
     var isReachable: Bool { session?.isReachable ?? false }
+
+    /// Compute current status from the underlying WCSession.
+    var currentStatus: WatchConnectionStatus {
+        guard let session else { return .unsupported }
+        guard session.activationState == .activated else { return .unknown }
+        if !session.isPaired { return .notPaired }
+        if !session.isWatchAppInstalled { return .notInstalled }
+        if session.isReachable { return .connected }
+        return .paired
+    }
+
+    private func emitStatus() {
+        let s = currentStatus
+        DispatchQueue.main.async { [weak self] in
+            self?.onStatusChange?(s)
+        }
+    }
 
     // MARK: - Send
 
@@ -103,18 +157,27 @@ final class WatchSession: NSObject, WCSessionDelegate {
     // MARK: - WCSessionDelegate
 
     func session(_ session: WCSession, activationDidCompleteWith state: WCSessionActivationState, error: Error?) {
-        // No-op. Activation state observable via `session.activationState`.
+        emitStatus()
     }
 
     // iOS-only delegate methods. Watch deactivates after pairing changes;
     // re-activate so the channel stays alive across paired-watch swaps.
-    func sessionDidBecomeInactive(_ session: WCSession) {}
+    func sessionDidBecomeInactive(_ session: WCSession) {
+        emitStatus()
+    }
     func sessionDidDeactivate(_ session: WCSession) {
         session.activate()
+        emitStatus()
     }
 
     func sessionReachabilityDidChange(_ session: WCSession) {
-        // No-op for now; future: drain a local queue when reachable flips true.
+        emitStatus()
+    }
+
+    // Pairing / install status can flip without a separate delegate hit on
+    // some watchOS versions — but Apple does deliver `watchStateDidChange`.
+    func sessionWatchStateDidChange(_ session: WCSession) {
+        emitStatus()
     }
 
     func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {

@@ -107,6 +107,10 @@ final class AppState {
     // observable signal so the iOS UI can verify the round-trip works.
     var lastTalkPressDuration: Double? = nil
 
+    /// Observable watch connection state for the Apple Watch row on
+    /// ConnectionsRoom. Defaults to .unknown until the session activates.
+    var watchStatus: WatchConnectionStatus = .unknown
+
     // Wire the session's callbacks into observable state + activate it.
     // Idempotent: safe to call multiple times.
     //
@@ -118,7 +122,13 @@ final class AppState {
         watch.onTalkPressed = { [weak self] duration in
             self?.lastTalkPressDuration = duration
         }
+        watch.onStatusChange = { [weak self] status in
+            self?.watchStatus = status
+        }
         watch.activate()
+        // Seed status synchronously so the row doesn't sit at "checking…"
+        // forever if the session already activated on a prior launch.
+        watchStatus = watch.currentStatus
     }
 
     // Likely future fields (deferred until the next direction settles):
