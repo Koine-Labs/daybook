@@ -36,6 +36,7 @@ def log_novelty_observation(
             FROM i_model_clusters
             WHERE user_id = %s
               AND centroid_embedding IS NOT NULL
+              AND status = 'active'
             ORDER BY centroid_embedding <=> %s::vector ASC
             LIMIT 1
             """,

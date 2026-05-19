@@ -101,6 +101,8 @@ def run_clusterer(
         }
 
     existing = _fetch_existing_clusters(user_id=user_id, model_owner=model_owner)
+    pre_existing_cluster_ids = list(existing.keys())
+    newly_inserted_cluster_ids: list[str] = []
 
     discovered = 0
     updated = 0
@@ -126,6 +128,7 @@ def run_clusterer(
             discovered += 1
             if not dry_run:
                 existing[target_cluster_id] = centroid
+                newly_inserted_cluster_ids.append(target_cluster_id)
 
         for eid, vec in zip(member_emb_ids, member_vecs):
             sim = float(np.dot(_l2_normalize(vec), centroid))
@@ -133,6 +136,24 @@ def run_clusterer(
 
     if not dry_run and memberships:
         _upsert_memberships(memberships)
+
+    lineage_rows = 0
+    if not dry_run and newly_inserted_cluster_ids and pre_existing_cluster_ids:
+        try:
+            from .cluster_lineage import detect_and_record_supersessions
+
+            lineage_rows = detect_and_record_supersessions(
+                user_id=user_id,
+                new_cluster_ids=newly_inserted_cluster_ids,
+                existing_cluster_ids=pre_existing_cluster_ids,
+            )
+            if lineage_rows:
+                logger.info(
+                    "clusterer: recorded %d supersession lineage row(s)",
+                    lineage_rows,
+                )
+        except Exception as e:
+            logger.warning("clusterer: lineage detection failed: %s", e)
 
     newly_labeled = 0
     if not dry_run:
@@ -152,6 +173,7 @@ def run_clusterer(
         "input_embeddings": len(rows),
         "dry_run": dry_run,
         "newly_labeled": newly_labeled,
+        "lineage_rows": lineage_rows,
     }
 
 
@@ -221,7 +243,11 @@ def _fetch_embeddings(*, user_id: str, source_types: list[str]) -> list[tuple[st
 def _fetch_existing_clusters(
     *, user_id: str, model_owner: str
 ) -> dict[str, np.ndarray]:
-    """Map cluster_id -> centroid (only those with non-null centroids)."""
+    """Map cluster_id -> centroid for active clusters with non-null centroids.
+
+    Excludes dormant clusters so supersession lineage never points back to a
+    parent that was already dormant before the new cluster was born.
+    """
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -229,6 +255,7 @@ def _fetch_existing_clusters(
             FROM i_model_clusters
             WHERE user_id = %s AND model_owner = %s
               AND centroid_embedding IS NOT NULL
+              AND status = 'active'
             """,
             (user_id, model_owner),
         )
