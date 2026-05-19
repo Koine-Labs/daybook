@@ -13,11 +13,17 @@ Trait conventions (see migration 0002):
   - familiarity   — 0.0 formal, 1.0 intimate
   - humor         — 0.0 dry, 1.0 absurd
 
-Daily cap: signal-driven writes (this module + trait_drift_from_dreams) are
-limited to DAILY_CAP_PER_TRAIT = 4 * MAX_DELTA per UTC day per trait, so a
-single intense day can't ratchet a dial runaway. Decay/baseline rows
-(source IN ('decay', 'baseline')) are EXCLUDED from the cap — only real
-signal counts toward the budget.
+Daily cap: signal-driven writes (this module's heuristic rules with
+source='heuristic' AND trait_drift_from_dreams._persist_delta with
+source='dream') BOTH route through _enforce_daily_cap and share a single
+DAILY_CAP_PER_TRAIT = 4 * MAX_DELTA per UTC day per trait, so a single
+intense day can't ratchet a dial runaway no matter how many heuristic +
+dream signals fire. Decay/baseline rows (source IN ('decay', 'baseline'))
+are EXCLUDED from the cap — only real signal counts toward the budget.
+
+_enforce_daily_cap is the single source of truth for the cap. Any new
+trait-write path (future LLM-based drift, etc.) should route through it
+with its own `source` tag rather than INSERTing directly.
 """
 from __future__ import annotations
 

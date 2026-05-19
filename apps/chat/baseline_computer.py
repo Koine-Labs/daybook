@@ -34,6 +34,46 @@ MAX_LOOKBACK_DAYS = 540
 BASELINE_REASON = "nightly baseline snapshot"
 BASELINE_SOURCE = "baseline"
 
+# Shared SQL fragment for "current trait value" readers. Excludes both
+# baseline snapshots and decay nudges so callers see the most recent REAL
+# signal (chat heuristic or dream-drift). Decay/baseline rows are derived
+# state, not signal — surfacing them as "the current trait value" defeats
+# the two-time-scale design: a nightly baseline write at 0.50 would
+# otherwise mask whatever the dial actually drifted to during the day.
+#
+# Any new SELECT against regis_trait_history that wants "where the dial is
+# right now for rendering / context" MUST apply this filter. See
+# fetch_current_trait_values() for the canonical reader.
+CURRENT_VALUE_SOURCE_FILTER = (
+    "(source IS NULL OR source NOT IN ('baseline', 'decay'))"
+)
+
+
+def fetch_current_trait_values(user_id: str) -> dict[str, float]:
+    """Latest signal-sourced value per trait_name for this user.
+
+    Excludes source IN ('baseline', 'decay') — those are derived rows, not
+    signal. Returns {} if no signal history exists yet.
+
+    This is the canonical reader. All non-decay-engine callers that need
+    "the current value of each trait" should use this helper rather than
+    rolling their own SELECT, otherwise a future source-filter change has
+    to be replayed across N call sites.
+    """
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT DISTINCT ON (trait_name) trait_name, value
+            FROM regis_trait_history
+            WHERE user_id = %s
+              AND {CURRENT_VALUE_SOURCE_FILTER}
+            ORDER BY trait_name, changed_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return {r[0]: float(r[1]) for r in rows}
+
 
 def compute_baseline(
     user_id: str,

@@ -368,18 +368,14 @@ def _time_of_day_score() -> float:
 
 
 def _active_traits(user_id: str) -> dict[str, float]:
+    """Latest signal-sourced value per trait. Excludes baseline/decay rows.
+
+    Delegates to chat.baseline_computer.fetch_current_trait_values — see
+    CURRENT_VALUE_SOURCE_FILTER for the rationale.
+    """
     try:
-        with get_conn() as conn, conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT DISTINCT ON (trait_name) trait_name, value
-                FROM regis_trait_history
-                WHERE user_id = %s
-                ORDER BY trait_name, changed_at DESC
-                """,
-                (user_id,),
-            )
-            return {name: float(val) for name, val in cur.fetchall()}
+        from chat.baseline_computer import fetch_current_trait_values  # type: ignore
+        return fetch_current_trait_values(user_id)
     except Exception:
         return {}
 
