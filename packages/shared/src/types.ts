@@ -516,8 +516,6 @@ export interface RegisMoment {
   activeIModelIds: IModelID[];
   /** Primary I-Model link (legacy single-link pattern). */
   iModelId: IModelID | null;
-  /** Observed reaction (dismissed, lingered, captured, etc.) — null if not yet observed. */
-  userResponse: Record<string, unknown> | null;
   createdAt: ISODateTime;
 }
 
