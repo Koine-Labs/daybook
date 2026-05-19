@@ -26,7 +26,15 @@ sys.path.insert(0, str(INFERENCE_DIR))
 
 from db import get_conn  # noqa: E402
 from llm import ChatClient  # noqa: E402
-from embeddings import retrieve_similar  # noqa: E402
+from embeddings import embed, retrieve_similar  # noqa: E402
+from imodels import (  # noqa: E402
+    ActiveCluster,
+    ModeDecision,
+    decide_mode,
+    get_active_clusters,
+    log_novelty_observation,
+    read_regis_self,
+)
 
 # PERSONA.md sits next to this file in apps/wisp/
 PERSONA_PATH = Path(__file__).resolve().parent / "PERSONA.md"
@@ -53,12 +61,16 @@ COMPANION_KINDS = {
 @dataclass
 class ComposedUtterance:
     text: str
-    mode: str  # 'witness' | 'companion'
+    mode: str
     moment_kind: str
     model: str
     backend: str
     retrieved: list[dict[str, Any]] = field(default_factory=list)
     current_state: dict[str, Any] | None = None
+    active_clusters: list[dict[str, Any]] = field(default_factory=list)
+    regis_self_snapshot: dict[str, Any] | None = None
+    mode_decision_reason: str | None = None
+    suppressed: bool = False
     persisted_moment_id: str | None = None
     composition_seconds: float = 0.0
 
@@ -107,44 +119,114 @@ def compose_utterance(
     Returns ComposedUtterance with utterance text + metadata.
     """
     t0 = time.monotonic()
-    mode = _mode_for_kind(moment_kind)
     persona = PERSONA_PATH.read_text()
 
-    # 1. Current state from user_state_estimate (latest row)
     current_state = _read_latest_state(user_id)
+    mode_decision = decide_mode(
+        user_id=user_id,
+        moment_kind=moment_kind,
+        user_state=current_state,
+    )
+    mode = mode_decision.mode
 
-    # 2. Retrieved I-Model context
+    if not mode_decision.should_speak:
+        composed = ComposedUtterance(
+            text="",
+            mode=mode,
+            moment_kind=moment_kind,
+            model="",
+            backend="",
+            current_state=current_state,
+            mode_decision_reason=mode_decision.reason,
+            suppressed=True,
+            composition_seconds=time.monotonic() - t0,
+        )
+        return composed
+
+    query_text = (retrieval_query or explicit_context).strip()
+    query_vec: list[float] | None = None
     retrieved: list[dict[str, Any]] = []
-    query_text = retrieval_query or explicit_context
-    if query_text.strip():
-        try:
-            hits = retrieve_similar(
-                query_text,
-                user_id=user_id,
-                top_k=retrieval_top_k,
-                source_types=list(retrieval_source_types) if retrieval_source_types else None,
-            )
-            retrieved = [
-                {
-                    "source_type": h.source_type,
-                    "source_id": h.source_id,
-                    "similarity": round(h.similarity, 3),
-                }
-                for h in hits
-            ]
-        except Exception as e:
-            retrieved = [{"_retrieval_error": str(e)}]
+    active_clusters: list[ActiveCluster] = []
 
-    # 3. Compose the runtime context (the LLM user message)
+    if query_text:
+        try:
+            query_vec = embed(query_text)
+        except Exception as e:
+            retrieved = [{"_embed_error": str(e)}]
+
+        if query_vec is not None:
+            try:
+                hits = retrieve_similar(
+                    query_vec,
+                    user_id=user_id,
+                    top_k=retrieval_top_k,
+                    source_types=list(retrieval_source_types) if retrieval_source_types else None,
+                )
+                retrieved = [
+                    {
+                        "source_type": h.source_type,
+                        "source_id": h.source_id,
+                        "similarity": round(h.similarity, 3),
+                    }
+                    for h in hits
+                ]
+            except Exception as e:
+                retrieved = [{"_retrieval_error": str(e)}]
+
+            try:
+                active_clusters = get_active_clusters(
+                    user_id=user_id,
+                    query_embedding=query_vec,
+                    persist=persist,
+                )
+            except Exception as e:
+                active_clusters = []
+                print(f"[composer] activator failed: {e}")
+
+            try:
+                log_novelty_observation(
+                    user_id=user_id,
+                    state_snapshot={
+                        "moment_kind": moment_kind,
+                        "mode": mode,
+                        "explicit_context": explicit_context[:240],
+                    },
+                    embedding=query_vec,
+                )
+            except Exception as e:
+                print(f"[composer] novelty log failed: {e}")
+
+    regis_self_snap: dict[str, Any] | None = None
+    try:
+        snap = read_regis_self(user_id)
+        regis_self_snap = {
+            "traits": snap.traits,
+            "fingerprint": snap.fingerprint,
+            "recent_mode_distribution": snap.recent_mode_distribution,
+        }
+    except Exception as e:
+        print(f"[composer] regis_self read failed: {e}")
+
+    active_dicts = [
+        {
+            "cluster_id": c.cluster_id,
+            "label": c.label,
+            "similarity": round(c.similarity, 3),
+            "model_owner": c.model_owner,
+        }
+        for c in active_clusters
+    ]
+
     user_prompt = _build_user_prompt(
         moment_kind=moment_kind,
         mode=mode,
         explicit_context=explicit_context,
         current_state=current_state,
         retrieved=retrieved,
+        active_clusters=active_dicts,
+        regis_self_snapshot=regis_self_snap,
     )
 
-    # 4. LLM call
     if client is None:
         client = ChatClient.auto()
     text = client.chat(
@@ -154,7 +236,6 @@ def compose_utterance(
         verbosity=verbosity,
     ).strip()
 
-    # 5. Sanity warn on forbidden-word presence (don't reject — see docstring)
     leaks = sorted({w for w in FORBIDDEN_WORDS_SOFT if w.lower() in text.lower()})
     if leaks:
         print(f"[composer] note: utterance contains soft-forbidden words {leaks}: {text!r}")
@@ -167,16 +248,19 @@ def compose_utterance(
         backend=client.backend,
         retrieved=retrieved,
         current_state=current_state,
+        active_clusters=active_dicts,
+        regis_self_snapshot=regis_self_snap,
+        mode_decision_reason=mode_decision.reason,
         composition_seconds=time.monotonic() - t0,
     )
 
-    # 6. Optional persistence
     if persist:
         composed.persisted_moment_id = _persist_moment(
             user_id=user_id,
             session_id=session_id,
             composed=composed,
             explicit_context=explicit_context,
+            active_cluster_ids=[c.cluster_id for c in active_clusters],
         )
 
     return composed
@@ -231,11 +315,14 @@ def _build_user_prompt(
     explicit_context: str,
     current_state: dict[str, Any] | None,
     retrieved: list[dict[str, Any]],
+    active_clusters: list[dict[str, Any]] | None = None,
+    regis_self_snapshot: dict[str, Any] | None = None,
 ) -> str:
     """Assemble the LLM user-message context. Structured but compact.
 
     The persona (system prompt) governs voice; this user message provides
-    *what is happening right now* and *what to remember*.
+    what is happening right now, what to remember, which I-Models are firing,
+    and who Regis currently is.
     """
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
     parts: list[str] = [
@@ -252,6 +339,35 @@ def _build_user_prompt(
         parts.extend(["", "# Sensor state", json.dumps(current_state, default=str)])
     else:
         parts.extend(["", "# Sensor state", "(no user_state_estimate available)"])
+
+    if active_clusters:
+        labeled = [c for c in active_clusters if c.get("label")]
+        if labeled:
+            parts.extend(
+                [
+                    "",
+                    "# Active I-Models (firing right now)",
+                    "(let these tilt your tone; do NOT name them in the utterance)",
+                ]
+            )
+            for c in labeled:
+                parts.append(
+                    f"  - {c['label']} ({c['model_owner']}, sim {c['similarity']})"
+                )
+
+    if regis_self_snapshot:
+        traits = regis_self_snapshot.get("traits") or {}
+        if traits:
+            parts.extend(
+                [
+                    "",
+                    "# Who you are right now (your drifting dials, 0..1)",
+                    "  " + ", ".join(f"{k}={v:.2f}" for k, v in sorted(traits.items())),
+                ]
+            )
+        fingerprint = (regis_self_snapshot.get("fingerprint") or "").strip()
+        if fingerprint:
+            parts.extend(["", "# Recent self-pattern", fingerprint])
 
     if retrieved:
         retrieved_block = json.dumps(retrieved, indent=2)
@@ -281,15 +397,18 @@ def _persist_moment(
     session_id: str | None,
     composed: ComposedUtterance,
     explicit_context: str,
+    active_cluster_ids: list[str] | None = None,
 ) -> str:
     """Write to regis_moments. Returns new moment id."""
+    cluster_ids = active_cluster_ids or []
+    primary_cluster_id = cluster_ids[0] if cluster_ids else None
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO regis_moments
                 (user_id, session_id, occurred_at, kind, mode, content,
-                 content_source, triggering_context, active_i_model_ids)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                 content_source, triggering_context, active_i_model_ids, i_model_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
             RETURNING id
             """,
             (
@@ -305,12 +424,16 @@ def _persist_moment(
                         "explicit_context": explicit_context,
                         "current_state": composed.current_state,
                         "retrieved": composed.retrieved,
+                        "active_clusters": composed.active_clusters,
+                        "regis_self": composed.regis_self_snapshot,
+                        "mode_decision_reason": composed.mode_decision_reason,
                         "model": composed.model,
                         "backend": composed.backend,
                     },
                     default=str,
                 ),
-                [],  # active_i_model_ids — empty until activator job is wired
+                cluster_ids,
+                primary_cluster_id,
             ),
         )
         new_id = str(cur.fetchone()[0])
