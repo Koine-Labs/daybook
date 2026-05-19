@@ -139,7 +139,7 @@ def run_rem_dreaming(
                 source_type="regis_observation",
                 source_id=obs_id,
                 text=text,
-            )
+            )  # returns (emb_id, vec) — neither needed here
             _link_embedding(obs_id)
             obs_ids.append(obs_id)
             written += 1

@@ -41,12 +41,17 @@ def embed_and_store(
     source_type: str,
     source_id: str,
     text: str,
-) -> str:
-    """One-shot: embed text and persist to embeddings. Returns the embedding id."""
+) -> tuple[str, list[float]]:
+    """One-shot: embed text and persist to embeddings.
+
+    Returns (embedding_id, vector). The vector is returned so callers can
+    reuse it (e.g. for novelty logging) without paying for a second embed.
+    """
     vec = embed(text)
-    return store_embedding(
+    emb_id = store_embedding(
         user_id=user_id, source_type=source_type, source_id=source_id, vector=vec
     )
+    return emb_id, vec
 
 
 def _vec_literal(vector: list[float]) -> str:

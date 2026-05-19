@@ -21,6 +21,7 @@ for p in (APPS_DIR, INFERENCE_DIR):
 
 from db import get_conn  # noqa: E402
 from embeddings import embed_and_store  # noqa: E402
+from imodels import log_novelty_observation  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +54,11 @@ def log_mood(
     )
 
     embedding_id: str | None = None
+    mood_vec: list[float] | None = None
     embed_error: str | None = None
     if notes:
         try:
-            embedding_id = embed_and_store(
+            embedding_id, mood_vec = embed_and_store(
                 user_id=user_id,
                 source_type="mood",
                 source_id=mood_id,
@@ -65,6 +67,26 @@ def log_mood(
         except Exception as e:
             embed_error = str(e)
             logger.warning("Embedding failed (continuing): %s", e)
+
+        # Novelty signal: mood notes are direct user-state evidence. Only
+        # logged if notes exist (numeric valence/arousal alone has no
+        # embedding to compare). Vector reused from embed_and_store above.
+        # Never block on failure.
+        if embedding_id is not None and mood_vec is not None:
+            try:
+                log_novelty_observation(
+                    user_id=user_id,
+                    state_snapshot={
+                        "source_type": "mood",
+                        "source_id": mood_id,
+                        "valence": valence,
+                        "arousal": arousal,
+                        "text_preview": notes[:200],
+                    },
+                    embedding=mood_vec,
+                )
+            except Exception as e:
+                logger.warning("novelty logging failed (mood): %s", e)
 
     return {
         "mood_id": mood_id,

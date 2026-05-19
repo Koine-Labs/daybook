@@ -15,6 +15,7 @@ from typing import Any
 from . import _paths  # noqa: F401
 from db import get_conn  # noqa: E402
 from embeddings import embed_and_store  # noqa: E402
+from imodels import log_novelty_observation  # noqa: E402
 from llm import ChatClient  # noqa: E402
 
 
@@ -78,12 +79,29 @@ def maybe_extract_observation(
             observation=text,
             context=context or {},
         )
-        embed_and_store(
+        _emb_id, obs_vec = embed_and_store(
             user_id=user_id,
             source_type="regis_observation",
             source_id=obs_id,
             text=text,
         )
+        # Novelty signal: chat observations are user-state evidence Regis
+        # distilled from a substantive exchange. Vector reused from
+        # embed_and_store above — single embed, no double-pay.
+        # Failure must not block the write path.
+        try:
+            log_novelty_observation(
+                user_id=user_id,
+                state_snapshot={
+                    "source_type": "regis_observation",
+                    "source_id": obs_id,
+                    "source": "chat_observer",
+                    "text_preview": text[:200],
+                },
+                embedding=obs_vec,
+            )
+        except Exception as e:
+            logger.warning("novelty logging failed (chat observer): %s", e)
         with get_conn() as conn, conn.cursor() as cur:
             cur.execute(
                 """

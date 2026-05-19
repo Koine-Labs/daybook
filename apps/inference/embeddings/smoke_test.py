@@ -64,7 +64,7 @@ def main() -> int:
     for dream in SAMPLE_DREAMS:
         fake_sid = str(uuid4())
         fake_source_ids.append(fake_sid)
-        eid = embed_and_store(
+        eid, _vec = embed_and_store(
             user_id=DEFAULT_USER_ID,
             source_type="dream_recall_smoke",
             source_id=fake_sid,
