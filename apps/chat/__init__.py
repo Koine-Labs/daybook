@@ -1,9 +1,10 @@
 """Daybook chat — text-based interactive conversation with Regis.
 
 Public surface:
-  - handle_user_message(...) -> AssistantResponse  (one full turn)
-  - gather_context(...)      -> dict               (retrieval bundle)
-  - start_or_resume_conversation(...) -> str       (conversation_id)
+  - handle_user_message_streaming(...) -> AsyncIterator[str]   (canonical streaming turn)
+  - handle_user_message(...)           -> AssistantResponse    (thin sync wrapper)
+  - gather_context(...)                -> dict                 (retrieval bundle)
+  - start_or_resume_conversation(...)  -> str                  (conversation_id)
 """
 from __future__ import annotations
 
