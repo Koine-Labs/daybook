@@ -364,7 +364,7 @@ def _persist_moment(
                 (user_id, session_id, occurred_at, kind, mode, content,
                  content_source, triggering_context, active_i_model_ids,
                  i_model_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::uuid[], %s)
             RETURNING id
             """,
             (
