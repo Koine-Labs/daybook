@@ -27,6 +27,7 @@ from . import _paths  # noqa: F401
 from db import get_conn  # noqa: E402
 from embeddings import embed, embed_and_store  # noqa: E402
 from llm import ChatClient  # noqa: E402
+from wisp.embedding_hook import embed_regis_moment  # noqa: E402
 
 
 logger = logging.getLogger(__name__)
@@ -311,6 +312,9 @@ def _write_dream_moment(
         )
         moment_id = cur.fetchone()[0]
         conn.commit()
+    # Fire-and-forget: embed this moment so Regis can later recall his own
+    # dream-thoughts (audit item #12). Failure is logged but does not raise.
+    embed_regis_moment(user_id, moment_id, content)
     return moment_id
 
 

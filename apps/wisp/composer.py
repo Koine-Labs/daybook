@@ -28,6 +28,8 @@ from db import get_conn  # noqa: E402
 from llm import ChatClient  # noqa: E402
 from embeddings import retrieve_similar  # noqa: E402
 
+from .embedding_hook import embed_regis_moment  # noqa: E402
+
 # PERSONA.md sits next to this file in apps/wisp/
 PERSONA_PATH = Path(__file__).resolve().parent / "PERSONA.md"
 
@@ -317,4 +319,8 @@ def _persist_moment(
         )
         new_id = str(cur.fetchone()[0])
         conn.commit()
+    # Fire-and-forget: embed this moment so Regis can later recall his own
+    # utterances (audit item #12). Errors are logged inside the hook and do
+    # not propagate — moment persistence must succeed even if embedding fails.
+    embed_regis_moment(user_id, new_id, composed.text)
     return new_id
