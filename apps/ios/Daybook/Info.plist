@@ -29,6 +29,8 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Daybook reads your heart rate, HRV, and sleep so Regis can sense your body state.</string>
 	<key>UIAppFonts</key>
 	<array/>
 	<key>UILaunchScreen</key>

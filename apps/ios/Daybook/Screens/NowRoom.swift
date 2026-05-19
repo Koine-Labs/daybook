@@ -7,6 +7,12 @@ struct NowRoom: View {
     var onTalk: () -> Void
     var ping: String?
     var onDonePing: () -> Void
+    // MARK: - HealthKit (#13)
+    // Composed body whisper line + relative-time meta from the server. Both
+    // nil = fall back to the empty-state copy ("no readings yet..."). Caller
+    // (ContentView) sources these from appState.bodySummary.
+    var bodyLine: String? = nil
+    var bodyMeta: String? = nil
 
     // Real day + time, formatted lowercase (e.g. "tuesday · 7:42")
     private var nowLabel: String {
@@ -45,12 +51,14 @@ struct NowRoom: View {
             .frame(height: 260)
             .padding(.top, 4)
 
-            // Body / mind whispers — honest empty states
+            // Body / mind whispers — body is real when HealthKit has data,
+            // honest empty-state copy otherwise.
             VStack(alignment: .leading, spacing: 18) {
                 BodyWhisper(
                     title: "body",
-                    line: "no readings yet. once your watch syncs, i'll know.",
-                    meta: nil,
+                    // MARK: - HealthKit (#13)
+                    line: bodyLine ?? "no readings yet. once your watch syncs, i'll know.",
+                    meta: bodyLine != nil ? bodyMeta : nil,
                     hue: .amber
                 )
                 BodyWhisper(

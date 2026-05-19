@@ -1,7 +1,7 @@
 """Pydantic request/response models for the Daybook HTTP API."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -239,3 +239,47 @@ class HealthResponse(BaseModel):
     last_dream_at: datetime | None = None
     total_dreams: int
     total_chat_messages: int
+
+
+# ---------------------------------------------------------------------------
+# State (#13) — iOS HealthKit → Mac body picture
+# ---------------------------------------------------------------------------
+
+
+class SensorReadingIn(BaseModel):
+    recorded_at: datetime
+    source: str                # "IPHONE" or "APPLE_WATCH"
+    kind: str                  # "heart_rate" | "hrv" | "sleep_stage" | "temperature"
+    payload: dict[str, Any]    # numeric value(s); polymorphic per `kind`
+
+
+class SensorReadingsBatch(BaseModel):
+    readings: list[SensorReadingIn]
+
+
+class SensorIngestResponse(BaseModel):
+    inserted: int
+    rejected: int
+    last_recorded_at: datetime | None = None
+
+
+class BodySummary(BaseModel):
+    line: str | None = None
+    hrv_avg_ms: float | None = None
+    hr_resting_bpm: int | None = None
+    last_sleep_duration_minutes: int | None = None
+    last_sleep_ended_at: datetime | None = None
+    readings_last_24h: int
+    generated_at: datetime
+
+
+class BodySeriesPoint(BaseModel):
+    day: str                   # "YYYY-MM-DD" (UTC)
+    hrv_avg_ms: float | None = None
+    hr_avg_bpm: float | None = None
+    sleep_minutes: int | None = None
+
+
+class BodySeriesResponse(BaseModel):
+    days: int
+    points: list[BodySeriesPoint]

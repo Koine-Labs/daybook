@@ -48,7 +48,10 @@ struct ContentView: View {
                     tweaks: tweaks,
                     onTalk: { openChat() },
                     ping: tweaks.proactivePing,
-                    onDonePing: { tweaks.proactivePing = nil }
+                    onDonePing: { tweaks.proactivePing = nil },
+                    // MARK: - HealthKit (#13)
+                    bodyLine: appState.bodySummary?.line,
+                    bodyMeta: appState.bodySummary?.last_sleep_ended_at.flatMap { relativeTimeAgo($0) }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .tag(Room.now.rawValue)
@@ -130,6 +133,20 @@ struct ContentView: View {
     private func stopTimers() {
         hrvTimer?.invalidate(); hrvTimer = nil
         pingTimer?.invalidate(); pingTimer = nil
+    }
+
+    // MARK: - HealthKit (#13)
+    /// Lowercase relative-time string for the body whisper meta line.
+    /// e.g. "updated 3h ago" / "updated just now". Returns nil if `date`
+    /// is in the future (shouldn't happen for HealthKit data).
+    private func relativeTimeAgo(_ date: Date) -> String? {
+        let secs = Date().timeIntervalSince(date)
+        guard secs >= 0 else { return nil }
+        let prefix = "updated"
+        if secs < 60 { return "\(prefix) just now" }
+        if secs < 3600 { return "\(prefix) \(Int(secs / 60))m ago" }
+        if secs < 86400 { return "\(prefix) \(Int(secs / 3600))h ago" }
+        return "\(prefix) \(Int(secs / 86400))d ago"
     }
 }
 
