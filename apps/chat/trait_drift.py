@@ -12,20 +12,33 @@ Trait conventions (see migration 0002):
   - directness    — 0.0 hedged, 1.0 blunt
   - familiarity   — 0.0 formal, 1.0 intimate
   - humor         — 0.0 dry, 1.0 absurd
+
+Daily cap: signal-driven writes (this module + trait_drift_from_dreams) are
+limited to DAILY_CAP_PER_TRAIT = 4 * MAX_DELTA per UTC day per trait, so a
+single intense day can't ratchet a dial runaway. Decay/baseline rows
+(source IN ('decay', 'baseline')) are EXCLUDED from the cap — only real
+signal counts toward the budget.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from . import _paths  # noqa: F401
 from db import get_conn  # noqa: E402
 
 
+logger = logging.getLogger(__name__)
+
 MAX_DELTA = 0.05
 TRAIT_FLOOR = 0.0
 TRAIT_CEIL = 1.0
 DEFAULT_TRAIT_VALUE = 0.5
+DAILY_CAP_PER_TRAIT = 4 * MAX_DELTA  # 0.20 per UTC day per trait of real signal
+
+HEURISTIC_SOURCE = "heuristic"
 
 KNOWN_TRAITS = {
     "playfulness",
@@ -75,6 +88,12 @@ def _clamp_delta(d: TraitDelta) -> TraitDelta:
 
 
 def _apply(*, user_id: str, delta: TraitDelta) -> None:
+    """Persist a trait delta, enforcing the per-UTC-day cap on signal writes.
+
+    Decay and baseline rows are excluded from the cap (they're not signal).
+    If the day's budget is exhausted, drop the write and log. If only part
+    of the delta fits, clamp it down.
+    """
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -86,16 +105,68 @@ def _apply(*, user_id: str, delta: TraitDelta) -> None:
         )
         row = cur.fetchone()
         current = float(row[0]) if row else DEFAULT_TRAIT_VALUE
-        new_value = max(TRAIT_FLOOR, min(TRAIT_CEIL, current + delta.delta))
+
+        effective_delta = _enforce_daily_cap(
+            cur, user_id=user_id, trait=delta.trait, proposed_delta=delta.delta
+        )
+        if effective_delta == 0.0:
+            return
+
+        new_value = max(TRAIT_FLOOR, min(TRAIT_CEIL, current + effective_delta))
         cur.execute(
             """
             INSERT INTO regis_trait_history
-              (user_id, trait_name, value, delta, reason)
-            VALUES (%s, %s, %s, %s, %s)
+              (user_id, trait_name, value, delta, reason, source)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (user_id, delta.trait, new_value, delta.delta, delta.reason),
+            (user_id, delta.trait, new_value, effective_delta, delta.reason, HEURISTIC_SOURCE),
         )
         conn.commit()
+
+
+def _enforce_daily_cap(
+    cur,
+    *,
+    user_id: str,
+    trait: str,
+    proposed_delta: float,
+    now: datetime | None = None,
+) -> float:
+    """Return the delta clamped to fit within today's signal budget for this trait.
+
+    Sum of absolute deltas for signal rows (source NOT IN ('decay','baseline'))
+    written since 00:00 UTC today must not exceed DAILY_CAP_PER_TRAIT. Returns
+    0.0 to mean "drop the write entirely".
+    """
+    now = now or datetime.now(timezone.utc)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    cur.execute(
+        """
+        SELECT COALESCE(SUM(ABS(delta)), 0)
+        FROM regis_trait_history
+        WHERE user_id = %s
+          AND trait_name = %s
+          AND changed_at >= %s
+          AND (source IS NULL OR source NOT IN ('decay', 'baseline'))
+        """,
+        (user_id, trait, day_start),
+    )
+    used = float(cur.fetchone()[0] or 0.0)
+    remaining = DAILY_CAP_PER_TRAIT - used
+    if remaining <= 0:
+        logger.info(
+            "trait_drift: daily cap hit for %s (used %.3f >= %.3f); dropping delta %+.3f",
+            trait, used, DAILY_CAP_PER_TRAIT, proposed_delta,
+        )
+        return 0.0
+    if abs(proposed_delta) <= remaining:
+        return proposed_delta
+    clamped = remaining if proposed_delta > 0 else -remaining
+    logger.info(
+        "trait_drift: daily cap clamping %s: proposed %+.3f -> %+.3f (used %.3f)",
+        trait, proposed_delta, clamped, used,
+    )
+    return clamped
 
 
 # ---------------------------------------------------------------------------
