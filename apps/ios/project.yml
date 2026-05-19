@@ -30,6 +30,14 @@ targets:
           - "Info.plist"
           - "Daybook.icon"
           - "Daybook-Local.plist"
+          - "Daybook.entitlements"
+      # Local-only override (gitignored). bin/cloudflare-tunnel-setup.sh writes
+      # the real tunnel URL + API key into it. Listed as a resource-phase source
+      # so xcodegen copies it into the .app bundle, where APIClient reads it via
+      # Bundle.main.url(forResource: "Daybook-Local", withExtension: "plist").
+      - path: Daybook/Daybook-Local.plist
+        buildPhase: resources
+        optional: true
     resources:
       - path: Daybook/Assets.xcassets
     info:
@@ -56,6 +64,10 @@ targets:
         # the real URL + key into Daybook-Local.plist.
         DaybookAPIBaseURL: "http://localhost:8000"
         DaybookAPIKey: ""
+        # HealthKit (#13)
+        NSHealthShareUsageDescription: "Daybook reads your heart rate, HRV, and sleep so Regis can sense your body state."
+    entitlements:
+      path: "Daybook/Daybook.entitlements"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koinelabs.daybook
@@ -68,6 +80,7 @@ targets:
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
         INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: "YES"
         INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        CODE_SIGN_ENTITLEMENTS: "Daybook/Daybook.entitlements"
     dependencies: []
 
   DaybookWatch Watch App:

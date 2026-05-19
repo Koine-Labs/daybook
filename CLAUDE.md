@@ -113,8 +113,43 @@ daybook/
 │   │   ├── cli.py                  # interactive REPL: python -m chat.cli
 │   │   └── smoke_test.py
 │   │
-│   └── pi/                         # Pi-side daemon (sensor capture, cue delivery, persistence)
-│       └── ...                     # owned by a separate Pi chat; imports apps/inference/* and apps/wisp/composer
+│   ├── pi/                         # Pi-side daemon (sensor capture, cue delivery, persistence)
+│   │   └── ...                     # owned by a separate Pi chat; imports apps/inference/* and apps/wisp/composer
+│   │
+│   ├── api/                        # FastAPI HTTP bridge — exposes the Python brain to native clients
+│   │   ├── app.py                  # FastAPI app, middleware wiring, route inclusion
+│   │   ├── auth.py                 # X-API-Key middleware. Loopback bypass; CF-proxied requests always require key.
+│   │   ├── deps.py                 # current_user_id() — single-user prototype, hardcoded to Aakash
+│   │   ├── schemas.py              # request/response models
+│   │   ├── routes/                 # chat, recall, observations, sessions, persona, compose, health
+│   │   ├── smoke_test.py
+│   │   └── README.md               # run instructions + tunnel runbook
+│   │
+│   └── ios/                        # Native iPhone + Apple Watch apps (SwiftUI)
+│       ├── project.yml             # xcodegen manifest — regenerates Daybook.xcodeproj
+│       ├── Daybook.xcodeproj/      # generated; don't hand-edit
+│       ├── Daybook/                # iPhone target
+│       │   ├── DaybookApp.swift
+│       │   ├── ContentView.swift   # 3-room shell (Self ← Now → Connections)
+│       │   ├── Info.plist          # DaybookAPIBaseURL + DaybookAPIKey defaults (committed)
+│       │   ├── Daybook-Local.plist # gitignored override (real tunnel URL + key) — written by cloudflare-tunnel-setup.sh
+│       │   ├── Daybook.icon/       # Icon Composer source bundle (layered for iOS 26+; preserved for future)
+│       │   ├── Assets.xcassets/    # AppIcon.appiconset (Default/Dark/Tinted), regis.imageset
+│       │   ├── DesignSystem/       # Theme.swift, GlassPanel.swift
+│       │   ├── Components/         # RegisCharacter, AmbientParticles, RoomBackground, ConstellationDots, SectionHeader
+│       │   ├── Screens/            # NowRoom, SelfRoom, ConnectionsRoom, ChatOverlay
+│       │   ├── State/              # AppState, Tweaks
+│       │   └── Networking/         # APIClient (chat() lazy-creates conversation, sends X-API-Key header)
+│       └── DaybookWatch Watch App/ # watchOS target — single face, four states (Rest / Listen / Speak / Talk)
+│           ├── ContentView.swift   # state machine: default Rest, long-press → Talk
+│           ├── WatchStates.swift   # Rest/Listen/Speak/Talk views
+│           ├── WatchRegis.swift, WatchBackground.swift, WatchTheme.swift
+│           ├── HeartRateClient.swift  # HKAnchoredObjectQuery for live HR (needs HealthKit capability on real device)
+│           └── DaybookWatch.entitlements
+│
+├── bin/
+│   ├── cloudflare-tunnel-setup.sh  # one-shot: create named tunnel, route DNS, write ~/.cloudflared/config.yml + Daybook-Local.plist
+│   └── cloudflare-tunnel-run.sh    # foreground tunnel runner
 │
 └── (other usual workspace files)
 ```
@@ -122,6 +157,8 @@ daybook/
 ---
 
 ## Quick start — running the live system
+
+> **For the full command catalog** (every scenario: chat from Mac, phone via tunnel, always-on daemon, smoke tests, troubleshooting), see **`docs/RUNBOOK.md`**. The rest of this section is the bare minimum.
 
 All Python work runs from `apps/` with the venv activated:
 
@@ -142,6 +179,19 @@ python -m recall.capture --text "I dreamed about..."   # text input
 python -m recall.capture                                # interactive mic (ENTER to start/stop)
 python -m recall.capture --text "..." --no-ack          # skip Regis "Held." (saves a few seconds)
 ```
+
+### Bring up the HTTP bridge for the iOS / Watch apps
+```bash
+cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook/apps"
+source inference/.venv/bin/activate
+cd api && uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+
+# In another terminal — Cloudflare Tunnel (makes Mac reachable from phone anywhere):
+bin/cloudflare-tunnel-run.sh
+# Or `sudo cloudflared service install` once to auto-start at boot.
+```
+
+iOS + Watch apps then hit `https://daybook.koinelabs.com` (URL + API key come from the gitignored `apps/ios/Daybook/Daybook-Local.plist`, written by `bin/cloudflare-tunnel-setup.sh`).
 
 ### Sign in to ChatGPT (already done for Aakash, persists in `~/.daybook/auth.json`)
 ```bash
@@ -216,6 +266,7 @@ These are decisions made over the development arc that future code must honor. S
 9. **Continuous build, not phased.** v1 prototype IS the v3 substrate. Don't defer features by phase; build them when foundational, even if the matching hardware lags.
 10. **Multi-channel input/output (added 2026-05-17 late).** Regis has two kinds of input channels: voice (explicit speech), continuous context (ambient audio + vision + BCI + biometrics), and gestures (silent back-channel — tap / nod / grunt / blink). All three are first-class. Output channels are voice, future haptic, future visual indicator. Schema captures gestures + explicit commands in `user_actions` table; continuous context flows through polymorphic `sensor_readings`. Gestures must be available before always-on companion can be tolerable — the user needs to dismiss / acknowledge / redirect silently.
 11. **Semantic-first continuous sensing (added 2026-05-17 late).** All continuous context streams (audio, video) use semantic-first architecture: continuous low-bandwidth meaningful extraction (VAD, diarization, prosody for audio; YOLO, scene class, OCR for visual) → semantic packets stored as `sensor_readings` rows. Raw pixels and raw audio are discarded after processing. Cloud LLM calls (multimodal vision, full STT) are *triggered escalation only* — never continuous. This is the only viable architecture for always-on awareness on battery / privacy / cost grounds, and aligns with how biological attention actually works (subconscious feature extraction + occasional conscious focus).
+12. **Native clients talk to FastAPI, never the brain modules directly (added 2026-05-19).** iOS, watchOS, and any future client speaks HTTP to `apps/api/` — they never import `chat`, `recall`, `wisp`, etc. The bridge is the seam. Public reachability uses Cloudflare Tunnel at `https://daybook.koinelabs.com` → `localhost:8000`. Auth is `X-API-Key` (in `apps/inference/.env.local` server-side, `apps/ios/Daybook/Daybook-Local.plist` client-side, both gitignored). Middleware bypasses auth for loopback BUT enforces it whenever Cloudflare headers (`cf-connecting-ip` etc.) are present, so cloudflared-on-Mac can't be used to launder unauthenticated requests through localhost. The setup script `bin/cloudflare-tunnel-setup.sh` is idempotent and writes both the tunnel config + the iOS-side override plist.
 
 ---
 
