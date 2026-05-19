@@ -43,7 +43,7 @@ def main() -> int:
     for txt in seed_intents:
         sid = str(uuid4())
         seeded_sids.append(sid)
-        eid = embed_and_store(
+        eid, _vec = embed_and_store(
             user_id=DEFAULT_USER_ID,
             source_type="intent_smoke",
             source_id=sid,

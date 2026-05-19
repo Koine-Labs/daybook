@@ -25,7 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from . import _paths  # noqa: F401
 from db import get_conn  # noqa: E402
-from embeddings import embed, embed_and_store  # noqa: E402
+from embeddings import embed_and_store  # noqa: E402
 from imodels import log_novelty_observation  # noqa: E402
 from llm import ChatClient  # noqa: E402
 
@@ -127,7 +127,7 @@ def consolidate_chat_day(
                     "message_count": len(messages),
                 },
             )
-            embed_and_store(
+            _emb_id, obs_vec = embed_and_store(
                 user_id=user_id,
                 source_type="regis_observation",
                 source_id=obs_id,
@@ -136,9 +136,9 @@ def consolidate_chat_day(
             _link_embedding(obs_id)
             # Novelty signal: nightly NREM consolidations are derived user-state
             # summaries. Per brief, log as 'regis_observation' source_type to
-            # match how they're stored. Never block on failure.
+            # match how they're stored. Vector reused from embed_and_store above.
+            # Never block on failure.
             try:
-                obs_vec = embed(obs_text)
                 log_novelty_observation(
                     user_id=user_id,
                     state_snapshot={

@@ -29,13 +29,20 @@ USER_SIDE_SOURCE_TYPES = (
     "mood",
 )
 
+# BGE-M3 cosine floor is ~0.45 for unrelated text (gibberish, random noise);
+# 0.55 captures genuinely-novel-for-this-user states while filtering out
+# the natural similarity floor. The previous default (0.4) sat below the
+# floor, so for any user with existing clusters is_novel=False ALWAYS and
+# the novelty log stayed empty. Tune here, single source of truth.
+DEFAULT_NOVELTY_THRESHOLD = 0.55
+
 
 def log_novelty_observation(
     *,
     user_id: str,
     state_snapshot: dict[str, Any],
     embedding: list[float],
-    novelty_threshold: float = 0.4,
+    novelty_threshold: float = DEFAULT_NOVELTY_THRESHOLD,
 ) -> dict:
     """Compare state to existing clusters; log if novel. Returns a summary dict."""
     qvec_literal = _vec_literal(embedding)

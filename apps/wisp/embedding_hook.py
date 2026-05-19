@@ -54,12 +54,13 @@ def embed_regis_moment(
         logger.debug("embed_regis_moment: empty content for moment %s, skipping", moment_id)
         return None
     try:
-        return embed_and_store(
+        emb_id, _vec = embed_and_store(
             user_id=user_id,
             source_type=REGIS_MOMENT_SOURCE_TYPE,
             source_id=moment_id,
             text=content,
         )
+        return emb_id
     except Exception as e:  # noqa: BLE001 — intentional broad catch
         logger.warning(
             "embed_regis_moment: failed to embed moment %s for user %s: %s",

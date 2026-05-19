@@ -307,6 +307,7 @@ async def handle_user_message_streaming(
             state_snapshot={
                 "source_type": "chat_message",
                 "source_id": user_msg_id,
+                "source": "chat_handler",
                 "role": "user",
                 "conversation_id": conversation_id,
                 "text_preview": user_text[:200],
