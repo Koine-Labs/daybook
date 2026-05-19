@@ -37,6 +37,7 @@ def log_novelty_observation(
             WHERE user_id = %s
               AND centroid_embedding IS NOT NULL
               AND status = 'active'
+              AND model_owner <> 'regis_self'
             ORDER BY centroid_embedding <=> %s::vector ASC
             LIMIT 1
             """,
