@@ -35,6 +35,13 @@ final class AppState {
     private var lastBodyRefreshAt: Date? = nil
     private let bodyRefreshMinInterval: TimeInterval = 60
 
+    /// Last upload attempt time. Throttles `uploadHealthSnapshot` so
+    /// scenePhase chatter (active ↔ background) can't hammer HealthKit
+    /// or the API. Independent of `lastBodyRefreshAt` because the upload
+    /// + refresh share a cost ceiling.
+    private var lastUploadAt: Date? = nil
+    private let uploadMinInterval: TimeInterval = 60
+
     /// Background refresh timer kicked off on first start.
     private var bodyRefreshTimer: Timer? = nil
 
@@ -49,8 +56,16 @@ final class AppState {
     }
 
     /// Pull any new HealthKit samples, ship them to FastAPI, then refresh
-    /// the body summary + series so the UI updates.
-    func uploadHealthSnapshot() async {
+    /// the body summary + series so the UI updates. Throttled so rapid
+    /// scenePhase transitions (foreground ↔ background) coalesce into one
+    /// sweep per minute. `force=true` bypasses the throttle (used by the
+    /// internal 5-min timer that wants a real periodic snapshot).
+    func uploadHealthSnapshot(force: Bool = false) async {
+        if !force, let last = lastUploadAt,
+           Date().timeIntervalSince(last) < uploadMinInterval {
+            return
+        }
+        lastUploadAt = Date()
         await HealthKitClient.shared.fetchAndUpload(api: api)
         await refreshBody(force: true)
     }
@@ -72,10 +87,11 @@ final class AppState {
     }
 
     /// Periodic refresh (every 5 min) while the app is in foreground.
+    /// Bypasses the throttle since a 5-min cadence is the throttle.
     private func startBodyRefreshTimer() {
         bodyRefreshTimer?.invalidate()
         bodyRefreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
-            Task { @MainActor in await self?.uploadHealthSnapshot() }
+            Task { @MainActor in await self?.uploadHealthSnapshot(force: true) }
         }
     }
 

@@ -161,7 +161,12 @@ def body_summary(
         row = cur.fetchone()
         readings_24h = int(row[0]) if row else 0
 
-        # Last sleep session — duration + ended_at.
+        # Last sleep — prefer the legacy `sleep_sessions` table (populated by
+        # parse_apple_health.py), but fall back to rolling up recent
+        # `sleep_stage` rows from `sensor_readings` so live HealthKit uploads
+        # produce a sleep line too. Without this fallback the live pipeline
+        # would silently never compose "you slept Xh Ym" once the historical
+        # import ages out.
         cur.execute(
             """
             SELECT duration_seconds, ended_at
@@ -176,6 +181,30 @@ def body_summary(
         if row and row[0] is not None:
             last_sleep_minutes = int(row[0]) // 60
             last_sleep_ended = row[1]
+        else:
+            # Live-data fallback: sum durations of recent non-awake sleep
+            # stages. Window of 18h covers a normal night plus naps without
+            # picking up the previous calendar day's session.
+            cur.execute(
+                """
+                SELECT
+                    SUM(EXTRACT(EPOCH FROM (
+                        (payload->>'endAt')::timestamptz
+                        - (payload->>'startAt')::timestamptz
+                    ))) AS sleep_seconds,
+                    MAX((payload->>'endAt')::timestamptz) AS latest_end
+                FROM sensor_readings
+                WHERE user_id = %s
+                  AND kind = 'sleep_stage'
+                  AND recorded_at >= NOW() - INTERVAL '18 hours'
+                  AND payload->>'stage' NOT IN ('AWAKE', 'IN_BED', 'UNKNOWN')
+                """,
+                (user_id,),
+            )
+            row = cur.fetchone()
+            if row and row[0] is not None and float(row[0]) > 0:
+                last_sleep_minutes = int(float(row[0]) // 60)
+                last_sleep_ended = row[1]
 
     line = _compose_body_line(
         hrv_avg=hrv_avg,
@@ -285,7 +314,20 @@ def _compose_body_line(
     hr_resting: int | None,
     last_sleep_minutes: int | None,
 ) -> str | None:
-    """Tiny rule-based composer. Returns None if there's nothing to say."""
+    """Tiny rule-based composer. Returns None if there's nothing to say.
+
+    NOTE — this is a deliberate, scoped departure from commitment #8
+    ("Generative Regis from day one"). The body whisper is polled every ~5
+    minutes from the iOS app, so dropping a Codex call here would burn
+    tokens + add latency on every refresh for a near-static surface. Acceptable
+    while the line is purely descriptive ("hrv steady. you slept 6h 41m.").
+
+    TODO(#8): when retrieval context is rich enough that the line could
+    actually drift in Regis's voice (e.g., "you barely slept. again."),
+    swap to `from wisp.composer import compose_utterance` with
+    `moment_kind="body_check"` and a passed-in retrieval slice. Until then
+    this stays deterministic so it can't burn cycles on no-news days.
+    """
     parts: list[str] = []
 
     hrv_phrase = _classify_hrv(hrv_avg)
