@@ -311,6 +311,7 @@ def _build_user_prompt(
         mode == "companion"
         and substrate.regis_self
         and not substrate.regis_self.get("stale")
+        and substrate.regis_self.get("fingerprint", "").strip()
     ):
         parts.extend([
             "",

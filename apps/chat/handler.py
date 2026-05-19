@@ -224,7 +224,11 @@ def _build_prompt(*, user_text: str, context: dict[str, Any]) -> str:
     # regis_self fingerprint — background self-coloration, NOT to be quoted.
     # Header text is the explicit anti-quote instruction; do not soften it.
     regis_self = context.get("regis_self")
-    if regis_self and not regis_self.get("stale"):
+    if (
+        regis_self
+        and not regis_self.get("stale")
+        and regis_self.get("fingerprint", "").strip()
+    ):
         parts.extend([
             "",
             "# Your current shape (background only — do not mention)",
