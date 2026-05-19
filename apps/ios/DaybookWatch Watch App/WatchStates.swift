@@ -168,13 +168,17 @@ struct WatchTalk: View {
             WatchBackground(mood: .curious, intensity: 1.4)
 
             VStack(spacing: 4) {
-                Spacer(minLength: 18)
+                Spacer(minLength: 26)  // extra headroom — same fix as Rest/Listen
                 ZStack {
+                    // Outer amber ring sized to sit inside the screen even
+                    // after Regis's halo (size * 2.1) extends beyond it.
                     Circle()
                         .strokeBorder(WatchTheme.amber.opacity(0.65), lineWidth: 1.5)
-                        .frame(width: 138, height: 138)
-                        .shadow(color: WatchTheme.amber.opacity(0.35), radius: 12)
-                    WatchRegis(size: 80, mood: .curious, hrv: 1.15, ringExpand: 0.3)
+                        .frame(width: 116, height: 116)
+                        .shadow(color: WatchTheme.amber.opacity(0.35), radius: 10)
+                    // Smaller Regis so halo (64 * 2.1 = 134pt) clears the
+                    // system-clock zone and stays under the rounded corners.
+                    WatchRegis(size: 64, mood: .curious, hrv: 1.15, ringExpand: 0.3)
                 }
                 Spacer(minLength: 4)
                 MiniWaveform(active: isRecording)
@@ -182,7 +186,7 @@ struct WatchTalk: View {
                     .font(WatchFonts.mono(9))
                     .tracking(1.8)
                     .foregroundStyle(Color(red: 1.0, green: 200/255.0, blue: 140/255.0).opacity(0.55))
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 12)
             }
             .padding(.horizontal, 10)
         }
