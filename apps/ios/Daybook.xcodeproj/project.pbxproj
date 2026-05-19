@@ -51,7 +51,7 @@
 		65060ACA9837799D681BCC0E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6BFA405CF5F8D72E4B291DF5 /* SectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionHeader.swift; sourceTree = "<group>"; };
 		764E71219F6247E4EEC17F50 /* DaybookWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DaybookWatch.entitlements; sourceTree = "<group>"; };
-		8B0EBB65CC96DF28DB209C9A /* Daybook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Daybook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8B0EBB65CC96DF28DB209C9A /* Daybook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Daybook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8BFCD72AC804BE52F5277998 /* HeartRateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateClient.swift; sourceTree = "<group>"; };
 		ACF9A260794CA4FEDAE5E025 /* ChatOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatOverlay.swift; sourceTree = "<group>"; };
 		B145B7FF073E4031AC49F946 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
@@ -318,6 +318,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "DaybookWatch Watch App/DaybookWatch.entitlements";
+				DEVELOPMENT_TEAM = NJFQ58VW6A;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = "DaybookWatch Watch App/Info.plist";
 				PRODUCT_BUNDLE_IDENTIFIER = com.koinelabs.daybook.watchkitapp;
@@ -334,6 +335,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "DaybookWatch Watch App/DaybookWatch.entitlements";
+				DEVELOPMENT_TEAM = NJFQ58VW6A;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = "DaybookWatch Watch App/Info.plist";
 				PRODUCT_BUNDLE_IDENTIFIER = com.koinelabs.daybook.watchkitapp;
@@ -350,6 +352,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = NJFQ58VW6A;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Daybook/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -434,6 +437,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = NJFQ58VW6A;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Daybook/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

@@ -97,17 +97,21 @@ struct WatchRest: View {
 }
 
 struct WatchListen: View {
-    var line: String = "you're warmer than usual. drink water."
+    // No default — Listen only renders when there's a real line from a
+    // real ping (phone → WatchConnectivity). No mock copy.
+    var line: String
 
     var body: some View {
         ZStack {
             WatchBackground(mood: .curious, intensity: 1.15)
             VStack(spacing: 4) {
-                Spacer(minLength: 18)  // headroom for system clock
-                WatchRegis(size: 84, mood: .curious, hrv: 1.1)
+                Spacer(minLength: 26)  // more headroom — voice line at bottom
+                                       // pushes Regis up; halo extending past
+                                       // the system clock zone was the bug.
+                WatchRegis(size: 72, mood: .curious, hrv: 1.1)
                 Spacer(minLength: 4)
                 WatchVoiceLine(text: line)
-                    .padding(.bottom, 10)
+                    .padding(.bottom, 12)
             }
             .padding(.horizontal, 14)
             .frame(maxWidth: .infinity)

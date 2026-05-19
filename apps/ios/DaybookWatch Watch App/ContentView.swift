@@ -1,30 +1,48 @@
 import SwiftUI
 
-// Daybook Watch — single face, four states (Rest / Listen / Speak / Talk).
+// Daybook Watch — single face, four states.
 //
-// Real triggers (now):
-//   - long-press anywhere      → Talk (records via mic; release returns to Rest)
-//   - HealthKit heart rate     → drives the HR readout on Rest
+// State model:
+//   - Rest   → default. What the user sees on wrist-raise.
+//   - Listen → Regis surfaced something. Server-pushed (phone →
+//              WatchConnectivity). Not user-triggerable. NOT WIRED YET.
+//   - Speak  → phone is playing Regis's TTS. Server-pushed. NOT WIRED YET.
+//   - Talk   → user is recording. Triggered by long-press, released on lift.
 //
-// Testing scaffolding (until WatchConnectivity + TTS-active feed are wired):
-//   - tap anywhere             → cycles Rest → Listen → Speak → Talk → Rest
+// Real gestures (now):
+//   - long-press   → Talk (records mic; release returns to Rest)
+//   - HealthKit HR → drives the HR readout on Rest
+//
+// (No tap-to-cycle. The earlier testing scaffold was confusing — random
+// tap pulling up Listen made the model unreadable. To see Listen / Speak
+// states during dev, set the @State initial value below.)
 
 struct ContentView: View {
     @State private var state: WatchFaceState = .rest
     @State private var heartRate = HeartRateClient.shared
+    @State private var pushedLine: String? = nil   // populated when a ping arrives
 
     var body: some View {
         ZStack {
             switch state {
-            case .rest:    WatchRest(heartRate: heartRate)
-            case .listen:  WatchListen()
-            case .speak:   WatchSpeak()
-            case .talk:    WatchTalk(isRecording: state == .talk)
+            case .rest:
+                WatchRest(heartRate: heartRate)
+            case .listen:
+                // Only renders if we actually have a line. If not, fall back
+                // to Rest — never show Listen with empty content.
+                if let line = pushedLine {
+                    WatchListen(line: line)
+                } else {
+                    WatchRest(heartRate: heartRate)
+                }
+            case .speak:
+                WatchSpeak()
+            case .talk:
+                WatchTalk(isRecording: state == .talk)
             }
         }
         .ignoresSafeArea()
         .contentShape(Rectangle())
-        .onTapGesture { cycleState() }
         .onLongPressGesture(
             minimumDuration: 0.4,
             perform: {},
@@ -35,15 +53,6 @@ struct ContentView: View {
             }
         )
         .onAppear { heartRate.start() }
-    }
-
-    private func cycleState() {
-        let all = WatchFaceState.allCases
-        if let i = all.firstIndex(of: state) {
-            withAnimation(.easeInOut(duration: 0.35)) {
-                state = all[(i + 1) % all.count]
-            }
-        }
     }
 }
 
