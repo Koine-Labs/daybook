@@ -243,7 +243,11 @@ def _fetch_embeddings(*, user_id: str, source_types: list[str]) -> list[tuple[st
 def _fetch_existing_clusters(
     *, user_id: str, model_owner: str
 ) -> dict[str, np.ndarray]:
-    """Map cluster_id -> centroid (only those with non-null centroids)."""
+    """Map cluster_id -> centroid for active clusters with non-null centroids.
+
+    Excludes dormant clusters so supersession lineage never points back to a
+    parent that was already dormant before the new cluster was born.
+    """
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
@@ -251,6 +255,7 @@ def _fetch_existing_clusters(
             FROM i_model_clusters
             WHERE user_id = %s AND model_owner = %s
               AND centroid_embedding IS NOT NULL
+              AND status = 'active'
             """,
             (user_id, model_owner),
         )

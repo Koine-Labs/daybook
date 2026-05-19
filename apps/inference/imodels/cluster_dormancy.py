@@ -5,9 +5,12 @@ cluster hasn't fired in DORMANCY_THRESHOLD_DAYS, we mark it dormant — it
 stops shaping current prompts but is preserved (recoverable when matching
 evidence returns).
 
-Reactivation is automatic: when the nightly clusterer rediscovers a centroid
-matching a dormant cluster, or the activator hits a dormant cluster directly,
-``reactivate_if_matched`` flips it back to 'active'.
+Reactivation is automatic via two paths, both calling ``reactivate_if_matched``:
+  - The activator (``get_active_clusters``) scans dormant clusters' centroids
+    too; any dormant match above ``min_similarity`` is flipped to 'active'
+    (so it can shape prompts on the next call).
+  - The clusterer's supersession detector also stamps the child cluster
+    active when recording a 'supersedes' lineage row.
 
 CLI:
     python -m imodels.cluster_dormancy --user-id <uuid> [--dry-run]
