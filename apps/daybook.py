@@ -134,8 +134,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mic-only", action="store_true", help="alias for --no-scheduler")
     parser.add_argument("--scheduler-only", action="store_true", help="alias for --no-mic")
     parser.add_argument("--no-speak", action="store_true", help="print replies instead of TTS playback")
-    parser.add_argument("--no-streaming", action="store_true",
-                        help="disable streaming LLM + TTS (use legacy synchronous path)")
     parser.add_argument("--user", default=DEFAULT_USER_ID)
     parser.add_argument("--log-level", default="INFO")
     args = parser.parse_args(argv)
@@ -186,8 +184,6 @@ def main(argv: list[str] | None = None) -> int:
             mic_argv: list[str] = ["--user", args.user]
             if args.no_speak:
                 mic_argv.append("--no-speak")
-            if args.no_streaming:
-                mic_argv.append("--no-streaming")
             exit_code = mic_main(mic_argv) or 0
         else:
             # Scheduler-only mode — block forever until Ctrl-C.

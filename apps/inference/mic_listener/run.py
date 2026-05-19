@@ -202,8 +202,7 @@ class TurnRunner:
     The mic listener worker thread MUST NOT block on turn processing — that
     would freeze packet callbacks and kill barge-in detection. submit_turn()
     returns immediately; the turn runs in a daemon thread with its own asyncio
-    loop (when streaming) so the listener stays responsive at ~80ms packet
-    granularity.
+    loop so the listener stays responsive at ~80ms packet granularity.
 
     Cancellation strategy: a new turn calls stop_speaking() to signal the
     in-flight speak loop to bail. The old TTS chain exits cleanly (handler
@@ -217,12 +216,10 @@ class TurnRunner:
         user_id: str,
         conversation_box: dict,
         speak_enabled: bool,
-        streaming: bool,
     ) -> None:
         self.user_id = user_id
         self.conversation_box = conversation_box
         self.speak_enabled = speak_enabled
-        self.streaming = streaming
         self._lock = threading.Lock()
         self._current_thread: threading.Thread | None = None
         self._on_complete: list[threading.Event] = []
@@ -250,10 +247,7 @@ class TurnRunner:
 
     def _run_one(self, user_text: str, on_complete: callable | None) -> None:
         try:
-            if self.streaming:
-                asyncio.run(self._stream_turn(user_text))
-            else:
-                self._sync_turn(user_text)
+            asyncio.run(self._stream_turn(user_text))
         except Exception:
             logger.exception("turn processing failed: %r", user_text[:80])
         finally:
@@ -291,8 +285,7 @@ class TurnRunner:
             from chat.handler import handle_user_message_streaming
             from inference.audio import speak_streaming_async
         except Exception:
-            logger.exception("streaming chat import failed; falling back to sync")
-            self._sync_turn(user_text)
+            logger.exception("streaming chat import failed; aborting turn")
             return
 
         conv_id = self._resolve_conversation_id()
@@ -320,31 +313,6 @@ class TurnRunner:
                     print(delta, end="", flush=True)
         finally:
             print()
-
-    def _sync_turn(self, user_text: str) -> None:
-        """Non-streaming fallback path."""
-        try:
-            from chat.handler import handle_user_message
-        except Exception:
-            logger.exception("chat.handler import failed")
-            return
-
-        conv_id = self._resolve_conversation_id()
-        if conv_id is None:
-            return
-
-        try:
-            resp = handle_user_message(
-                user_id=self.user_id,
-                conversation_id=conv_id,
-                user_text=user_text,
-            )
-        except Exception:
-            logger.exception("chat handler failed")
-            return
-
-        print(f"Regis: {resp.text}")
-        _maybe_speak(resp.text, speak_enabled=self.speak_enabled)
 
 
 class _ArmedState:
@@ -417,11 +385,6 @@ def main(argv: list[str] | None = None) -> int:
                              "Set to 0 to disable follow-up mode.")
     parser.add_argument("--user", default=DEFAULT_USER_ID)
     parser.add_argument("--no-speak", action="store_true")
-    parser.add_argument(
-        "--no-streaming",
-        action="store_true",
-        help="disable streaming LLM + TTS (use legacy synchronous path)",
-    )
     parser.add_argument("--silence-seconds-to-end", type=float, default=0.8)
     parser.add_argument("--input-device", default=DEFAULT_INPUT_DEVICE,
                         help="audio input device (name substring or int index). "
@@ -437,14 +400,12 @@ def main(argv: list[str] | None = None) -> int:
 
     user_id = args.user
     speak_enabled = not args.no_speak
-    streaming_enabled = not args.no_streaming
     armed = _ArmedState()
     conversation_box: dict = {"id": None}
     runner = TurnRunner(
         user_id=user_id,
         conversation_box=conversation_box,
         speak_enabled=speak_enabled,
-        streaming=streaming_enabled,
     )
 
     # Resolve device: int if numeric string, else string substring match for sounddevice
@@ -473,8 +434,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[mic listener] mode=transcription wake-phrase={args.wake_phrase!r} "
             f"armed-window={args.armed_seconds}s follow-up={args.followup_seconds}s "
-            f"speak={'on' if speak_enabled else 'off'} "
-            f"streaming={'on' if streaming_enabled else 'off'}"
+            f"speak={'on' if speak_enabled else 'off'}"
         )
         print(f"[mic listener] say '{args.wake_phrase}' or 'hey {args.wake_phrase}' to wake. "
               f"After a turn you have {args.followup_seconds}s to continue without re-waking.")
@@ -482,8 +442,7 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"[mic listener] mode=wake_word wake-word={args.wake_word} threshold={args.threshold} "
             f"armed-window={args.armed_seconds}s follow-up={args.followup_seconds}s "
-            f"speak={'on' if speak_enabled else 'off'} "
-            f"streaming={'on' if streaming_enabled else 'off'}"
+            f"speak={'on' if speak_enabled else 'off'}"
         )
         print(f"[mic listener] say the wake word, then speak. After a turn you have "
               f"{args.followup_seconds}s to continue without re-waking. Speak over Regis to interrupt.")

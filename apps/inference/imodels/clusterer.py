@@ -263,20 +263,26 @@ def _update_cluster_centroid(cluster_id: str, centroid: np.ndarray) -> None:
 
 
 def _upsert_memberships(memberships: list[tuple[str, str, float]]) -> None:
-    """Insert-or-update embedding_cluster_memberships rows."""
+    """Insert-or-update embedding_cluster_memberships rows in a single batch.
+
+    Uses psycopg3's executemany (extended-protocol pipelined) so a 1000-member
+    cluster is one round-trip instead of 1000. ON CONFLICT semantics preserved
+    exactly — same SQL, just one batched send.
+    """
+    if not memberships:
+        return
     with get_conn() as conn, conn.cursor() as cur:
-        for emb_id, cluster_id, sim in memberships:
-            cur.execute(
-                """
-                INSERT INTO embedding_cluster_memberships
-                    (embedding_id, cluster_id, similarity, assignment_source)
-                VALUES (%s, %s, %s, 'clusterer')
-                ON CONFLICT (embedding_id, cluster_id) DO UPDATE
-                  SET similarity = EXCLUDED.similarity,
-                      assigned_at = NOW()
-                """,
-                (emb_id, cluster_id, sim),
-            )
+        cur.executemany(
+            """
+            INSERT INTO embedding_cluster_memberships
+                (embedding_id, cluster_id, similarity, assignment_source)
+            VALUES (%s, %s, %s, 'clusterer')
+            ON CONFLICT (embedding_id, cluster_id) DO UPDATE
+              SET similarity = EXCLUDED.similarity,
+                  assigned_at = NOW()
+            """,
+            memberships,
+        )
         conn.commit()
 
 

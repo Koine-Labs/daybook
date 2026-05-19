@@ -1,6 +1,13 @@
-"""Core chat loop. handle_user_message() owns one full turn."""
+"""Core chat loop. handle_user_message_streaming() owns one full turn.
+
+The streaming path is canonical. A thin sync wrapper (handle_user_message)
+exists for callers that want a one-shot AssistantResponse — it drives the
+streaming generator to exhaustion and assembles the response from the
+final_state populated by _finalize_assistant_turn.
+"""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -45,124 +52,42 @@ def handle_user_message(
     reasoning_effort: str = "medium",
     verbosity: str = "medium",
 ) -> AssistantResponse:
-    """Run one full turn end-to-end."""
-    t0 = time.monotonic()
-    user_text = user_text.strip()
-    if not user_text:
-        raise ValueError("user_text is empty")
+    """Sync wrapper around the streaming turn.
 
-    user_vec = embed(user_text)
+    Drives handle_user_message_streaming to exhaustion, collects emitted
+    deltas, and assembles an AssistantResponse from the final_state populated
+    by _finalize_assistant_turn. The streaming path is canonical; this is a
+    convenience for callers that don't need incremental delivery.
+    """
+    final_state: dict[str, Any] = {}
+    chunks: list[str] = []
 
-    user_msg_id = _insert_message(
-        conversation_id=conversation_id,
-        user_id=user_id,
-        role="user",
-        content=user_text,
-        metadata={},
-    )
-    user_emb_id = _embed_and_link(
-        user_id=user_id,
-        message_id=user_msg_id,
-        vector=user_vec,
-        text=user_text,
-    )
-
-    prior_user_msgs = _prior_user_messages(
-        conversation_id=conversation_id, exclude_id=user_msg_id, limit=10
-    )
-
-    context = gather_context(
-        user_id=user_id,
-        conversation_id=conversation_id,
-        user_text=user_text,
-        user_embedding=user_vec,
-    )
-
-    persona = _load_persona()
-    user_prompt = _build_prompt(user_text=user_text, context=context)
-
-    if client is None:
-        client = ChatClient.auto()
-
-    llm_t0 = time.monotonic()
-    try:
-        assistant_text = client.chat(
-            system=persona,
-            user=user_prompt,
+    async def _drain() -> None:
+        async for delta in handle_user_message_streaming(
+            user_id=user_id,
+            conversation_id=conversation_id,
+            user_text=user_text,
+            client=client,
+            extract_observation=extract_observation,
+            apply_drift=apply_drift,
             reasoning_effort=reasoning_effort,
             verbosity=verbosity,
-        ).strip()
-    except Exception as e:
-        logger.exception("LLM call failed")
-        assistant_text = (
-            "I'm having trouble reaching the language layer right now. Try me again in a moment."
-        )
-    llm_ms = int((time.monotonic() - llm_t0) * 1000)
+            final_state=final_state,
+        ):
+            chunks.append(delta)
 
-    assistant_meta = {
-        "model": client.model,
-        "backend": client.backend,
-        "retrieval_ms": context.get("_retrieval_ms"),
-        "llm_ms": llm_ms,
-    }
-    assistant_msg_id = _insert_message(
-        conversation_id=conversation_id,
-        user_id=user_id,
-        role="assistant",
-        content=assistant_text,
-        metadata=assistant_meta,
-    )
-    _embed_and_link(
-        user_id=user_id,
-        message_id=assistant_msg_id,
-        vector=embed(assistant_text),
-        text=assistant_text,
-    )
+    asyncio.run(_drain())
 
-    observation_text: str | None = None
-    if extract_observation:
-        try:
-            observation_text = observer.maybe_extract_observation(
-                user_id=user_id,
-                user_message=user_text,
-                assistant_message=assistant_text,
-                client=client,
-                context={
-                    "conversation_id": conversation_id,
-                    "user_message_id": user_msg_id,
-                    "assistant_message_id": assistant_msg_id,
-                },
-            )
-        except Exception as e:
-            logger.warning("observer failed: %s", e)
-
-    trait_deltas_dicts: list[dict[str, Any]] = []
-    if apply_drift:
-        try:
-            deltas = trait_drift.maybe_apply_heuristics(
-                user_id=user_id,
-                user_message=user_text,
-                assistant_message=assistant_text,
-                prior_user_messages=prior_user_msgs,
-            )
-            trait_deltas_dicts = [
-                {"trait": d.trait, "delta": d.delta, "reason": d.reason}
-                for d in deltas
-            ]
-        except Exception as e:
-            logger.warning("trait drift failed: %s", e)
-
-    elapsed_ms = int((time.monotonic() - t0) * 1000)
     return AssistantResponse(
-        user_message_id=user_msg_id,
-        assistant_message_id=assistant_msg_id,
-        text=assistant_text,
-        model=client.model,
-        backend=client.backend,
-        context_assembled=_context_for_debug(context, user_emb_id=user_emb_id),
-        elapsed_ms=elapsed_ms,
-        observation_extracted=observation_text,
-        trait_deltas=trait_deltas_dicts,
+        user_message_id=final_state.get("user_message_id", ""),
+        assistant_message_id=final_state.get("assistant_message_id", ""),
+        text=final_state.get("assistant_text", "".join(chunks).strip()),
+        model=final_state.get("model", ""),
+        backend=final_state.get("backend", ""),
+        context_assembled=final_state.get("context_assembled", {}),
+        elapsed_ms=final_state.get("elapsed_ms", 0),
+        observation_extracted=final_state.get("observation_extracted"),
+        trait_deltas=final_state.get("trait_deltas", []),
     )
 
 
@@ -328,12 +253,14 @@ async def handle_user_message_streaming(
     apply_drift: bool = True,
     reasoning_effort: str = "low",
     verbosity: str = "low",
+    final_state: dict[str, Any] | None = None,
 ) -> AsyncIterator[str]:
-    """Streaming variant of handle_user_message.
+    """Canonical chat turn. Yields assistant text deltas as they arrive.
 
-    Yields assistant text deltas as they arrive from the LLM. Same DB writes,
-    observer, and trait drift as the sync path — the assistant row is written
-    after the stream completes (or on early termination).
+    If `final_state` is provided, it's populated after the stream completes
+    (or on early termination via GeneratorExit) with the final IDs, metadata,
+    observation, and trait deltas — letting sync callers reconstruct the
+    AssistantResponse shape without duplicating the turn logic.
     """
     t0 = time.monotonic()
     user_text = user_text.strip()
@@ -349,7 +276,7 @@ async def handle_user_message_streaming(
         content=user_text,
         metadata={},
     )
-    _embed_and_link(
+    user_emb_id = _embed_and_link(
         user_id=user_id,
         message_id=user_msg_id,
         vector=user_vec,
@@ -404,6 +331,7 @@ async def handle_user_message_streaming(
             conversation_id=conversation_id,
             user_text=user_text,
             user_msg_id=user_msg_id,
+            user_emb_id=user_emb_id,
             assistant_text=full_text,
             client=client,
             context=context,
@@ -414,6 +342,7 @@ async def handle_user_message_streaming(
             extract_observation=extract_observation,
             apply_drift=apply_drift,
             prior_user_msgs=prior_user_msgs,
+            final_state=final_state,
         )
         raise
     except Exception as e:
@@ -432,6 +361,7 @@ async def handle_user_message_streaming(
         conversation_id=conversation_id,
         user_text=user_text,
         user_msg_id=user_msg_id,
+        user_emb_id=user_emb_id,
         assistant_text=full_text.strip(),
         client=client,
         context=context,
@@ -442,6 +372,7 @@ async def handle_user_message_streaming(
         extract_observation=extract_observation,
         apply_drift=apply_drift,
         prior_user_msgs=prior_user_msgs,
+        final_state=final_state,
     )
 
 
@@ -451,6 +382,7 @@ def _finalize_assistant_turn(
     conversation_id: str,
     user_text: str,
     user_msg_id: str,
+    user_emb_id: str,
     assistant_text: str,
     client: ChatClient,
     context: dict[str, Any],
@@ -461,9 +393,31 @@ def _finalize_assistant_turn(
     extract_observation: bool,
     apply_drift: bool,
     prior_user_msgs: list[str],
+    final_state: dict[str, Any] | None = None,
 ) -> None:
-    """Write assistant row + embedding, fire observer + drift. Best-effort."""
+    """Write assistant row + embedding, fire observer + drift. Best-effort.
+
+    Populates `final_state` (if provided) with assistant_message_id,
+    user_message_id, model/backend, elapsed_ms, observation_extracted, and
+    trait_deltas — the data sync callers need to assemble an AssistantResponse.
+    """
+    # Pre-populate the bits available regardless of whether we persist.
+    if final_state is not None:
+        final_state.setdefault("user_message_id", user_msg_id)
+        final_state.setdefault("assistant_text", assistant_text)
+        final_state.setdefault("model", client.model)
+        final_state.setdefault("backend", client.backend)
+        final_state.setdefault(
+            "context_assembled",
+            _context_for_debug(context, user_emb_id=user_emb_id),
+        )
+
     if not assistant_text:
+        if final_state is not None:
+            final_state.setdefault("elapsed_ms", int((time.monotonic() - t0) * 1000))
+            final_state.setdefault("assistant_message_id", "")
+            final_state.setdefault("trait_deltas", [])
+            final_state.setdefault("observation_extracted", None)
         return
 
     llm_ms = int((time.monotonic() - llm_t0) * 1000)
@@ -480,6 +434,7 @@ def _finalize_assistant_turn(
         assistant_meta["streaming_interrupted"] = True
         assistant_meta["stream_error"] = str(stream_error)[:300]
 
+    assistant_msg_id = ""
     try:
         assistant_msg_id = _insert_message(
             conversation_id=conversation_id,
@@ -496,11 +451,17 @@ def _finalize_assistant_turn(
         )
     except Exception:
         logger.exception("failed to persist assistant message; skipping observer/drift")
+        if final_state is not None:
+            final_state.setdefault("assistant_message_id", assistant_msg_id)
+            final_state.setdefault("elapsed_ms", int((time.monotonic() - t0) * 1000))
+            final_state.setdefault("trait_deltas", [])
+            final_state.setdefault("observation_extracted", None)
         return
 
+    observation_text: str | None = None
     if extract_observation:
         try:
-            observer.maybe_extract_observation(
+            observation_text = observer.maybe_extract_observation(
                 user_id=user_id,
                 user_message=user_text,
                 assistant_message=assistant_text,
@@ -514,14 +475,19 @@ def _finalize_assistant_turn(
         except Exception as e:
             logger.warning("observer failed: %s", e)
 
+    trait_deltas_dicts: list[dict[str, Any]] = []
     if apply_drift:
         try:
-            trait_drift.maybe_apply_heuristics(
+            deltas = trait_drift.maybe_apply_heuristics(
                 user_id=user_id,
                 user_message=user_text,
                 assistant_message=assistant_text,
                 prior_user_messages=prior_user_msgs,
             )
+            trait_deltas_dicts = [
+                {"trait": d.trait, "delta": d.delta, "reason": d.reason}
+                for d in deltas
+            ]
         except Exception as e:
             logger.warning("trait drift failed: %s", e)
 
@@ -533,6 +499,12 @@ def _finalize_assistant_turn(
         llm_ms,
         stream_error is not None,
     )
+
+    if final_state is not None:
+        final_state["assistant_message_id"] = assistant_msg_id
+        final_state["elapsed_ms"] = total_ms
+        final_state["observation_extracted"] = observation_text
+        final_state["trait_deltas"] = trait_deltas_dicts
 
 
 def _context_for_debug(
