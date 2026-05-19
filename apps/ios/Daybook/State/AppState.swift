@@ -9,10 +9,16 @@ import SwiftUI
 
 @Observable
 final class AppState {
-    // Placeholder — will grow as the new direction takes shape.
-    // Likely fields once we know more:
+    // HTTP client pointed at the FastAPI bridge. Uses `APIClient.shared`
+    // which reads the base URL from Info.plist (`DaybookAPIBaseURL`).
+    let api: APIClient = .shared
+
+    // First /chat reply from the server seeds this. Subsequent messages reuse
+    // it so the whole session shares one conversation row in Postgres.
+    var conversationId: String? = nil
+
+    // Likely future fields (deferred until the next direction settles):
     //   - var surfaceMode: SurfaceMode  // .resting / .capturing / .browsing / .settings
     //   - var fireballState: FireballState  // .idle / .listening / .composing / .alert
-    //   - var conversationId: String?
     //   - var settingsOpen: Bool
 }

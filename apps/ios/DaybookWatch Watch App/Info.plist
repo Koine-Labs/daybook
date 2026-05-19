@@ -20,11 +20,13 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Daybook reads your heart rate to show Regis your live state.</string>
 	<key>WKApplication</key>
 	<true/>
-	<key>WKWatchOnly</key>
-	<false/>
 	<key>WKCompanionAppBundleIdentifier</key>
 	<string>com.koinelabs.daybook</string>
+	<key>WKWatchOnly</key>
+	<false/>
 </dict>
 </plist>

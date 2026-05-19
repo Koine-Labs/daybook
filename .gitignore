@@ -97,3 +97,6 @@ apps/inference/wake_word/models/*.onnx
 
 # iOS DerivedData, archives
 apps/ios/screenshots/
+
+# Claude Design handoff bundles — extracted to inspect; large + transient
+_design_package*/

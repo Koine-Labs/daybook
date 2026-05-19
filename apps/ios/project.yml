@@ -28,6 +28,7 @@ targets:
       - path: Daybook
         excludes:
           - "Info.plist"
+          - "Daybook.icon"
     resources:
       - path: Daybook/Assets.xcassets
     info:
@@ -70,6 +71,7 @@ targets:
       - path: "DaybookWatch Watch App"
         excludes:
           - "Info.plist"
+          - "Daybook.icon"
     resources:
       - path: "DaybookWatch Watch App/Assets.xcassets"
     info:
@@ -81,6 +83,9 @@ targets:
         WKApplication: true
         WKWatchOnly: false
         WKCompanionAppBundleIdentifier: com.koinelabs.daybook
+        NSHealthShareUsageDescription: "Daybook reads your heart rate to show Regis your live state."
+    entitlements:
+      path: "DaybookWatch Watch App/DaybookWatch.entitlements"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koinelabs.daybook.watchkitapp
@@ -89,3 +94,70 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: "YES"
         WATCHOS_DEPLOYMENT_TARGET: "10.0"
+        CODE_SIGN_ENTITLEMENTS: "DaybookWatch Watch App/DaybookWatch.entitlements"
+
+schemes:
+  DaybookWatch Watch App:
+    build:
+      targets:
+        DaybookWatch Watch App: all
+        Daybook: all
+      postActions:
+        - script: |
+            # When running the Watch scheme, also install + launch the
+            # companion iOS app on the iPhone simulator paired with the
+            # watch Xcode chose. Logs to /tmp/daybook-post-build.log so
+            # you can debug if it ever silently fails.
+            LOG=/tmp/daybook-post-build.log
+            : > "$LOG"
+            echo "[post-build] $(date)" >> "$LOG"
+
+            IOS_APP="${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}"
+            echo "iOS app: $IOS_APP" >> "$LOG"
+
+            # Find the watch sim Xcode booted, then its paired iPhone.
+            WATCH_UDID=$(xcrun simctl list devices booted 2>/dev/null \
+              | grep -E "Apple Watch" \
+              | head -1 \
+              | grep -oE "[A-F0-9-]{36}")
+            echo "watch udid: $WATCH_UDID" >> "$LOG"
+
+            PHONE_UDID=""
+            if [ -n "$WATCH_UDID" ]; then
+              PHONE_UDID=$(xcrun simctl list pairs 2>/dev/null \
+                | grep -A1 -B1 "$WATCH_UDID" \
+                | grep "Phone:" \
+                | grep -oE "[A-F0-9-]{36}" \
+                | head -1)
+            fi
+            # Fallback: any booted iPhone.
+            if [ -z "$PHONE_UDID" ]; then
+              PHONE_UDID=$(xcrun simctl list devices booted 2>/dev/null \
+                | grep -E "iPhone" \
+                | head -1 \
+                | grep -oE "[A-F0-9-]{36}")
+            fi
+            echo "phone udid: $PHONE_UDID" >> "$LOG"
+
+            if [ -n "$PHONE_UDID" ] && [ -d "$IOS_APP" ]; then
+              # Boot the phone if it isn't already (no-op when it is).
+              xcrun simctl boot "$PHONE_UDID" >> "$LOG" 2>&1 || true
+              xcrun simctl install "$PHONE_UDID" "$IOS_APP" >> "$LOG" 2>&1 || true
+              xcrun simctl launch "$PHONE_UDID" com.koinelabs.daybook >> "$LOG" 2>&1 || true
+              echo "[post-build] done" >> "$LOG"
+            else
+              echo "[post-build] skipped — no phone sim or app build" >> "$LOG"
+            fi
+          name: Install + launch companion iOS app
+          settingsTarget: Daybook
+    run:
+      config: Debug
+      executable: DaybookWatch Watch App
+    test:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

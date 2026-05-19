@@ -8,28 +8,63 @@
 
 /* Begin PBXBuildFile section */
 		0201FFDAE27D409AD7741481 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DF16CCA0C36D546B76AA0D94 /* Assets.xcassets */; };
+		1554D1D9567229BF34E70F76 /* RoomBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A3DD3432FBB2916673BEFF /* RoomBackground.swift */; };
+		27886FDAAD01E6579FCCDF02 /* GlassPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62CF21D1642E705CDC1F5437 /* GlassPanel.swift */; };
+		27F64594FE3B30351A7B2AE8 /* SectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BFA405CF5F8D72E4B291DF5 /* SectionHeader.swift */; };
+		2E0EAB6251809CC5D62C6ECB /* WatchTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447F6F17E73432BEE5849093 /* WatchTheme.swift */; };
 		3C4074B3E89AF0E7CB3E44DF /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39DAA3EA7EB87ED75EE70A5C /* APIClient.swift */; };
+		4973808CB0F7C18E49B31DE0 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08531C58A1C2787A0864C3CD /* Theme.swift */; };
 		54627F429B206086738ED0B1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 65060ACA9837799D681BCC0E /* Assets.xcassets */; };
+		5935A7226A673B55088D7C35 /* ConnectionsRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = E782B33C1EBC38667EB18FBE /* ConnectionsRoom.swift */; };
 		5CCBFB4BA5E8EBABE509E5C5 /* DaybookApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05B8F2BB5AE606000377ED66 /* DaybookApp.swift */; };
+		69895DF97F70AE2EA4237B6C /* WatchStates.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53DA5585CAA55F7C0C0A8E2E /* WatchStates.swift */; };
 		6DB8CB060590F186741CD171 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = F641B096EB076245A859041C /* Models.swift */; };
+		77CE104E7B8E3F016A5575BF /* NowRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53050D00B5A583477CE67E59 /* NowRoom.swift */; };
+		7C8DF090769FF8A2146136AF /* RegisCharacter.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6A420E43E6537118247D09A /* RegisCharacter.swift */; };
 		7E333A3726619A6D9ED59D4C /* DaybookWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9AB95930B7D330867E9F7D0 /* DaybookWatchApp.swift */; };
+		8C36D4B53D4FFBB25580568D /* SelfRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4EDC3109595A6221712C21C /* SelfRoom.swift */; };
+		8F89D57A092C0B4463B71CE9 /* ConstellationDots.swift in Sources */ = {isa = PBXBuildFile; fileRef = D765C483EC80CF3421F32248 /* ConstellationDots.swift */; };
+		9006BB423AA89376A1395147 /* Tweaks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6EEF7A6B23A6B63594E83C9 /* Tweaks.swift */; };
+		AB747D18A5636B7EE820A3FA /* ChatOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF9A260794CA4FEDAE5E025 /* ChatOverlay.swift */; };
+		C0C6F63E11CFFBCA91F68A23 /* HeartRateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFCD72AC804BE52F5277998 /* HeartRateClient.swift */; };
 		C312F7F2997883B8E9A4F656 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B145B7FF073E4031AC49F946 /* AppState.swift */; };
+		D721FED71DE258552D12D948 /* WatchRegis.swift in Sources */ = {isa = PBXBuildFile; fileRef = B664CC1E0DF568827616EC17 /* WatchRegis.swift */; };
+		DFE804EFAE63BEFE1EC11801 /* AmbientParticles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5912536CCAA094AD8DC77C /* AmbientParticles.swift */; };
+		E894663FB04D1AD26374BBD8 /* WatchBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F749F4F1BFF637650C2E9DA /* WatchBackground.swift */; };
 		F1F8B8A0FADA9C3D39FFD01E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A3269417AAE5C44FE9892C1 /* ContentView.swift */; };
 		F6FE5D3C7B9538D77D844F10 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB9058579F36907E126FDDE6 /* ContentView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		05B8F2BB5AE606000377ED66 /* DaybookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookApp.swift; sourceTree = "<group>"; };
+		08531C58A1C2787A0864C3CD /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		126408CF211A2313F0B4AE0E /* DaybookWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DaybookWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		2F749F4F1BFF637650C2E9DA /* WatchBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBackground.swift; sourceTree = "<group>"; };
+		34A3DD3432FBB2916673BEFF /* RoomBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomBackground.swift; sourceTree = "<group>"; };
 		39DAA3EA7EB87ED75EE70A5C /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		447F6F17E73432BEE5849093 /* WatchTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTheme.swift; sourceTree = "<group>"; };
 		4A3269417AAE5C44FE9892C1 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		53050D00B5A583477CE67E59 /* NowRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowRoom.swift; sourceTree = "<group>"; };
+		53DA5585CAA55F7C0C0A8E2E /* WatchStates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchStates.swift; sourceTree = "<group>"; };
+		5B5912536CCAA094AD8DC77C /* AmbientParticles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientParticles.swift; sourceTree = "<group>"; };
+		62CF21D1642E705CDC1F5437 /* GlassPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPanel.swift; sourceTree = "<group>"; };
 		65060ACA9837799D681BCC0E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6BFA405CF5F8D72E4B291DF5 /* SectionHeader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionHeader.swift; sourceTree = "<group>"; };
+		764E71219F6247E4EEC17F50 /* DaybookWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DaybookWatch.entitlements; sourceTree = "<group>"; };
 		8B0EBB65CC96DF28DB209C9A /* Daybook.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Daybook.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BFCD72AC804BE52F5277998 /* HeartRateClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartRateClient.swift; sourceTree = "<group>"; };
+		ACF9A260794CA4FEDAE5E025 /* ChatOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatOverlay.swift; sourceTree = "<group>"; };
 		B145B7FF073E4031AC49F946 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
+		B4EDC3109595A6221712C21C /* SelfRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfRoom.swift; sourceTree = "<group>"; };
+		B664CC1E0DF568827616EC17 /* WatchRegis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRegis.swift; sourceTree = "<group>"; };
 		B9AB95930B7D330867E9F7D0 /* DaybookWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookWatchApp.swift; sourceTree = "<group>"; };
+		C6A420E43E6537118247D09A /* RegisCharacter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisCharacter.swift; sourceTree = "<group>"; };
 		CB9058579F36907E126FDDE6 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D765C483EC80CF3421F32248 /* ConstellationDots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstellationDots.swift; sourceTree = "<group>"; };
 		DF16CCA0C36D546B76AA0D94 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E782B33C1EBC38667EB18FBE /* ConnectionsRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionsRoom.swift; sourceTree = "<group>"; };
 		F641B096EB076245A859041C /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		F6EEF7A6B23A6B63594E83C9 /* Tweaks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tweaks.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -49,9 +84,23 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		54F6E91EDCAAE0F5BBAFEC0A /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				5B5912536CCAA094AD8DC77C /* AmbientParticles.swift */,
+				D765C483EC80CF3421F32248 /* ConstellationDots.swift */,
+				C6A420E43E6537118247D09A /* RegisCharacter.swift */,
+				34A3DD3432FBB2916673BEFF /* RoomBackground.swift */,
+				6BFA405CF5F8D72E4B291DF5 /* SectionHeader.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
 		7BF66FDB3BA4308C054E250E /* DesignSystem */ = {
 			isa = PBXGroup;
 			children = (
+				62CF21D1642E705CDC1F5437 /* GlassPanel.swift */,
+				08531C58A1C2787A0864C3CD /* Theme.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -68,6 +117,10 @@
 		A7D70584C457882F795C3B79 /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				ACF9A260794CA4FEDAE5E025 /* ChatOverlay.swift */,
+				E782B33C1EBC38667EB18FBE /* ConnectionsRoom.swift */,
+				53050D00B5A583477CE67E59 /* NowRoom.swift */,
+				B4EDC3109595A6221712C21C /* SelfRoom.swift */,
 			);
 			path = Screens;
 			sourceTree = "<group>";
@@ -86,7 +139,13 @@
 			children = (
 				DF16CCA0C36D546B76AA0D94 /* Assets.xcassets */,
 				CB9058579F36907E126FDDE6 /* ContentView.swift */,
+				764E71219F6247E4EEC17F50 /* DaybookWatch.entitlements */,
 				B9AB95930B7D330867E9F7D0 /* DaybookWatchApp.swift */,
+				8BFCD72AC804BE52F5277998 /* HeartRateClient.swift */,
+				2F749F4F1BFF637650C2E9DA /* WatchBackground.swift */,
+				B664CC1E0DF568827616EC17 /* WatchRegis.swift */,
+				53DA5585CAA55F7C0C0A8E2E /* WatchStates.swift */,
+				447F6F17E73432BEE5849093 /* WatchTheme.swift */,
 			);
 			path = "DaybookWatch Watch App";
 			sourceTree = "<group>";
@@ -94,6 +153,7 @@
 		BE90138026AF541F8B9B3390 /* Daybook */ = {
 			isa = PBXGroup;
 			children = (
+				54F6E91EDCAAE0F5BBAFEC0A /* Components */,
 				7BF66FDB3BA4308C054E250E /* DesignSystem */,
 				B50A57348BFAEB8944C89672 /* Networking */,
 				327200A3D55EE983059FE0C4 /* Resources */,
@@ -110,6 +170,7 @@
 			isa = PBXGroup;
 			children = (
 				B145B7FF073E4031AC49F946 /* AppState.swift */,
+				F6EEF7A6B23A6B63594E83C9 /* Tweaks.swift */,
 			);
 			path = State;
 			sourceTree = "<group>";
@@ -215,10 +276,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				3C4074B3E89AF0E7CB3E44DF /* APIClient.swift in Sources */,
+				DFE804EFAE63BEFE1EC11801 /* AmbientParticles.swift in Sources */,
 				C312F7F2997883B8E9A4F656 /* AppState.swift in Sources */,
+				AB747D18A5636B7EE820A3FA /* ChatOverlay.swift in Sources */,
+				5935A7226A673B55088D7C35 /* ConnectionsRoom.swift in Sources */,
+				8F89D57A092C0B4463B71CE9 /* ConstellationDots.swift in Sources */,
 				F1F8B8A0FADA9C3D39FFD01E /* ContentView.swift in Sources */,
 				5CCBFB4BA5E8EBABE509E5C5 /* DaybookApp.swift in Sources */,
+				27886FDAAD01E6579FCCDF02 /* GlassPanel.swift in Sources */,
 				6DB8CB060590F186741CD171 /* Models.swift in Sources */,
+				77CE104E7B8E3F016A5575BF /* NowRoom.swift in Sources */,
+				7C8DF090769FF8A2146136AF /* RegisCharacter.swift in Sources */,
+				1554D1D9567229BF34E70F76 /* RoomBackground.swift in Sources */,
+				27F64594FE3B30351A7B2AE8 /* SectionHeader.swift in Sources */,
+				8C36D4B53D4FFBB25580568D /* SelfRoom.swift in Sources */,
+				4973808CB0F7C18E49B31DE0 /* Theme.swift in Sources */,
+				9006BB423AA89376A1395147 /* Tweaks.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -228,6 +301,11 @@
 			files = (
 				F6FE5D3C7B9538D77D844F10 /* ContentView.swift in Sources */,
 				7E333A3726619A6D9ED59D4C /* DaybookWatchApp.swift in Sources */,
+				C0C6F63E11CFFBCA91F68A23 /* HeartRateClient.swift in Sources */,
+				E894663FB04D1AD26374BBD8 /* WatchBackground.swift in Sources */,
+				D721FED71DE258552D12D948 /* WatchRegis.swift in Sources */,
+				69895DF97F70AE2EA4237B6C /* WatchStates.swift in Sources */,
+				2E0EAB6251809CC5D62C6ECB /* WatchTheme.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -239,6 +317,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "DaybookWatch Watch App/DaybookWatch.entitlements";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = "DaybookWatch Watch App/Info.plist";
 				PRODUCT_BUNDLE_IDENTIFIER = com.koinelabs.daybook.watchkitapp;
@@ -254,6 +333,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "DaybookWatch Watch App/DaybookWatch.entitlements";
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = "DaybookWatch Watch App/Info.plist";
 				PRODUCT_BUNDLE_IDENTIFIER = com.koinelabs.daybook.watchkitapp;

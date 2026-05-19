@@ -1,0 +1,125 @@
+{
+  "fill" : {
+    "automatic-gradient" : "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+  },
+  "groups" : [
+    {
+      "layers" : [
+        {
+          "hidden" : false,
+          "image-name" : "Enlarged-Wisp 3.png",
+          "name" : "Enlarged-Wisp 3",
+          "position" : {
+            "scale" : 0.83,
+            "translation-in-points" : [
+              -70.35197073094378,
+              123.681658505737
+            ]
+          }
+        },
+        {
+          "blend-mode" : "normal",
+          "fill" : "none",
+          "glass" : true,
+          "hidden" : true,
+          "image-name" : "Clear-Koine-Wisp.png",
+          "name" : "Clear-Koine-Wisp",
+          "opacity" : 1,
+          "position" : {
+            "scale" : 0.85,
+            "translation-in-points" : [
+              -34.66197073094372,
+              58.24593636340637
+            ]
+          }
+        }
+      ],
+      "position" : {
+        "scale" : 1,
+        "translation-in-points" : [
+          18.28296877736966,
+          -21.47367960254246
+        ]
+      },
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "hidden" : false,
+      "layers" : [
+        {
+          "image-name" : "Eyes-Wisp.png",
+          "name" : "Eyes-Wisp",
+          "position" : {
+            "scale" : 0.83,
+            "translation-in-points" : [
+              -34.66197073094378,
+              68.40593636340645
+            ]
+          }
+        },
+        {
+          "hidden" : false,
+          "image-name" : "Body-Wisp.png",
+          "name" : "Body-Wisp",
+          "position" : {
+            "scale" : 0.83,
+            "translation-in-points" : [
+              -34.66197073094378,
+              68.40593636340645
+            ]
+          }
+        },
+        {
+          "image-name" : "Right Ear.png",
+          "name" : "Right Ear",
+          "position" : {
+            "scale" : 0.83,
+            "translation-in-points" : [
+              -34.66197073094378,
+              68.40593636340645
+            ]
+          }
+        },
+        {
+          "image-name" : "Left Ear.png",
+          "name" : "Left Ear",
+          "position" : {
+            "scale" : 0.83,
+            "translation-in-points" : [
+              -34.66197073094378,
+              68.40593636340645
+            ]
+          }
+        }
+      ],
+      "position" : {
+        "scale" : 1,
+        "translation-in-points" : [
+          18.28296877736966,
+          -21.47367960254246
+        ]
+      },
+      "shadow" : {
+        "kind" : "neutral",
+        "opacity" : 0.5
+      },
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    }
+  ],
+  "supported-platforms" : {
+    "circles" : [
+      "watchOS"
+    ],
+    "squares" : "shared"
+  }
+}

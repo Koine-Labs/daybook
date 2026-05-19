@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Scheme
+   LastUpgradeVersion = "1500"
+   version = "1.7">
+   <BuildAction
+      parallelizeBuildables = "YES"
+      buildImplicitDependencies = "YES">
+      <PostActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Install + launch companion iOS app"
+               scriptText = "# When running the Watch scheme, also install + launch the&#10;# companion iOS app on the iPhone simulator paired with the&#10;# watch Xcode chose. Logs to /tmp/daybook-post-build.log so&#10;# you can debug if it ever silently fails.&#10;LOG=/tmp/daybook-post-build.log&#10;: &gt; &quot;$LOG&quot;&#10;echo &quot;[post-build] $(date)&quot; &gt;&gt; &quot;$LOG&quot;&#10;&#10;IOS_APP=&quot;${TARGET_BUILD_DIR}/${FULL_PRODUCT_NAME}&quot;&#10;echo &quot;iOS app: $IOS_APP&quot; &gt;&gt; &quot;$LOG&quot;&#10;&#10;# Find the watch sim Xcode booted, then its paired iPhone.&#10;WATCH_UDID=$(xcrun simctl list devices booted 2&gt;/dev/null \&#10;  | grep -E &quot;Apple Watch&quot; \&#10;  | head -1 \&#10;  | grep -oE &quot;[A-F0-9-]{36}&quot;)&#10;echo &quot;watch udid: $WATCH_UDID&quot; &gt;&gt; &quot;$LOG&quot;&#10;&#10;PHONE_UDID=&quot;&quot;&#10;if [ -n &quot;$WATCH_UDID&quot; ]; then&#10;  PHONE_UDID=$(xcrun simctl list pairs 2&gt;/dev/null \&#10;    | grep -A1 -B1 &quot;$WATCH_UDID&quot; \&#10;    | grep &quot;Phone:&quot; \&#10;    | grep -oE &quot;[A-F0-9-]{36}&quot; \&#10;    | head -1)&#10;fi&#10;# Fallback: any booted iPhone.&#10;if [ -z &quot;$PHONE_UDID&quot; ]; then&#10;  PHONE_UDID=$(xcrun simctl list devices booted 2&gt;/dev/null \&#10;    | grep -E &quot;iPhone&quot; \&#10;    | head -1 \&#10;    | grep -oE &quot;[A-F0-9-]{36}&quot;)&#10;fi&#10;echo &quot;phone udid: $PHONE_UDID&quot; &gt;&gt; &quot;$LOG&quot;&#10;&#10;if [ -n &quot;$PHONE_UDID&quot; ] &amp;&amp; [ -d &quot;$IOS_APP&quot; ]; then&#10;  # Boot the phone if it isn&apos;t already (no-op when it is).&#10;  xcrun simctl boot &quot;$PHONE_UDID&quot; &gt;&gt; &quot;$LOG&quot; 2&gt;&amp;1 || true&#10;  xcrun simctl install &quot;$PHONE_UDID&quot; &quot;$IOS_APP&quot; &gt;&gt; &quot;$LOG&quot; 2&gt;&amp;1 || true&#10;  xcrun simctl launch &quot;$PHONE_UDID&quot; com.koinelabs.daybook &gt;&gt; &quot;$LOG&quot; 2&gt;&amp;1 || true&#10;  echo &quot;[post-build] done&quot; &gt;&gt; &quot;$LOG&quot;&#10;else&#10;  echo &quot;[post-build] skipped &#x2014; no phone sim or app build&quot; &gt;&gt; &quot;$LOG&quot;&#10;fi&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "786AC1F8C2C9A53BC088C319"
+                     BuildableName = "Daybook.app"
+                     BlueprintName = "Daybook"
+                     ReferencedContainer = "container:Daybook.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PostActions>
+      <BuildActionEntries>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "786AC1F8C2C9A53BC088C319"
+               BuildableName = "Daybook.app"
+               BlueprintName = "Daybook"
+               ReferencedContainer = "container:Daybook.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "900FF1566FC332B0B2E9ECA5"
+               BuildableName = "DaybookWatch Watch App.app"
+               BlueprintName = "DaybookWatch Watch App"
+               ReferencedContainer = "container:Daybook.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+      </BuildActionEntries>
+   </BuildAction>
+   <TestAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      shouldUseLaunchSchemeArgsEnv = "YES">
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "900FF1566FC332B0B2E9ECA5"
+            BuildableName = "DaybookWatch Watch App.app"
+            BlueprintName = "DaybookWatch Watch App"
+            ReferencedContainer = "container:Daybook.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
+      <Testables>
+      </Testables>
+   </TestAction>
+   <LaunchAction
+      buildConfiguration = "Debug"
+      selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
+      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      launchStyle = "0"
+      useCustomWorkingDirectory = "NO"
+      ignoresPersistentStateOnLaunch = "NO"
+      debugDocumentVersioning = "YES"
+      debugServiceExtension = "internal"
+      allowLocationSimulation = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "900FF1566FC332B0B2E9ECA5"
+            BuildableName = "DaybookWatch Watch App.app"
+            BlueprintName = "DaybookWatch Watch App"
+            ReferencedContainer = "container:Daybook.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </LaunchAction>
+   <ProfileAction
+      buildConfiguration = "Release"
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      savedToolIdentifier = ""
+      useCustomWorkingDirectory = "NO"
+      debugDocumentVersioning = "YES">
+      <BuildableProductRunnable
+         runnableDebuggingMode = "0">
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "900FF1566FC332B0B2E9ECA5"
+            BuildableName = "DaybookWatch Watch App.app"
+            BlueprintName = "DaybookWatch Watch App"
+            ReferencedContainer = "container:Daybook.xcodeproj">
+         </BuildableReference>
+      </BuildableProductRunnable>
+   </ProfileAction>
+   <AnalyzeAction
+      buildConfiguration = "Debug">
+   </AnalyzeAction>
+   <ArchiveAction
+      buildConfiguration = "Release"
+      revealArchiveInOrganizer = "YES">
+   </ArchiveAction>
+</Scheme>
