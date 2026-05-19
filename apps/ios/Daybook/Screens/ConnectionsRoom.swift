@@ -8,10 +8,6 @@ struct ConnectionsRoom: View {
     // MARK: - WatchConnectivity (#14 follow-up)
     @Environment(AppState.self) private var appState
 
-    @State private var proactivity: Double = 0.5
-    @State private var warmth: Double = 0.5
-    @State private var reach: Double = 0.5
-
     var body: some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
@@ -72,39 +68,16 @@ struct ConnectionsRoom: View {
                 }
                 .padding(.bottom, 28)
 
-                // Tuning
-                VStack(alignment: .leading, spacing: 14) {
-                    SectionHeader(title: "tuning", meta: "how regis shows up")
-                    VStack(spacing: 0) {
-                        TuneSlider(label: "proactivity",
-                                   leftLabel: "quiet", rightLabel: "forward",
-                                   value: $proactivity)
-                        TuneSlider(label: "warmth",
-                                   leftLabel: "cool", rightLabel: "affectionate",
-                                   value: $warmth)
-                        TuneSlider(label: "reach",
-                                   leftLabel: "just here", rightLabel: "everywhere",
-                                   value: $reach)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 4)
-                    .glassPanel(cornerRadius: 22)
-                }
-                .padding(.bottom, 28)
-
-                // Permissions — all off until user grants
-                VStack(alignment: .leading, spacing: 14) {
-                    SectionHeader(title: "what regis can see", meta: "you decide")
-                    VStack(spacing: 0) {
-                        PermissionRow(label: "biometrics", scope: "hrv · sleep · skin temp", initial: false)
-                        PermissionRow(label: "calendar", scope: "titles only · no attendees", initial: false)
-                        PermissionRow(label: "location", scope: "home · studio · in-transit", initial: false)
-                        PermissionRow(label: "messages", scope: "closed — opt in to share", initial: false)
-                        PermissionRow(label: "microphone", scope: "only when you tap to speak", initial: false)
-                    }
-                    .padding(.horizontal, 4)
-                }
-                .padding(.bottom, 28)
+                // Tuning sliders + permission toggles were removed on
+                // 2026-05-19 — both were UI without wiring, and theatrical
+                // controls are worse than absent ones. They'll come back
+                // when their behavior is real: sliders need a
+                // POST /tuning endpoint + composer/cue-decider consumers;
+                // each permission toggle needs to actually request +
+                // reflect the corresponding OS permission. Until then,
+                // permission management lives in Settings → Privacy &
+                // Security → Health → Daybook (the only real permission
+                // today is HealthKit, requested automatically on launch).
 
                 // Closing reverent line
                 Text("anything you tell me, you can also unmake.")
