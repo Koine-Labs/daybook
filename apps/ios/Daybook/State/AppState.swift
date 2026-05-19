@@ -95,6 +95,28 @@ final class AppState {
         }
     }
 
+    // MARK: - WatchConnectivity (#14)
+
+    // Singleton session bridging phone ↔ watch. Activated by `bindWatch()`
+    // at app launch from DaybookApp. The state below is updated by the
+    // session's incoming-message callbacks (see WatchSession.swift).
+    let watch: WatchSession = .shared
+
+    // Most recent watch long-press duration (seconds). Future hook for
+    // routing this into a voice-recording flow (#16) — for now just an
+    // observable signal so the iOS UI can verify the round-trip works.
+    var lastTalkPressDuration: Double? = nil
+
+    // Wire the session's callbacks into observable state + activate it.
+    // Idempotent: safe to call multiple times.
+    func bindWatch() {
+        watch.onTalkPressed = { [weak self] duration in
+            self?.lastTalkPressDuration = duration
+        }
+        watch.activate()
+        watch.startHeartbeat()
+    }
+
     // Likely future fields (deferred until the next direction settles):
     //   - var surfaceMode: SurfaceMode  // .resting / .capturing / .browsing / .settings
     //   - var fireballState: FireballState  // .idle / .listening / .composing / .alert

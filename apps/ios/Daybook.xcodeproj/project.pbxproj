@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0201FFDAE27D409AD7741481 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DF16CCA0C36D546B76AA0D94 /* Assets.xcassets */; };
 		1554D1D9567229BF34E70F76 /* RoomBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34A3DD3432FBB2916673BEFF /* RoomBackground.swift */; };
+		1B70592DB53B72882EF14B6B /* WatchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406FF98A569BA3A1AE2AFDE5 /* WatchSession.swift */; };
 		27886FDAAD01E6579FCCDF02 /* GlassPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62CF21D1642E705CDC1F5437 /* GlassPanel.swift */; };
 		27F64594FE3B30351A7B2AE8 /* SectionHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BFA405CF5F8D72E4B291DF5 /* SectionHeader.swift */; };
 		2E0EAB6251809CC5D62C6ECB /* WatchTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 447F6F17E73432BEE5849093 /* WatchTheme.swift */; };
@@ -25,12 +26,15 @@
 		8C36D4B53D4FFBB25580568D /* SelfRoom.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4EDC3109595A6221712C21C /* SelfRoom.swift */; };
 		8F89D57A092C0B4463B71CE9 /* ConstellationDots.swift in Sources */ = {isa = PBXBuildFile; fileRef = D765C483EC80CF3421F32248 /* ConstellationDots.swift */; };
 		9006BB423AA89376A1395147 /* Tweaks.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6EEF7A6B23A6B63594E83C9 /* Tweaks.swift */; };
+		95E465EA6BFCC95E0150018E /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075C2AF72818CE6E00017376 /* WatchMessage.swift */; };
 		AB747D18A5636B7EE820A3FA /* ChatOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF9A260794CA4FEDAE5E025 /* ChatOverlay.swift */; };
 		C0C6F63E11CFFBCA91F68A23 /* HeartRateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFCD72AC804BE52F5277998 /* HeartRateClient.swift */; };
 		C312F7F2997883B8E9A4F656 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B145B7FF073E4031AC49F946 /* AppState.swift */; };
 		C518A1C40B4532BA82C52A64 /* Daybook-Local.plist in Resources */ = {isa = PBXBuildFile; fileRef = BBE786AEC96BB6ADA4A172B6 /* Daybook-Local.plist */; };
 		D721FED71DE258552D12D948 /* WatchRegis.swift in Sources */ = {isa = PBXBuildFile; fileRef = B664CC1E0DF568827616EC17 /* WatchRegis.swift */; };
 		DFE804EFAE63BEFE1EC11801 /* AmbientParticles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5912536CCAA094AD8DC77C /* AmbientParticles.swift */; };
+		E6DBB9E1AFE7AA3CCC616AC1 /* WatchMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56F60F43FE06E4D3E4FB1769 /* WatchMessage.swift */; };
+		E86AD5EC54E8B3EBD23FA9A5 /* WatchSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 061F9D7698F84F3020691180 /* WatchSession.swift */; };
 		E87AF9888C70ABA7AABAF913 /* HealthKitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70AFB5B86769D0DF72C5127D /* HealthKitClient.swift */; };
 		E894663FB04D1AD26374BBD8 /* WatchBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F749F4F1BFF637650C2E9DA /* WatchBackground.swift */; };
 		F1F8B8A0FADA9C3D39FFD01E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A3269417AAE5C44FE9892C1 /* ContentView.swift */; };
@@ -39,15 +43,19 @@
 
 /* Begin PBXFileReference section */
 		05B8F2BB5AE606000377ED66 /* DaybookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookApp.swift; sourceTree = "<group>"; };
+		061F9D7698F84F3020691180 /* WatchSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSession.swift; sourceTree = "<group>"; };
+		075C2AF72818CE6E00017376 /* WatchMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMessage.swift; sourceTree = "<group>"; };
 		08531C58A1C2787A0864C3CD /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		126408CF211A2313F0B4AE0E /* DaybookWatch Watch App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "DaybookWatch Watch App.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		2F749F4F1BFF637650C2E9DA /* WatchBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBackground.swift; sourceTree = "<group>"; };
 		34A3DD3432FBB2916673BEFF /* RoomBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomBackground.swift; sourceTree = "<group>"; };
 		39DAA3EA7EB87ED75EE70A5C /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		406FF98A569BA3A1AE2AFDE5 /* WatchSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchSession.swift; sourceTree = "<group>"; };
 		447F6F17E73432BEE5849093 /* WatchTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchTheme.swift; sourceTree = "<group>"; };
 		4A3269417AAE5C44FE9892C1 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		53050D00B5A583477CE67E59 /* NowRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowRoom.swift; sourceTree = "<group>"; };
 		53DA5585CAA55F7C0C0A8E2E /* WatchStates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchStates.swift; sourceTree = "<group>"; };
+		56F60F43FE06E4D3E4FB1769 /* WatchMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMessage.swift; sourceTree = "<group>"; };
 		5B5912536CCAA094AD8DC77C /* AmbientParticles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AmbientParticles.swift; sourceTree = "<group>"; };
 		62CF21D1642E705CDC1F5437 /* GlassPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassPanel.swift; sourceTree = "<group>"; };
 		65060ACA9837799D681BCC0E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -139,6 +147,15 @@
 			path = Networking;
 			sourceTree = "<group>";
 		};
+		BA3DD7FAD3B0E6B69CF790C7 /* Watch */ = {
+			isa = PBXGroup;
+			children = (
+				56F60F43FE06E4D3E4FB1769 /* WatchMessage.swift */,
+				061F9D7698F84F3020691180 /* WatchSession.swift */,
+			);
+			path = Watch;
+			sourceTree = "<group>";
+		};
 		BA52CE82BB5568F4721B09A9 /* DaybookWatch Watch App */ = {
 			isa = PBXGroup;
 			children = (
@@ -148,7 +165,9 @@
 				B9AB95930B7D330867E9F7D0 /* DaybookWatchApp.swift */,
 				8BFCD72AC804BE52F5277998 /* HeartRateClient.swift */,
 				2F749F4F1BFF637650C2E9DA /* WatchBackground.swift */,
+				075C2AF72818CE6E00017376 /* WatchMessage.swift */,
 				B664CC1E0DF568827616EC17 /* WatchRegis.swift */,
+				406FF98A569BA3A1AE2AFDE5 /* WatchSession.swift */,
 				53DA5585CAA55F7C0C0A8E2E /* WatchStates.swift */,
 				447F6F17E73432BEE5849093 /* WatchTheme.swift */,
 			);
@@ -164,6 +183,7 @@
 				B50A57348BFAEB8944C89672 /* Networking */,
 				A7D70584C457882F795C3B79 /* Screens */,
 				FE87D52CDC8498AEC14421A9 /* State */,
+				BA3DD7FAD3B0E6B69CF790C7 /* Watch */,
 				65060ACA9837799D681BCC0E /* Assets.xcassets */,
 				4A3269417AAE5C44FE9892C1 /* ContentView.swift */,
 				BBE786AEC96BB6ADA4A172B6 /* Daybook-Local.plist */,
@@ -300,6 +320,8 @@
 				8C36D4B53D4FFBB25580568D /* SelfRoom.swift in Sources */,
 				4973808CB0F7C18E49B31DE0 /* Theme.swift in Sources */,
 				9006BB423AA89376A1395147 /* Tweaks.swift in Sources */,
+				E6DBB9E1AFE7AA3CCC616AC1 /* WatchMessage.swift in Sources */,
+				E86AD5EC54E8B3EBD23FA9A5 /* WatchSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -311,7 +333,9 @@
 				7E333A3726619A6D9ED59D4C /* DaybookWatchApp.swift in Sources */,
 				C0C6F63E11CFFBCA91F68A23 /* HeartRateClient.swift in Sources */,
 				E894663FB04D1AD26374BBD8 /* WatchBackground.swift in Sources */,
+				95E465EA6BFCC95E0150018E /* WatchMessage.swift in Sources */,
 				D721FED71DE258552D12D948 /* WatchRegis.swift in Sources */,
+				1B70592DB53B72882EF14B6B /* WatchSession.swift in Sources */,
 				69895DF97F70AE2EA4237B6C /* WatchStates.swift in Sources */,
 				2E0EAB6251809CC5D62C6ECB /* WatchTheme.swift in Sources */,
 			);

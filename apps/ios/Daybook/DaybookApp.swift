@@ -22,6 +22,9 @@ struct DaybookApp: App {
                         Task { await appState.uploadHealthSnapshot() }
                     }
                 }
+                // MARK: - WatchConnectivity (#14)
+                // Activate the session + heartbeat once on launch. Idempotent.
+                .task { appState.bindWatch() }
         }
     }
 }
