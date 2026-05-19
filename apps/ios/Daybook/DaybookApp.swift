@@ -23,8 +23,13 @@ struct DaybookApp: App {
                     }
                 }
                 // MARK: - WatchConnectivity (#14)
-                // Activate the session + heartbeat once on launch. Idempotent.
-                .task { appState.bindWatch() }
+                // Activate the session once on launch. Idempotent.
+                .task {
+                    appState.bindWatch()
+                    #if DEBUG
+                    print("watch wire smoke: \(WatchMessage.runRoundTripSmoke())")
+                    #endif
+                }
         }
     }
 }

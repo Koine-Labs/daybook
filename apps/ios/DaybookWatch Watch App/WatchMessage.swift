@@ -22,4 +22,26 @@ enum WatchMessage: Codable, Equatable {
         guard let data = userInfo[payloadKey] as? Data else { return nil }
         return try? JSONDecoder().decode(WatchMessage.self, from: data)
     }
+
+    #if DEBUG
+    static func runRoundTripSmoke() -> Bool {
+        let cases: [WatchMessage] = [
+            .showListen(line: "test line", ttlSeconds: 6),
+            .showSpeak,
+            .dismissOverlay,
+            .talkPressed(durationSec: 1.23),
+            .heartbeat,
+        ]
+        for c in cases {
+            guard
+                let wire = try? c.encodeToUserInfo(),
+                let back = WatchMessage.decode(from: wire),
+                back == c
+            else {
+                return false
+            }
+        }
+        return true
+    }
+    #endif
 }

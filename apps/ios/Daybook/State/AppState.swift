@@ -109,12 +109,16 @@ final class AppState {
 
     // Wire the session's callbacks into observable state + activate it.
     // Idempotent: safe to call multiple times.
+    //
+    // We deliberately DON'T call watch.startHeartbeat() yet — no observer
+    // for reachability liveness exists today, so the wakeup cost has no
+    // consumer. Activate the heartbeat when something starts using the
+    // `onHeartbeat` callback (build-when-foundational, commitment #9).
     func bindWatch() {
         watch.onTalkPressed = { [weak self] duration in
             self?.lastTalkPressDuration = duration
         }
         watch.activate()
-        watch.startHeartbeat()
     }
 
     // Likely future fields (deferred until the next direction settles):
