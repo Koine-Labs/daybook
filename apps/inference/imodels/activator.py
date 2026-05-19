@@ -58,6 +58,7 @@ def get_active_clusters(
             WHERE user_id = %s
               AND model_owner = ANY(%s)
               AND centroid_embedding IS NOT NULL
+              AND status = 'active'
             ORDER BY centroid_embedding <=> %s::vector ASC
             LIMIT %s
             """,
@@ -76,6 +77,12 @@ def get_active_clusters(
         if float(r[3]) >= min_similarity
     ][:top_k]
 
+    if results:
+        try:
+            _stamp_activation_timestamps([c.cluster_id for c in results])
+        except Exception as e:
+            logger.warning("activator timestamp-stamp failed: %s", e)
+
     if persist and results:
         try:
             _persist_activations(results, context={"query_text": query_text})
@@ -83,6 +90,25 @@ def get_active_clusters(
             logger.warning("activator persist failed: %s", e)
 
     return results
+
+
+def _stamp_activation_timestamps(cluster_ids: list[str]) -> None:
+    """Batched UPDATE: bump last_activated_at = now() for each cluster.
+
+    Cluster dormancy depends on this — clusters that fire stay active.
+    """
+    if not cluster_ids:
+        return
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE i_model_clusters
+               SET last_activated_at = now()
+             WHERE id = ANY(%s::uuid[])
+            """,
+            (cluster_ids,),
+        )
+        conn.commit()
 
 
 def _persist_activations(active: list[ActiveCluster], *, context: dict) -> None:
