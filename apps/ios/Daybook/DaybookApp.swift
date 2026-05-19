@@ -22,6 +22,14 @@ struct DaybookApp: App {
                         Task { await appState.uploadHealthSnapshot() }
                     }
                 }
+                // MARK: - WatchConnectivity (#14)
+                // Activate the session once on launch. Idempotent.
+                .task {
+                    appState.bindWatch()
+                    #if DEBUG
+                    print("watch wire smoke: \(WatchMessage.runRoundTripSmoke())")
+                    #endif
+                }
         }
     }
 }
