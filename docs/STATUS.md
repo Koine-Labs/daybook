@@ -224,6 +224,7 @@ In rough order of blocking severity:
 
 ## Canonical references (read these for depth)
 
+- **`docs/RUNBOOK.md`** — every command you need to run anything: chat from Mac, phone via tunnel, full always-on daemon, dream log, smoke tests. Scenario-indexed.
 - **`docs/POSITIONING.md`** — full strategic anchor (customer, problem, solution, defensibility, expansion path)
 - **`apps/wisp/PERSONA.md`** — Regis character bible (dual-mode, vocabulary, utterance slots)
 - **`apps/AI_PI_CONTRACT.md`** — interface contract between AI brain and Pi daemon

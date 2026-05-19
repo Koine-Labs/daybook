@@ -158,6 +158,8 @@ daybook/
 
 ## Quick start — running the live system
 
+> **For the full command catalog** (every scenario: chat from Mac, phone via tunnel, always-on daemon, smoke tests, troubleshooting), see **`docs/RUNBOOK.md`**. The rest of this section is the bare minimum.
+
 All Python work runs from `apps/` with the venv activated:
 
 ```bash
