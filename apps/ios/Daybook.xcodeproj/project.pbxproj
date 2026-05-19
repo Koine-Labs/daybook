@@ -28,6 +28,7 @@
 		AB747D18A5636B7EE820A3FA /* ChatOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACF9A260794CA4FEDAE5E025 /* ChatOverlay.swift */; };
 		C0C6F63E11CFFBCA91F68A23 /* HeartRateClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BFCD72AC804BE52F5277998 /* HeartRateClient.swift */; };
 		C312F7F2997883B8E9A4F656 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B145B7FF073E4031AC49F946 /* AppState.swift */; };
+		C518A1C40B4532BA82C52A64 /* Daybook-Local.plist in Resources */ = {isa = PBXBuildFile; fileRef = BBE786AEC96BB6ADA4A172B6 /* Daybook-Local.plist */; };
 		D721FED71DE258552D12D948 /* WatchRegis.swift in Sources */ = {isa = PBXBuildFile; fileRef = B664CC1E0DF568827616EC17 /* WatchRegis.swift */; };
 		DFE804EFAE63BEFE1EC11801 /* AmbientParticles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B5912536CCAA094AD8DC77C /* AmbientParticles.swift */; };
 		E894663FB04D1AD26374BBD8 /* WatchBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F749F4F1BFF637650C2E9DA /* WatchBackground.swift */; };
@@ -58,6 +59,7 @@
 		B4EDC3109595A6221712C21C /* SelfRoom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfRoom.swift; sourceTree = "<group>"; };
 		B664CC1E0DF568827616EC17 /* WatchRegis.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchRegis.swift; sourceTree = "<group>"; };
 		B9AB95930B7D330867E9F7D0 /* DaybookWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DaybookWatchApp.swift; sourceTree = "<group>"; };
+		BBE786AEC96BB6ADA4A172B6 /* Daybook-Local.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Daybook-Local.plist"; sourceTree = "<group>"; };
 		C6A420E43E6537118247D09A /* RegisCharacter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegisCharacter.swift; sourceTree = "<group>"; };
 		CB9058579F36907E126FDDE6 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		D765C483EC80CF3421F32248 /* ConstellationDots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstellationDots.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 				FE87D52CDC8498AEC14421A9 /* State */,
 				65060ACA9837799D681BCC0E /* Assets.xcassets */,
 				4A3269417AAE5C44FE9892C1 /* ContentView.swift */,
+				BBE786AEC96BB6ADA4A172B6 /* Daybook-Local.plist */,
 				05B8F2BB5AE606000377ED66 /* DaybookApp.swift */,
 			);
 			path = Daybook;
@@ -257,6 +260,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				54627F429B206086738ED0B1 /* Assets.xcassets in Resources */,
+				C518A1C40B4532BA82C52A64 /* Daybook-Local.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -30,6 +30,13 @@ targets:
           - "Info.plist"
           - "Daybook.icon"
           - "Daybook-Local.plist"
+      # Local-only override (gitignored). bin/cloudflare-tunnel-setup.sh writes
+      # the real tunnel URL + API key into it. Listed as a resource-phase source
+      # so xcodegen copies it into the .app bundle, where APIClient reads it via
+      # Bundle.main.url(forResource: "Daybook-Local", withExtension: "plist").
+      - path: Daybook/Daybook-Local.plist
+        buildPhase: resources
+        optional: true
     resources:
       - path: Daybook/Assets.xcassets
     info:
