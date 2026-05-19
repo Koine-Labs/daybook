@@ -5,6 +5,8 @@ import SwiftUI
 
 struct SelfRoom: View {
     var tweaks: Tweaks
+    // MARK: - HealthKit (#13 follow-up)
+    var bodySeries: APIClient.BodySeriesResponse? = nil
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -32,10 +34,13 @@ struct SelfRoom: View {
                 }
                 .padding(.bottom, 32)
 
-                // Body aurora — honest empty meta
+                // Body aurora — honest empty meta until #13 data lands.
                 VStack(alignment: .leading, spacing: 14) {
-                    SectionHeader(title: "body, lately", meta: "not connected")
-                    BodyAurora()
+                    SectionHeader(
+                        title: "body, lately",
+                        meta: bodyAuroraMeta
+                    )
+                    BodyAurora(series: bodySeries)
                 }
                 .padding(.bottom, 32)
 
@@ -98,11 +103,27 @@ struct SelfRoom: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+
+    // MARK: - HealthKit (#13 follow-up)
+    /// Header meta for the body aurora — counts populated days and falls
+    /// back to "not connected" when the series is missing entirely.
+    private var bodyAuroraMeta: String {
+        guard let s = bodySeries else { return "not connected" }
+        let populated = s.points.filter {
+            $0.hrv_avg_ms != nil || $0.hr_avg_bpm != nil || $0.sleep_minutes != nil
+        }.count
+        if populated == 0 { return "no readings yet" }
+        return "\(populated)/\(s.days) days"
+    }
 }
 
 // MARK: - BodyAurora
 
 struct BodyAurora: View {
+    // MARK: - HealthKit (#13 follow-up)
+    /// Seven-day series from /state/body/series. Nil → honest empty state.
+    var series: APIClient.BodySeriesResponse? = nil
+
     @State private var shift = false
     var body: some View {
         ZStack {
@@ -156,29 +177,30 @@ struct BodyAurora: View {
                     .position(x: geo.size.width * 0.78, y: geo.size.height * 0.38)
             }
 
-            // Captions
+            // Captions — real HRV avg when present, honest empty otherwise.
             HStack {
                 Text("seven days · body").labelTiny()
                 Spacer()
-                Text("no readings yet").labelMono(Theme.pearl.opacity(0.55), size: 10)
+                Text(captionText).labelMono(Theme.pearl.opacity(0.55), size: 10)
             }
             .padding(.top, 12)
             .padding(.horizontal, 16)
             .frame(maxHeight: .infinity, alignment: .top)
 
-            // Timeline track
+            // Timeline track — labels + dot opacity derived from real series.
             HStack {
-                let days = ["fri", "sat", "sun", "mon", "tue", "wed", "today"]
-                ForEach(0..<days.count, id: \.self) { i in
+                let entries = trackEntries()
+                ForEach(0..<entries.count, id: \.self) { i in
+                    let e = entries[i]
                     VStack(spacing: 4) {
                         Circle()
-                            .fill(i == 6 ? Theme.amber : Theme.pearl.opacity(0.35))
+                            .fill(e.isToday ? Theme.amber : Theme.pearl.opacity(e.dotOpacity))
                             .frame(width: 2, height: 2)
-                            .shadow(color: i == 6 ? Theme.amberGlow : .clear, radius: 3, x: 0, y: 0)
-                        Text(days[i])
+                            .shadow(color: e.isToday ? Theme.amberGlow : .clear, radius: 3, x: 0, y: 0)
+                        Text(e.label)
                             .font(Fonts.mono(9))
                             .tracking(0.9)
-                            .foregroundStyle(i == 6 ? Theme.pearl : Theme.pearl.opacity(0.32))
+                            .foregroundStyle(e.isToday ? Theme.pearl : Theme.pearl.opacity(0.32))
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -198,6 +220,52 @@ struct BodyAurora: View {
         }
         .frame(height: 168)
         .onAppear { shift = true }
+    }
+
+    // MARK: - HealthKit (#13 follow-up)
+
+    private struct TrackEntry {
+        let label: String
+        let dotOpacity: Double
+        let isToday: Bool
+    }
+
+    /// Caption shown top-right of the aurora box. Real HRV avg when present.
+    private var captionText: String {
+        guard let s = series else { return "no readings yet" }
+        let hrvVals = s.points.compactMap { $0.hrv_avg_ms }
+        guard !hrvVals.isEmpty else { return "no readings yet" }
+        let avg = hrvVals.reduce(0, +) / Double(hrvVals.count)
+        return "hrv avg \(Int(avg.rounded())) ms"
+    }
+
+    /// Per-day track entries (label + dot brightness). Real series drives
+    /// the day labels + opacity; falls back to placeholder labels with
+    /// empty dots if no data.
+    private func trackEntries() -> [TrackEntry] {
+        guard let s = series, !s.points.isEmpty else {
+            // Honest empty fallback — placeholder labels, all dim except today.
+            let days = ["fri", "sat", "sun", "mon", "tue", "wed", "today"]
+            return days.enumerated().map { i, label in
+                TrackEntry(label: label, dotOpacity: 0.18, isToday: i == days.count - 1)
+            }
+        }
+        let fmtIn = DateFormatter()
+        fmtIn.dateFormat = "yyyy-MM-dd"
+        fmtIn.timeZone = TimeZone(identifier: "UTC")
+        let fmtOut = DateFormatter()
+        fmtOut.dateFormat = "EEE"  // mon / tue / wed ...
+        let todayKey = fmtIn.string(from: Date())
+        let lastIdx = s.points.count - 1
+        return s.points.enumerated().map { (i, p) in
+            let isToday = (p.day == todayKey) || (i == lastIdx && p.day != todayKey)
+            let label = isToday ? "today" : (fmtIn.date(from: p.day).map { fmtOut.string(from: $0).lowercased() } ?? "—")
+            // Dot opacity scales with how much data the day has.
+            let parts = [p.hrv_avg_ms != nil, p.hr_avg_bpm != nil, p.sleep_minutes != nil]
+            let filled = parts.filter { $0 }.count
+            let opacity = filled == 0 ? 0.18 : 0.35 + Double(filled - 1) * 0.18
+            return TrackEntry(label: label, dotOpacity: opacity, isToday: isToday)
+        }
     }
 }
 

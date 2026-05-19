@@ -41,7 +41,7 @@ struct ContentView: View {
 
             // Sliding rooms via TabView paging (iOS-native and respects child ScrollViews)
             TabView(selection: $index) {
-                SelfRoom(tweaks: tweaks)
+                SelfRoom(tweaks: tweaks, bodySeries: appState.bodySeries)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .tag(Room.self_.rawValue)
                 NowRoom(
@@ -92,6 +92,10 @@ struct ContentView: View {
             startTimers()
         }
         .onDisappear { stopTimers() }
+        // Re-derive halo intensity when real HRV updates land (#13 → halo).
+        .onChange(of: appState.bodySummary?.hrv_avg_ms) { _, _ in
+            syncHrv()
+        }
     }
 
     private var roomLabel: String {
@@ -108,11 +112,11 @@ struct ContentView: View {
     // MARK: - Live simulators
 
     private func startTimers() {
-        // HRV drift — slow random walk between 0.7..1.3 so Regis's halo modulates
-        hrvTimer = Timer.scheduledTimer(withTimeInterval: 2.4, repeats: true) { _ in
-            let delta = Double.random(in: -0.06...0.06)
-            tweaks.hrv = max(0.7, min(1.3, tweaks.hrv + delta))
-        }
+        // HRV halo intensity comes from real data now (post-#13). When
+        // appState.bodySummary updates, syncHrv() re-derives tweaks.hrv from
+        // the real average. No more random walk — if no data exists Regis's
+        // halo sits at neutral until HealthKit catches up.
+        syncHrv()
 
         // Proactive ping cadence — only if there are real pings to surface.
         guard !NOW_PINGS.isEmpty else { return }
@@ -122,6 +126,20 @@ struct ContentView: View {
                 surfacePing()
             }
         }
+    }
+
+    /// Map real HRV ms → halo intensity multiplier (the same 0.7-1.3 range
+    /// the visualization was tuned for). When HRV is unknown, halo sits at
+    /// neutral 1.0 (no fake animation).
+    private func syncHrv() {
+        guard let ms = appState.bodySummary?.hrv_avg_ms else {
+            tweaks.hrv = 1.0
+            return
+        }
+        // Linear map: 15ms → 0.80 (soft halo), 35ms → 1.0 (neutral),
+        // 60ms → 1.20 (lively). Clamped to keep visual sane.
+        let mapped = 0.80 + ((ms - 15.0) / 45.0) * 0.40
+        tweaks.hrv = max(0.7, min(1.3, mapped))
     }
 
     private func surfacePing() {
