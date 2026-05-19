@@ -8,8 +8,9 @@ Triggers must NEVER raise — failures log and return a held-silence decision.
 """
 from __future__ import annotations
 
+import logging
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 INFERENCE_DIR = Path(__file__).resolve().parent.parent
@@ -30,6 +31,22 @@ from .decider import (  # noqa: E402
 )
 from .triggers import register  # noqa: E402
 
+logger = logging.getLogger(__name__)
+
+# Fallback constants — used only when real derivation fails (DB down, no
+# embedding, etc). These are the historical hardcoded values; keeping them as
+# the last-resort default preserves prior behaviour on catastrophic failure.
+FALLBACK_NOVELTY = 0.7
+FALLBACK_RECEPTIVITY = 0.5  # conservative neutral when signal is thin
+LEGACY_RECEPTIVITY = 0.7    # last-resort if DB itself is unreachable
+
+# Receptivity window + min sample size for trusting the rolling rate.
+RECEPTIVITY_LOOKBACK_HOURS = 24
+RECEPTIVITY_MIN_SAMPLES = 3
+
+# Novelty: how many prior recalls to average similarity against.
+NOVELTY_TOP_K = 5
+
 
 @register("post_recall")
 def post_recall_trigger(
@@ -48,13 +65,23 @@ def post_recall_trigger(
         silence_seconds = _recent_silence_seconds(user_id)
         time_of_day_score = _time_of_day_score()
         active_traits = _active_traits(user_id)
+        novelty = _derive_novelty(
+            user_id=user_id, dream_recall_id=dream_recall_id,
+        )
+        user_receptivity = _derive_receptivity(user_id=user_id)
+        logger.info(
+            "[post_recall_trigger] inputs user=%s recall=%s novelty=%.3f "
+            "receptivity=%.3f silence_s=%.0f tod=%.2f",
+            user_id, dream_recall_id, novelty, user_receptivity,
+            silence_seconds, time_of_day_score,
+        )
 
         ctx = InterjectContext(
             user_id=user_id,
             trigger_kind="post_recall",
             recent_silence_seconds=silence_seconds,
-            user_receptivity=0.7,  # default high — user just engaged
-            novelty=0.9,            # dream content is novel by definition
+            user_receptivity=user_receptivity,
+            novelty=novelty,
             time_of_day_score=time_of_day_score,
             active_traits=active_traits,
             trigger_payload={
@@ -168,3 +195,125 @@ def _active_traits(user_id: str) -> dict:
 
 
 SILENCE_FALLBACK_SECONDS = 30 * 60  # 30 min — assume a healthy gap if unknown
+
+
+def _derive_novelty(*, user_id: str, dream_recall_id: str) -> float:
+    """Novelty = 1 - mean(top-5 cosine similarities to prior dream_recalls).
+
+    If this recall has no embedding yet (race with embedder), warn and return
+    FALLBACK_NOVELTY. If the user has zero prior recalls, novelty=1.0 (all-new).
+    DB failure => FALLBACK_NOVELTY with a warning.
+    """
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT embedding::text FROM embeddings
+                WHERE user_id=%s AND source_type='dream_recall'
+                  AND source_id=%s
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                (user_id, dream_recall_id),
+            )
+            row = cur.fetchone()
+        if row is None:
+            logger.warning(
+                "[post_recall_trigger] no embedding for recall %s — "
+                "novelty fallback %.2f", dream_recall_id, FALLBACK_NOVELTY,
+            )
+            return FALLBACK_NOVELTY
+
+        qvec = _parse_vector_literal(row[0])
+
+        from embeddings.retrieve import retrieve_similar  # noqa: E402
+
+        # Over-fetch by 1 so we can drop the self-hit (similarity == 1.0)
+        hits = retrieve_similar(
+            qvec,
+            user_id=user_id,
+            top_k=NOVELTY_TOP_K + 1,
+            source_types=["dream_recall"],
+        )
+        prior = [
+            h.similarity for h in hits if h.source_id != dream_recall_id
+        ][:NOVELTY_TOP_K]
+        if not prior:
+            logger.info(
+                "[post_recall_trigger] no prior recalls — novelty=1.0",
+            )
+            return 1.0
+        mean_sim = sum(prior) / len(prior)
+        novelty = max(0.0, min(1.0, 1.0 - mean_sim))
+        logger.info(
+            "[post_recall_trigger] novelty=%.3f from %d prior (mean_sim=%.3f)",
+            novelty, len(prior), mean_sim,
+        )
+        return novelty
+    except Exception as e:
+        logger.warning(
+            "[post_recall_trigger] novelty derivation failed: %s — "
+            "fallback %.2f", e, FALLBACK_NOVELTY,
+        )
+        return FALLBACK_NOVELTY
+
+
+def _derive_receptivity(*, user_id: str) -> float:
+    """Rolling receptivity from interject_decisions outcomes in last 24h.
+
+    receptivity = (count_positive + 0.5 * count_neutral) / total
+    Outcomes considered: 'positive', 'neutral', 'negative', 'ignored'.
+    If fewer than RECEPTIVITY_MIN_SAMPLES outcomes, use FALLBACK_RECEPTIVITY.
+    DB failure => LEGACY_RECEPTIVITY (preserves prior hardcoded behaviour).
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(
+        hours=RECEPTIVITY_LOOKBACK_HOURS,
+    )
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT user_outcome, COUNT(*) FROM interject_decisions
+                WHERE user_id=%s
+                  AND decided_at >= %s
+                  AND user_outcome IS NOT NULL
+                GROUP BY user_outcome
+                """,
+                (user_id, cutoff),
+            )
+            counts = {row[0]: int(row[1]) for row in cur.fetchall()}
+    except Exception as e:
+        logger.warning(
+            "[post_recall_trigger] receptivity DB query failed: %s — "
+            "fallback %.2f", e, LEGACY_RECEPTIVITY,
+        )
+        return LEGACY_RECEPTIVITY
+
+    total = sum(counts.values())
+    if total < RECEPTIVITY_MIN_SAMPLES:
+        logger.info(
+            "[post_recall_trigger] receptivity: only %d outcomes in last %dh "
+            "(<%d) — fallback %.2f",
+            total, RECEPTIVITY_LOOKBACK_HOURS, RECEPTIVITY_MIN_SAMPLES,
+            FALLBACK_RECEPTIVITY,
+        )
+        return FALLBACK_RECEPTIVITY
+
+    pos = counts.get("positive", 0)
+    neu = counts.get("neutral", 0)
+    raw = (pos + 0.5 * neu) / total
+    receptivity = max(0.0, min(1.0, raw))
+    logger.info(
+        "[post_recall_trigger] receptivity=%.3f from %d outcomes %s",
+        receptivity, total, counts,
+    )
+    return receptivity
+
+
+def _parse_vector_literal(text: str) -> list[float]:
+    """Parse pgvector text form '[1.0,2.0,...]' into a python list."""
+    s = text.strip()
+    if s.startswith("[") and s.endswith("]"):
+        s = s[1:-1]
+    if not s:
+        return []
+    return [float(x) for x in s.split(",")]
