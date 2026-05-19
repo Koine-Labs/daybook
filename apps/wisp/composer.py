@@ -304,6 +304,20 @@ def _build_user_prompt(
             "  " + ", ".join(f"{k}={v:.2f}" for k, v in sorted(traits.items()))
         )
 
+    # regis_self fingerprint — companion mode ONLY. Witness-mode utterances
+    # (sleep cues, REM whispers) skip this: Regis whispering reverently over
+    # a sleeping user shouldn't be coloring his voice with self-portrait data.
+    if (
+        mode == "companion"
+        and substrate.regis_self
+        and not substrate.regis_self.get("stale")
+    ):
+        parts.extend([
+            "",
+            "# Your current shape (background only — do not mention)",
+            substrate.regis_self["fingerprint"],
+        ])
+
     active_imodels = substrate.active_i_models
     if active_imodels:
         parts.extend(["", "# Active facets right now (I-Models)"])

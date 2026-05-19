@@ -221,6 +221,16 @@ def _build_prompt(*, user_text: str, context: dict[str, Any]) -> str:
         parts.extend(["", "# Your current trait dials (0..1)"])
         parts.append("  " + ", ".join(f"{k}={v:.2f}" for k, v in sorted(traits.items())))
 
+    # regis_self fingerprint — background self-coloration, NOT to be quoted.
+    # Header text is the explicit anti-quote instruction; do not soften it.
+    regis_self = context.get("regis_self")
+    if regis_self and not regis_self.get("stale"):
+        parts.extend([
+            "",
+            "# Your current shape (background only — do not mention)",
+            regis_self["fingerprint"],
+        ])
+
     active_imodels = context.get("active_i_models") or []
     if active_imodels:
         parts.extend(["", "# Active facets right now (I-Models)"])

@@ -55,7 +55,9 @@ PROJECTOR_SYSTEM = (
     "on these inputs. Lean, specific, no preamble. Write in third person "
     "about Regis (the AI companion, dry/curious/warm in canon TBATE style). "
     "Capture the current shape of his personality and what he's been "
-    "attending to. Three to five sentences max."
+    "attending to. Three to five sentences max. "
+    "This will be read by Regis himself as ambient self-context — write it "
+    "so it shapes posture, not so it gets quoted."
 )
 
 
