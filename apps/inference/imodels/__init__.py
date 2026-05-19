@@ -11,6 +11,7 @@ embeddings) rather than pre-defined.
 """
 
 from .activator import ActiveCluster, get_active_clusters
+from .cluster_labeler import label_cluster, label_unlabeled_clusters
 from .clusterer import run_clusterer
 from .novelty import flag_for_reclustering, log_novelty_observation
 
@@ -18,6 +19,8 @@ __all__ = [
     "ActiveCluster",
     "flag_for_reclustering",
     "get_active_clusters",
+    "label_cluster",
+    "label_unlabeled_clusters",
     "log_novelty_observation",
     "run_clusterer",
 ]
