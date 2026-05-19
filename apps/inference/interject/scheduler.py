@@ -15,6 +15,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,26 @@ class DaybookScheduler:
             replace_existing=True,
         )
         self._registered.append(f"{name} @ {run_at.isoformat()} once")
+
+    def register_interval(
+        self,
+        *,
+        minutes: int,
+        func: Callable[..., Any],
+        name: str,
+        **kwargs: Any,
+    ) -> None:
+        """Register a job that fires every N minutes around the clock."""
+        wrapped = _wrap_safe(func, name=name)
+        self.scheduler.add_job(
+            wrapped,
+            IntervalTrigger(minutes=minutes),
+            id=name,
+            name=name,
+            kwargs=kwargs,
+            replace_existing=True,
+        )
+        self._registered.append(f"{name} every {minutes} min")
 
     def start(self) -> None:
         """Print registry then start the scheduler. Blocks if blocking=True."""

@@ -49,6 +49,7 @@ class MorningBriefSections:
     sleep: str
     news: list[str]
     observations: list[str]
+    overnight_thoughts: list[str]
 
 
 @register("morning_brief")
@@ -76,6 +77,7 @@ def fire_morning_brief(
                 "sleep": sections.sleep,
                 "news_titles": sections.news,
                 "observations": sections.observations,
+                "overnight_thoughts": sections.overnight_thoughts,
             },
         )
 
@@ -127,6 +129,7 @@ def compose_morning_brief_text(
             "sleep": sections.sleep,
             "news": sections.news,
             "observations": sections.observations,
+            "overnight_thoughts": sections.overnight_thoughts,
         },
         "persisted_moment_id": composed.persisted_moment_id,
     }
@@ -142,7 +145,33 @@ def _gather_sections(*, user_id: str) -> MorningBriefSections:
         sleep=_sleep_summary(user_id),
         news=_news_top(user_id),
         observations=_recent_observations(user_id),
+        overnight_thoughts=_overnight_thoughts(user_id),
     )
+
+
+def _overnight_thoughts(user_id: str) -> list[str]:
+    """Pull dream-thoughts written by rem_dreaming since last night's 02:00 UTC."""
+    now_utc = datetime.now(timezone.utc)
+    today_02_utc = now_utc.replace(hour=2, minute=0, second=0, microsecond=0)
+    if today_02_utc > now_utc:
+        today_02_utc -= timedelta(days=1)
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT observation FROM regis_observations
+                WHERE user_id = %s
+                  AND source = 'dreaming'
+                  AND observed_at >= %s
+                ORDER BY observed_at DESC
+                LIMIT 3
+                """,
+                (user_id, today_02_utc),
+            )
+            return [r[0] for r in cur.fetchall()]
+    except Exception as e:
+        print(f"[morning_brief] overnight-thoughts query failed: {e}")
+        return []
 
 
 def _sleep_summary(user_id: str) -> str:
@@ -220,6 +249,7 @@ def _recent_observations(user_id: str) -> list[str]:
                 """
                 SELECT observation FROM regis_observations
                 WHERE user_id = %s
+                  AND source <> 'dreaming'
                 ORDER BY observed_at DESC
                 LIMIT %s
                 """,
@@ -249,6 +279,15 @@ def _format_context(sections: MorningBriefSections) -> str:
         parts.append("Recent things you've noticed about them:")
         for o in sections.observations:
             parts.append(f"  - {o}")
+    if sections.overnight_thoughts:
+        parts.append("")
+        parts.append("# Things you were chewing on overnight (your own dream-thoughts)")
+        for t in sections.overnight_thoughts:
+            parts.append(f"  - {t}")
+        parts.append(
+            "If one of these lands for them this morning, weave it in — naturally, "
+            "as if it just resurfaced. Don't announce it as a dream."
+        )
     return "\n".join(parts)
 
 

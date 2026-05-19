@@ -47,6 +47,8 @@ COMPANION_KINDS = {
     "conversation_tease",
     "news_pull_comment",
     "mood_check",
+    "inner_thought",
+    "dream_thought",
 }
 
 

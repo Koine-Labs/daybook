@@ -33,6 +33,7 @@ import os
 import sys
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -155,6 +156,44 @@ def _maybe_speak(text: str, *, speak_enabled: bool) -> None:
             logger.warning("TTS failed: %s", e)
 
     threading.Thread(target=_bg, daemon=True, name="regis-speak").start()
+
+
+_PROSODY_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="prosody")
+
+
+def _dispatch_prosody(audio: np.ndarray, sample_rate: int, *, user_id: str) -> None:
+    """Run audio_context.process_audio_chunk + persist on a background thread.
+
+    Fire-and-forget. The listener worker (which calls this) must not block —
+    prosody extraction + DB write together can run hundreds of ms, while the
+    worker is shared with packet callbacks driving barge-in detection.
+    """
+    audio_copy = np.asarray(audio).copy()
+
+    def _bg() -> None:
+        try:
+            from audio_context.persistor import persist_audio_packet
+            from audio_context.processor import process_audio_chunk
+
+            packet = process_audio_chunk(
+                audio_copy, sample_rate, started_at=datetime.now(timezone.utc)
+            )
+            row_id = persist_audio_packet(user_id, packet, source="mic_listener_v1")
+            if row_id is not None:
+                logger.info(
+                    "prosody persisted id=%s tone=%s energy=%.3f pitch_mean=%.1fHz",
+                    row_id,
+                    packet.prosody.tone,
+                    packet.prosody.energy,
+                    packet.prosody.pitch_mean_hz,
+                )
+        except Exception:
+            logger.exception("prosody dispatch failed")
+
+    try:
+        _PROSODY_EXECUTOR.submit(_bg)
+    except Exception:
+        logger.exception("prosody executor submit failed")
 
 
 class TurnRunner:
@@ -522,6 +561,8 @@ def main(argv: list[str] | None = None) -> int:
             if not text:
                 return
 
+            _dispatch_prosody(chunk.audio, chunk.sample_rate, user_id=user_id)
+
             currently_armed = armed.is_armed() or barged_in
             after_wake = extract_message_after_wake(text, args.wake_phrase)
 
@@ -569,6 +610,7 @@ def main(argv: list[str] | None = None) -> int:
         if not text:
             print(f"[stt {stt_ms}ms] (empty)")
             return
+        _dispatch_prosody(chunk.audio, chunk.sample_rate, user_id=user_id)
         marker = "barge-msg" if barged_in else "msg"
         print(f"[stt {stt_ms}ms] [{marker}] {text!r}")
         _handle_message_text(

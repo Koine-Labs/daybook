@@ -17,6 +17,7 @@ from typing import Any
 from . import _paths  # noqa: F401
 from db import get_conn  # noqa: E402
 from embeddings import embed, retrieve_similar  # noqa: E402
+from imodels.activator import get_active_clusters  # noqa: E402
 
 from .health_summary import summarize_health_for_query
 
@@ -55,6 +56,8 @@ def gather_context(
     )
     state = _latest_user_state(user_id)
     traits = _current_traits(user_id)
+    prosody = _recent_prosody(user_id)
+    active_i_models = _active_i_models(user_id=user_id, user_embedding=qvec)
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)
     return {
@@ -64,8 +67,70 @@ def gather_context(
         "relevant_observations": observations,
         "current_user_state": state,
         "regis_traits": traits,
+        "current_prosody": prosody,
+        "active_i_models": active_i_models,
         "_retrieval_ms": elapsed_ms,
     }
+
+
+def _recent_prosody(user_id: str, limit: int = 3) -> list[dict[str, Any]]:
+    """Last `limit` audio_context sensor_readings within the past 10 minutes."""
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=10)
+    try:
+        with get_conn() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT recorded_at, payload
+                FROM sensor_readings
+                WHERE user_id = %s
+                  AND kind = 'audio_context'
+                  AND recorded_at >= %s
+                ORDER BY recorded_at DESC
+                LIMIT %s
+                """,
+                (user_id, cutoff, limit),
+            )
+            rows = cur.fetchall()
+    except Exception:
+        return []
+    return [
+        {
+            "recorded_at": r[0].isoformat(),
+            "tone": (r[1] or {}).get("tone"),
+            "energy": (r[1] or {}).get("energy"),
+            "pitch_mean_hz": (r[1] or {}).get("pitch_mean_hz"),
+            "pitch_std_hz": (r[1] or {}).get("pitch_std_hz"),
+            "speaking_rate_wpm": (r[1] or {}).get("speaking_rate_wpm"),
+            "vad_active": (r[1] or {}).get("vad_active"),
+        }
+        for r in rows
+    ]
+
+
+def _active_i_models(
+    *, user_id: str, user_embedding: list[float]
+) -> list[dict[str, Any]]:
+    """Top-3 I-Model clusters firing for the current embedding."""
+    try:
+        active = get_active_clusters(
+            user_id=user_id,
+            query_embedding=user_embedding,
+            top_k=3,
+            min_similarity=0.4,
+        )
+    except Exception:
+        return []
+    out: list[dict[str, Any]] = []
+    for c in active:
+        label = c.label or f"unlabeled cluster #{c.cluster_id[:8]}"
+        out.append(
+            {
+                "label": label,
+                "similarity": round(c.similarity, 3),
+                "model_owner": c.model_owner,
+            }
+        )
+    return out
 
 
 def _recent_turns(*, conversation_id: str, limit: int) -> list[dict[str, str]]:

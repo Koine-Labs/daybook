@@ -13,7 +13,9 @@ Starting weights (will be tuned):
 from __future__ import annotations
 
 import json
+import os
 import sys
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +34,8 @@ W_SILENCE = 0.20
 W_TIME_OF_DAY = 0.20
 DEFAULT_THRESHOLD = 0.65
 SILENCE_SATURATION_SECONDS = 30 * 60  # 30 min of silence saturates the silence input
+
+_routing_guard = threading.local()
 
 
 @dataclass
@@ -62,6 +66,19 @@ def decide(
     threshold: float = DEFAULT_THRESHOLD,
 ) -> InterjectDecision:
     """Run the composite decider. Returns an InterjectDecision (always)."""
+    if os.environ.get("DAYBOOK_LEARNED_DECIDER") and not getattr(
+        _routing_guard, "active", False,
+    ):
+        _routing_guard.active = True
+        try:
+            from .learned_decider import learned_decide
+
+            return learned_decide(ctx, persist=persist)
+        except Exception as e:
+            print(f"[decider] learned_decide failed, using fixed weights: {e}")
+        finally:
+            _routing_guard.active = False
+
     receptivity = _clamp01(ctx.user_receptivity)
     novelty = _clamp01(ctx.novelty)
     silence_term = _clamp01(ctx.recent_silence_seconds / SILENCE_SATURATION_SECONDS)

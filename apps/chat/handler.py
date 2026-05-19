@@ -280,10 +280,29 @@ def _build_prompt(*, user_text: str, context: dict[str, Any]) -> str:
     if state:
         parts.extend(["", "# Sensor read of the user right now", json.dumps(state, default=str)])
 
+    prosody = context.get("current_prosody") or []
+    if prosody:
+        parts.extend(["", "# How they sound right now"])
+        for p in prosody:
+            bits = [f"tone={p['tone']}", f"energy={p['energy']}"]
+            if p.get("pitch_mean_hz"):
+                bits.append(f"pitch_mean={p['pitch_mean_hz']}Hz")
+            if p.get("pitch_std_hz"):
+                bits.append(f"pitch_std={p['pitch_std_hz']}Hz")
+            parts.append(f"  ({p['recorded_at']}) " + ", ".join(bits))
+
     traits = context.get("regis_traits") or {}
     if traits:
         parts.extend(["", "# Your current trait dials (0..1)"])
         parts.append("  " + ", ".join(f"{k}={v:.2f}" for k, v in sorted(traits.items())))
+
+    active_imodels = context.get("active_i_models") or []
+    if active_imodels:
+        parts.extend(["", "# Active facets right now (I-Models)"])
+        for im in active_imodels:
+            parts.append(
+                f"  - {im['label']} (sim {im['similarity']}, {im['model_owner']})"
+            )
 
     parts.extend(
         [

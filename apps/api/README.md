@@ -13,12 +13,34 @@ Single-user prototype. All endpoints act on Aakash's UUID
 cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook/apps"
 source inference/.venv/bin/activate
 cd api
-uvicorn app:app --reload --port 8000
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+`--host 0.0.0.0` is required so the iPhone (on the same Wi-Fi) can reach the
+Mac. Loopback-only (`127.0.0.1`) works for the iOS simulator but not for an
+on-device build.
 
 Base URL: `http://localhost:8000`
 
 Interactive docs: `http://localhost:8000/docs`
+
+## Phone testing
+
+When testing the iOS app on a real device (same Wi-Fi as the Mac):
+
+1. Start uvicorn with `--host 0.0.0.0` as above.
+2. Find the Mac's LAN IP:
+   ```bash
+   ipconfig getifaddr en0
+   ```
+   (Use `en1` if you're on a USB-C / dock Ethernet adapter.)
+3. Edit `apps/ios/Daybook/Info.plist` and set the `DaybookAPIBaseURL` value to
+   `http://<that-ip>:8000`, e.g. `http://192.168.1.42:8000`.
+4. Build & run on the device from Xcode. The chat overlay will hit the Mac
+   over the LAN.
+
+The simulator can leave `DaybookAPIBaseURL` at the default `http://localhost:8000`
+since it shares the host's loopback.
 
 ## CORS
 
