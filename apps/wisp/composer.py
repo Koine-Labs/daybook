@@ -26,7 +26,8 @@ sys.path.insert(0, str(INFERENCE_DIR))
 
 from db import get_conn  # noqa: E402
 from llm import ChatClient  # noqa: E402
-from embeddings import retrieve_similar  # noqa: E402
+from embeddings import embed, retrieve_similar  # noqa: E402
+from imodels.substrate import SubstrateContext, gather_substrate  # noqa: E402
 
 from .embedding_hook import embed_regis_moment  # noqa: E402
 
@@ -65,6 +66,10 @@ class ComposedUtterance:
     current_state: dict[str, Any] | None = None
     persisted_moment_id: str | None = None
     composition_seconds: float = 0.0
+    # Shared substrate snapshot (traits / active i-models / prosody) used to
+    # texture this utterance. Empty SubstrateContext if no embedding-yielding
+    # query text was available at compose time.
+    substrate: SubstrateContext = field(default_factory=SubstrateContext)
 
 
 # Forbidden vocabulary — sanity validator, NOT strict enforcement (see Test 3 in
@@ -114,16 +119,33 @@ def compose_utterance(
     mode = _mode_for_kind(moment_kind)
     persona = PERSONA_PATH.read_text()
 
-    # 1. Current state from user_state_estimate (latest row)
+    # 1. Compute one query embedding (if we have query text) so retrieval AND
+    #    substrate share the same vector — cheaper than embedding twice, and
+    #    keeps "what's similar to right now" consistent across both reads.
+    query_text = retrieval_query or explicit_context
+    qvec: list[float] | None = None
+    if query_text and query_text.strip():
+        try:
+            qvec = embed(query_text)
+        except Exception:
+            qvec = None
+
+    # 2. Shared substrate: traits / current_user_state (fresh) / prosody /
+    #    active_i_models / relevant_observations. Same well chat drinks from.
+    substrate = gather_substrate(user_id=user_id, query_embedding=qvec)
+
+    # current_state preserves the legacy 'no freshness gate' read path so
+    # nightly autonomous moments (e.g., rem_whisper) still surface the
+    # session's latest estimate even if it's > 1h old. The substrate's
+    # fresh-only current_user_state is also rendered when present.
     current_state = _read_latest_state(user_id)
 
-    # 2. Retrieved I-Model context
+    # 3. Retrieved I-Model context — reuses qvec so we don't re-embed.
     retrieved: list[dict[str, Any]] = []
-    query_text = retrieval_query or explicit_context
-    if query_text.strip():
+    if qvec is not None:
         try:
             hits = retrieve_similar(
-                query_text,
+                qvec,
                 user_id=user_id,
                 top_k=retrieval_top_k,
                 source_types=list(retrieval_source_types) if retrieval_source_types else None,
@@ -139,13 +161,14 @@ def compose_utterance(
         except Exception as e:
             retrieved = [{"_retrieval_error": str(e)}]
 
-    # 3. Compose the runtime context (the LLM user message)
+    # 4. Compose the runtime context (the LLM user message)
     user_prompt = _build_user_prompt(
         moment_kind=moment_kind,
         mode=mode,
         explicit_context=explicit_context,
         current_state=current_state,
         retrieved=retrieved,
+        substrate=substrate,
     )
 
     # 4. LLM call
@@ -172,6 +195,7 @@ def compose_utterance(
         retrieved=retrieved,
         current_state=current_state,
         composition_seconds=time.monotonic() - t0,
+        substrate=substrate,
     )
 
     # 6. Optional persistence
@@ -235,11 +259,16 @@ def _build_user_prompt(
     explicit_context: str,
     current_state: dict[str, Any] | None,
     retrieved: list[dict[str, Any]],
+    substrate: SubstrateContext,
 ) -> str:
     """Assemble the LLM user-message context. Structured but compact.
 
     The persona (system prompt) governs voice; this user message provides
     *what is happening right now* and *what to remember*.
+
+    Substrate sections (trait dials, active facets, prosody) match the
+    rendering in chat.handler._build_prompt so trait drift learned via chat
+    transfers to autonomous moments.
     """
     now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
     parts: list[str] = [
@@ -256,6 +285,39 @@ def _build_user_prompt(
         parts.extend(["", "# Sensor state", json.dumps(current_state, default=str)])
     else:
         parts.extend(["", "# Sensor state", "(no user_state_estimate available)"])
+
+    prosody = substrate.current_prosody
+    if prosody:
+        parts.extend(["", "# How they sound right now"])
+        for p in prosody:
+            bits = [f"tone={p['tone']}", f"energy={p['energy']}"]
+            if p.get("pitch_mean_hz"):
+                bits.append(f"pitch_mean={p['pitch_mean_hz']}Hz")
+            if p.get("pitch_std_hz"):
+                bits.append(f"pitch_std={p['pitch_std_hz']}Hz")
+            parts.append(f"  ({p['recorded_at']}) " + ", ".join(bits))
+
+    traits = substrate.regis_traits
+    if traits:
+        parts.extend(["", "# Your current trait dials (0..1)"])
+        parts.append(
+            "  " + ", ".join(f"{k}={v:.2f}" for k, v in sorted(traits.items()))
+        )
+
+    active_imodels = substrate.active_i_models
+    if active_imodels:
+        parts.extend(["", "# Active facets right now (I-Models)"])
+        for im in active_imodels:
+            parts.append(
+                f"  - {im['label']} (sim {im['similarity']}, {im['model_owner']})"
+            )
+
+    observations = substrate.relevant_observations
+    notable_obs = [o for o in observations if "observation" in o]
+    if notable_obs:
+        parts.extend(["", "# Things you've previously noticed about this person"])
+        for o in notable_obs:
+            parts.append(f"  (sim {o['similarity']}) {o['observation']}")
 
     if retrieved:
         retrieved_block = json.dumps(retrieved, indent=2)
@@ -286,14 +348,23 @@ def _persist_moment(
     composed: ComposedUtterance,
     explicit_context: str,
 ) -> str:
-    """Write to regis_moments. Returns new moment id."""
+    """Write to regis_moments. Returns new moment id.
+
+    active_i_model_ids + i_model_id are populated from the substrate
+    snapshot (audit #3 / leftover #2) — no more hardcoded []. Top-1 cluster
+    becomes the primary i_model_id; all firing cluster ids land in the
+    array column.
+    """
+    active_ids = composed.substrate.active_i_model_cluster_ids
+    primary_id = composed.substrate.primary_i_model_cluster_id
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO regis_moments
                 (user_id, session_id, occurred_at, kind, mode, content,
-                 content_source, triggering_context, active_i_model_ids)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s)
+                 content_source, triggering_context, active_i_model_ids,
+                 i_model_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
             RETURNING id
             """,
             (
@@ -311,10 +382,12 @@ def _persist_moment(
                         "retrieved": composed.retrieved,
                         "model": composed.model,
                         "backend": composed.backend,
+                        "substrate": composed.substrate.as_dict(),
                     },
                     default=str,
                 ),
-                [],  # active_i_model_ids — empty until activator job is wired
+                active_ids,
+                primary_id,
             ),
         )
         new_id = str(cur.fetchone()[0])
