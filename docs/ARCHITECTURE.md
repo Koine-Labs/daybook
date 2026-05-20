@@ -83,24 +83,35 @@ The inviolable rules of the system. Each commitment exists to protect against a 
 
 **Why.** "We'll do that in v2/v3" architectures usually never reach v2/v3. By building everything as one continuous codebase that gracefully degrades when hardware is missing, the system is always one step closer to the destination. Hardware adoption then enables existing software rather than triggering rewrites.
 
-### 10. Input is classified by intent, not modality
+### 10. Input is classified by intent AND modality
 
-**Rule.** All input is classified into two categories at the L1 ingestion boundary, distinguished by user intent:
+**Rule.** Every input event is classified along two orthogonal axes at the L1 ingestion boundary:
 
-- **Explicit** — user-initiated, communication-intended.
-  Voice (typed text directly; spoken voice via STT → text), deliberate gestures (pinch, head shake, deliberate nod, hand wave).
-  Land in `chat_messages` and `user_actions`.
+**Axis 1 — Intent** (user communication-intent):
+- **Explicit** — user-initiated, communication-intended
+- **Continuous** — ambient, passive sensing, no communication intent
 
-- **Continuous** — ambient, passive sensing, no communication intent.
-  Biometrics, audio prosody, vision, BCI, involuntary gestures (EMG-detected blinks, micro-movements). Land in `sensor_readings` (polymorphic via `kind`).
+**Axis 2 — Modality** (signal type):
+- Voice / Text / Gesture / Biometric / Audio (non-voice) / Vision / BCI
 
-Modalities can cross-cut both categories (voice can be explicit speech or background mumbling; gestures can be deliberate commands or involuntary state signals). Each event is tagged with its intent at the L1 boundary.
+The two axes are orthogonal: the same modality can appear under different intents (voice → explicit speech OR continuous mumbling; gesture → deliberate pinch OR involuntary blink). Output channels (voice primary, future haptic, future visual indicator) are all explicit-by-design.
 
-Output channels are voice (primary), future haptic, future visual indicator — all explicit-by-design.
+**Downstream consequences:**
 
-**Why.** Categorizing by modality muddles the design: "gestures" as one category conflates EMG-detected involuntary blinks (state signal) with Vision-Pro-style pinch-to-select (command), but these need fundamentally different routing downstream. The intent axis is what later layers care about: continuous signals feed Layer 3 (fusion) to update state estimates; explicit signals dispatch to Layer 5 (decision) as commands. Intent propagates through the whole pipeline with different interpretive weight at each layer — it's a typing system, not just an L1 tag.
+| Layer | Routes by |
+|---|---|
+| L1 — Sensors | Both — intent determines table (`chat_messages` / `user_actions` / `sensor_readings`); modality determines `kind` within table |
+| L2 — Signal processing | **Modality** — biometrics → heartpy/neurokit2; audio → librosa/Whisper; BCI → MNE-Python; vision → OpenCV |
+| L3 — Fusion | **(Intent, Modality)** — explicit speech and continuous prosody are weighted differently in the unified state |
+| L4 — Prediction | **(Intent, Modality)** — HRV trajectory (continuous, biometric) is regression; nod event (explicit, gesture) is classification — different ML problems |
+| L5 — Decision | **Intent** — explicit events dispatch as commands; continuous state updates feed posture |
 
-**Lineage.** Original v1 of this commitment (2026-05-17) framed inputs as three channels (voice / continuous context / gestures). Refined 2026-05-21 to intent-based classification after recognizing gestures cross-cut both categories. The "non-voice input is first-class" claim of v1 is preserved; the taxonomy is sharpened.
+**Why.** Intent alone is insufficient: the *type* of signal determines which library / model handles it. Modality alone is insufficient: the *meaning* of a signal depends on whether the user meant to send it. The two together give complete typing — an event is `(intent, modality)`, and downstream routing decisions split on whichever axis matters at that layer.
+
+**Lineage.**
+- v1 (2026-05-17): three input channels (voice / continuous context / gestures)
+- v2 (2026-05-21 morning): refined to intent-based; gestures cross-cut both
+- v3 (2026-05-21 afternoon): refined to two-axis classification (intent × modality) after recognizing both axes carry distinct architectural weight
 
 ### 11. Semantic-first continuous sensing
 
@@ -143,27 +154,36 @@ For each layer below: **Job** · **Current components** · **Contract** · **Evo
 
 ### Layer 1 — Sensors
 
-**Job.** Ingest raw input from sources; persist as discrete events tagged with intent. No deep interpretation — only normalization.
+**Job.** Ingest raw input from sources; persist as discrete events. Tag each event along both axes (intent + modality) at the boundary. No deep interpretation — only normalization.
 
-**Intent categories (per commitment #10):**
-- **Explicit:** voice (typed text directly; spoken voice via STT → text), deliberate gestures (pinch, head shake, hand wave). Land in `chat_messages` / `user_actions`.
-- **Continuous:** biometrics, audio prosody, vision, BCI, involuntary gestures (EMG-detected blinks, micro-movements). Land in `sensor_readings` (polymorphic via `kind`).
+**Two-axis classification at the boundary (per commitment #10):**
+
+Every event has both an intent and a modality:
+
+| | Voice | Text | Gesture | Biometric | Audio (non-voice) | Vision | BCI |
+|---|---|---|---|---|---|---|---|
+| **Explicit** | Spoken-to-Regis | Typed chat | Pinch / nod / wave | — | — | Looking-at-camera | — |
+| **Continuous** | Background mumble | — | Blink / jaw clench | HR / HRV / sleep | Room prosody | Scene / presence | EEG / EOG / EMG |
+
+Storage today: intent determines the table; modality determines the row's `kind` (or content):
+- **Explicit** → `chat_messages` (voice/text), `user_actions` (gestures)
+- **Continuous** → `sensor_readings` (polymorphic via `kind`: `heart_rate`, `hrv`, `sleep_stage`, `audio_context`, future `eeg_packet`, etc.)
 
 **Current components:**
-- ✅ HealthKit ingestion (iOS HealthKitClient → `/state/sensor_readings`)
-- ✅ Audio prosody capture (Mac mic listener → audio_context persistor → `sensor_readings`)
-- ✅ STT (Whisper, captures user voice as `chat_messages`)
-- ✅ Text chat (iOS / CLI → `chat_messages`)
-- ⚪ Deliberate gestures (schema in `user_actions`; no ingestion code yet — needs hardware/UI)
-- ⚪ Involuntary gestures (no ingestion yet — needs BCI/EMG hardware or vision)
-- ⚪ BCI raw signals (no ingestion yet — BioAmp EXG Pill incoming)
-- ⚪ Vision (no ingestion yet — ESP32-CAM available)
+- ✅ HealthKit ingestion (iOS HealthKitClient → `/state/sensor_readings`) — *continuous, biometric*
+- ✅ Audio prosody capture (Mac mic listener → audio_context persistor → `sensor_readings`) — *continuous, audio*
+- ✅ STT (Whisper, captures user voice as `chat_messages`) — *explicit, voice*. Note: Whisper itself is L2 work (modality-specific feature extraction); the raw audio waveform was captured at L1
+- ✅ Text chat (iOS / CLI → `chat_messages`) — *explicit, text*
+- ⚪ Deliberate gestures — *explicit, gesture* (schema in `user_actions`; no ingestion code yet — needs hardware/UI)
+- ⚪ Involuntary gestures — *continuous, gesture* (no ingestion yet — needs BCI/EMG hardware or vision)
+- ⚪ BCI raw signals — *continuous, BCI* (no ingestion yet — BioAmp EXG Pill incoming)
+- ⚪ Vision — *continuous, vision* (no ingestion yet — ESP32-CAM available)
 
 **Contract.**
 - *Inputs:* hardware/user events (HealthKit deltas, mic frames, typed text, future BCI samples, etc.)
-- *Outputs:* persistent rows in event tables, each implicitly tagged with intent by its destination table (`chat_messages` / `user_actions` = explicit; `sensor_readings` = continuous)
+- *Outputs:* persistent rows in event tables, each implicitly tagged with `(intent, modality)` by destination table + `kind`
 - *Cadence:* per-event. No fixed clock; driven by source.
-- *Interpretation:* minimal — schema normalization only. Whisper STT sits at the L1/L2 boundary; we treat captured speech-as-text as L1 output for downstream simplicity.
+- *Interpretation:* minimal — schema normalization only. Modality-specific feature extraction (Whisper STT, prosody features) happens at L2.
 
 **Evolution.**
 - **v1 (today):** biometrics + audio prosody + text/voice chat
