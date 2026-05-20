@@ -221,7 +221,7 @@ Storage: intent determines the table; modality determines the row's `kind` (or c
 
 **The L2 mini-pipeline per modality:**
 ```
-L1 row → [signal normalization] → [feature extraction] → FeatureVector → L3
+L1 row → [signal normalization] → [feature extraction] → FeatureSnapshot → L3
 ```
 
 - **Signal normalization** (where the source doesn't already provide it): filter noise, baseline-correct, resample to common rates. For modalities where the source pre-normalizes (Apple HealthKit, Whisper), this step is a no-op.
@@ -240,12 +240,14 @@ L1 row → [signal normalization] → [feature extraction] → FeatureVector →
 
 **Contract.**
 - *Inputs:* L1 events from `sensor_readings` / `chat_messages` / `user_actions`
-- *Outputs:* `FeatureVector` with uniform envelope + modality-specific payload:
+- *Outputs:* `FeatureSnapshot` with uniform envelope + modality-specific payload:
   ```
   {user_id, modality, intent, timestamp, features, confidence}
   ```
   The envelope is invariant across modalities; the `features` payload is modality-specific (a dict of prosody floats, a 1024-dim BGE-M3 vector, a 24-element biometric feature tuple, future bandpower vector for BCI, etc.).
-- *Cadence:* continuous streams → rolling-window extraction at modality-appropriate rate (biometrics every 5min; audio prosody every 5-10s; future BCI every 1s). Explicit events → one feature vector per event.
+- *Cadence:* continuous streams → rolling-window extraction at modality-appropriate rate (biometrics every 5min; audio prosody every 5-10s; future BCI every 1s). Explicit events → one snapshot per event.
+
+> **Envelope vs payload.** The envelope normalizes *shape*, not *values*. The payload is modality-specific in both content and native units (HRV in ms, pitch in Hz, embedding in unit-vector space, etc.). The envelope's job is to give downstream layers a uniform integration point; interpretation of payload content stays modality-aware.
 
 **Meta-context bias.** L2's feature-extraction priorities shift with the active meta-context:
 
@@ -259,7 +261,7 @@ L1 row → [signal normalization] → [feature extraction] → FeatureVector →
 
 Sub-context further refines: **REM** elevates dream-recall preparation (sub-vocal detection); **Deep** sleep is minimal extraction; **Alert** waking is maximum cadence; **Working out** elevates HR/HRV + motion features.
 
-**Evolution.** The architectural pattern absorbs new modalities by adding a new feature extractor + registering it. The FeatureVector envelope is invariant; only the modality-specific payload changes. Migration target: centralize all L2 work in `apps/inference/features/` with per-modality submodules.
+**Evolution.** The architectural pattern absorbs new modalities by adding a new feature extractor + registering it. The FeatureSnapshot envelope is invariant; only the modality-specific payload changes. Migration target: centralize all L2 work in `apps/inference/features/` with per-modality submodules.
 
 ---
 
@@ -267,9 +269,9 @@ Sub-context further refines: **REM** elevates dream-recall preparation (sub-voca
 
 *Status: TODO (the next focused conversation).*
 
-**Job (preview).** Take FeatureVectors from all modalities and fuse them into a unified `BeliefState` — the system's current best representation of who the user is at this moment. Output: rows in `user_state_estimate` (or successor table) that downstream layers consume.
+**Job (preview).** Take FeatureSnapshots from all modalities and fuse them into a unified `BeliefState` — the system's current best representation of who the user is at this moment. Output: rows in `user_state_estimate` (or successor table) that downstream layers consume.
 
-This is where the body-bridge eventually lives in its proper architectural home. Today body-bridge does an L1→L3 shortcut (raw biometric data → state estimate); in the ideal, L3 receives FeatureVectors from L2 and fuses them across modalities.
+This is where the body-bridge eventually lives in its proper architectural home. Today body-bridge does an L1→L3 shortcut (raw biometric data → state estimate); in the ideal, L3 receives FeatureSnapshots from L2 and fuses them across modalities.
 
 Routes by `(intent, modality)` (per commitment #10). Meta-context bias is load-bearing here — Sleep fusion weights HRV differently than Waking fusion.
 
@@ -520,7 +522,7 @@ This index is the **bridge between ARCHITECTURE.md (ideal) and STATUS.md (realit
 ### Layer-implementation gaps
 
 - **L2 not centralized:** signal processing scattered across modality-specific modules (mic listener for prosody, `embeddings/` for text, `classifier/` for biometrics). Ideal: `apps/inference/features/` as the single home with per-modality submodules.
-- **Body-bridge L1→L3 shortcut:** body-bridge reads raw HR/HRV from L1 and applies heuristics directly. Ideal: formal L2 features (heartpy / neurokit2) producing FeatureVector → L3 fusion.
+- **Body-bridge L1→L3 shortcut:** body-bridge reads raw HR/HRV from L1 and applies heuristics directly. Ideal: formal L2 features (heartpy / neurokit2) producing FeatureSnapshot → L3 fusion.
 - **Fusion engine doesn't exist as a separate concept:** today the substrate reads scattered data + body-bridge is the only synthesizer. Ideal: dedicated L3 fusion engine that combines all modality features into a unified `BeliefState`.
 - **L4 (Prediction) has no components:** zero predictive heads exist. Ideal: per-state-axis predictors (arousal at t+30min, REM probability, sleep onset, etc.).
 - **Meta-context biases not implemented at L2–L4:** commitment #14 declares cross-layer biasing; today only L5/L6 (persona — Witness vs Companion) honors this. Ideal: every layer applies meta-context bias.
