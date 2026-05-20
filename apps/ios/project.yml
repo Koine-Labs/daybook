@@ -64,10 +64,22 @@ targets:
         # the real URL + key into Daybook-Local.plist.
         DaybookAPIBaseURL: "http://localhost:8000"
         DaybookAPIKey: ""
-        # HealthKit (#13)
+        # HealthKit (#13) — iOS 26 enforces all three purpose strings when
+        # the HealthKit entitlement is present. Missing any one → app dies
+        # at launch with EXC_GUARD / GUARD_TYPE_USER (privacy violation).
+        # See: ExcUserFault_Daybook crashes from 2026-05-19 afternoon.
         NSHealthShareUsageDescription: "Daybook reads your heart rate, HRV, and sleep so Regis can sense your body state."
+        NSHealthUpdateUsageDescription: "Daybook does not write to Apple Health. This permission is shown only because iOS bundles read and write together."
+        NSHealthClinicalHealthRecordsShareUsageDescription: "Daybook does not read clinical health records. This permission appears only because Apple groups it with general Health access."
+    # xcodegen generates this file from `properties` below on every regen.
+    # Prevents linters / iCloud sync from silently emptying the file (which
+    # was the actual cause of the afternoon's launch crashes — binary was
+    # being signed with an empty entitlements dict because something kept
+    # stripping the HealthKit key after Xcode wrote it).
     entitlements:
       path: "Daybook/Daybook.entitlements"
+      properties:
+        com.apple.developer.healthkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koinelabs.daybook
@@ -106,9 +118,15 @@ targets:
         WKApplication: true
         WKWatchOnly: false
         WKCompanionAppBundleIdentifier: com.koinelabs.daybook
+        # HealthKit — same 3-string requirement on watchOS 26 as iOS 26.
         NSHealthShareUsageDescription: "Daybook reads your heart rate to show Regis your live state."
+        NSHealthUpdateUsageDescription: "Daybook does not write to Apple Health. This permission is shown only because watchOS bundles read and write together."
+        NSHealthClinicalHealthRecordsShareUsageDescription: "Daybook does not read clinical health records. This permission appears only because Apple groups it with general Health access."
+    # Same protection — xcodegen owns this file's contents.
     entitlements:
       path: "DaybookWatch Watch App/DaybookWatch.entitlements"
+      properties:
+        com.apple.developer.healthkit: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.koinelabs.daybook.watchkitapp
