@@ -215,44 +215,99 @@ Storage: intent determines the table; modality determines the row's `kind` (or c
 
 ---
 
-### Layer 1 — Sensors
+### Layer 2 — Signal processing
 
-**Job.** Ingest raw input from sources; persist as discrete events. Tag each event along both axes (intent + modality) at the boundary. No deep interpretation — only normalization.
+**Job.** Turn raw L1 events into meaningful **features** that downstream layers can reason about. Each modality runs through its own established library pipeline.
 
-**Two-axis classification at the boundary (per commitment #10):**
+**The L2 mini-pipeline per modality:**
+```
+L1 row → [signal normalization] → [feature extraction] → FeatureVector → L3
+```
 
-Every event has both an intent and a modality:
+- **Signal normalization** (where the source doesn't already provide it): filter noise, baseline-correct, resample to common rates. For modalities where the source pre-normalizes (Apple HealthKit, Whisper), this step is a no-op.
+- **Feature extraction:** the main work. Library calls that compute higher-level numbers from (normalized) raw data.
 
-| | Voice | Text | Gesture | Biometric | Audio (non-voice) | Vision | BCI |
-|---|---|---|---|---|---|---|---|
-| **Explicit** | Spoken-to-Regis | Typed chat | Pinch / nod / wave | — | — | Looking-at-camera | — |
-| **Continuous** | Background mumble | — | Blink / jaw clench | HR / HRV / sleep | Room prosody | Scene / presence | EEG / EOG / EMG |
+**Routing — by modality (per commitment #10).** Each modality runs through its own established library:
 
-Storage today: intent determines the table; modality determines the row's `kind` (or content):
-- **Explicit** → `chat_messages` (voice/text), `user_actions` (gestures)
-- **Continuous** → `sensor_readings` (polymorphic via `kind`: `heart_rate`, `hrv`, `sleep_stage`, `audio_context`, future `eeg_packet`, etc.)
-
-**Current components:**
-- ✅ HealthKit ingestion (iOS HealthKitClient → `/state/sensor_readings`) — *continuous, biometric*
-- ✅ Audio prosody capture (Mac mic listener → audio_context persistor → `sensor_readings`) — *continuous, audio*
-- ✅ STT (Whisper, captures user voice as `chat_messages`) — *explicit, voice*. Note: Whisper itself is L2 work (modality-specific feature extraction); the raw audio waveform was captured at L1
-- ✅ Text chat (iOS / CLI → `chat_messages`) — *explicit, text*
-- ⚪ Deliberate gestures — *explicit, gesture* (schema in `user_actions`; no ingestion code yet — needs hardware/UI)
-- ⚪ Involuntary gestures — *continuous, gesture* (no ingestion yet — needs BCI/EMG hardware or vision)
-- ⚪ BCI raw signals — *continuous, BCI* (no ingestion yet — BioAmp EXG Pill incoming)
-- ⚪ Vision — *continuous, vision* (no ingestion yet — ESP32-CAM available)
+| Modality | Library / model | Intent-specific branches? |
+|---|---|---|
+| Biometric | `heartpy`, `neurokit2` | No — always continuous |
+| Audio | `librosa`, `Whisper` | **Yes**: explicit → text + prosody; continuous → prosody only |
+| Vision | `OpenCV`, `MediaPipe`, `YOLO` | **Yes**: explicit → face/gaze landmarks; continuous → scene/presence |
+| BCI | `MNE-Python`, `NeuroDSP` | Continuous for raw-signal features; explicit-gesture detection is a separate path |
+| Text | `sentence-transformers` (BGE-M3) | No — always explicit |
+| Gesture | (vision-derived; model TBD) | **Yes**: explicit → command classification; continuous → micro-feature |
 
 **Contract.**
-- *Inputs:* hardware/user events (HealthKit deltas, mic frames, typed text, future BCI samples, etc.)
-- *Outputs:* persistent rows in event tables, each implicitly tagged with `(intent, modality)` by destination table + `kind`
-- *Cadence:* per-event. No fixed clock; driven by source.
-- *Interpretation:* minimal — schema normalization only. Modality-specific feature extraction (Whisper STT, prosody features) happens at L2.
+- *Inputs:* L1 events from `sensor_readings` / `chat_messages` / `user_actions`
+- *Outputs:* `FeatureVector` with uniform envelope + modality-specific payload:
+  ```
+  {user_id, modality, intent, timestamp, features, confidence}
+  ```
+  The envelope is invariant across modalities; the `features` payload is modality-specific (a dict of prosody floats, a 1024-dim BGE-M3 vector, a 24-element biometric feature tuple, future bandpower vector for BCI, etc.).
+- *Cadence:* continuous streams → rolling-window extraction at modality-appropriate rate (biometrics every 5min; audio prosody every 5-10s; future BCI every 1s). Explicit events → one feature vector per event.
 
-**Evolution.**
-- **v1 (today):** biometrics + audio prosody + text/voice chat
-- **v1.5:** BCI + vision ingestion as additional `kind` values in `sensor_readings`
-- **v2:** gesture pipelines online — deliberate via `user_actions`, involuntary via `sensor_readings`
-- Polymorphic schema absorbs new modalities without migrations. Adding BCI is `kind='eeg_packet'`, not a new table.
+**Meta-context bias.** L2's feature-extraction priorities shift with the active meta-context:
+
+- **Waking:** full multi-modal extraction across all available sensors. STT runs on detected explicit voice; prosody extracts continuously on ambient audio; biometric features support moment-to-moment state estimation; vision processes scene + presence; BCI extracts attention/alertness markers.
+- **Sleep:** extraction priorities shift —
+  - **STT mostly off** (no point transcribing internal dream activity)
+  - **Audio shifts to sleep-event detection** (snoring, sleep-talking, environmental disturbances) rather than everyday speech
+  - **Biometric features prioritize sleep classification** (REM/non-REM features over moment-to-moment HRV stress estimation)
+  - **Vision off** (camera doesn't run during sleep — privacy + compute)
+  - **BCI features shift to sleep-staging** rather than alertness markers
+
+Sub-context further refines: **REM** elevates dream-recall preparation (sub-vocal detection); **Deep** sleep is minimal extraction; **Alert** waking is maximum cadence; **Working out** elevates HR/HRV + motion features.
+
+**Evolution.** The architectural pattern absorbs new modalities by adding a new feature extractor + registering it. The FeatureVector envelope is invariant; only the modality-specific payload changes. Migration target: centralize all L2 work in `apps/inference/features/` with per-modality submodules.
+
+---
+
+### Layer 3 — Fusion
+
+*Status: TODO (the next focused conversation).*
+
+**Job (preview).** Take FeatureVectors from all modalities and fuse them into a unified `BeliefState` — the system's current best representation of who the user is at this moment. Output: rows in `user_state_estimate` (or successor table) that downstream layers consume.
+
+This is where the body-bridge eventually lives in its proper architectural home. Today body-bridge does an L1→L3 shortcut (raw biometric data → state estimate); in the ideal, L3 receives FeatureVectors from L2 and fuses them across modalities.
+
+Routes by `(intent, modality)` (per commitment #10). Meta-context bias is load-bearing here — Sleep fusion weights HRV differently than Waking fusion.
+
+---
+
+### Layer 4 — Prediction
+
+*Status: TODO (the next focused conversation after L3).*
+
+**Job (preview).** Take current `BeliefState` + recent state trajectory and produce forecasts of future state. Per yesterday's design conversation, prediction is **multi-faceted**:
+
+- **Data prediction** — "what will HRV be in 30 min?" (regression on a sensor signal)
+- **Context/state prediction** — "how will the user's overall state evolve — energy, arousal, focus, distress?" (multi-dimensional state trajectory; this is the most product-relevant)
+- **Action prediction** — "will the user issue a command? engage with what?" (event prediction)
+
+Each prediction type has its own model family. L4 will hold a registry of per-state-axis predictors.
+
+Per commitment #13, L4 eventually models counterfactuals (*"if Regis acts X, predicted t+1 = ?"*). Meta-context bias selects which prediction models are active.
+
+---
+
+### Layer 5 — Decision
+
+*Status: TODO.*
+
+**Job (preview).** Take predictions + user-outcome history + current explicit input + meta-context and decide what action (if any) Regis takes. Routes by **intent** (per commitment #10) — explicit events dispatch as commands, continuous state updates feed posture decisions (Witness vs Companion mode per commitment #5).
+
+Components today: the Thompson contextual bandit (`learned_decider.py`) is the seed. Eventually closes the treatment-effect estimation loop from commitment #13.
+
+---
+
+### Layer 6 — Output
+
+*Status: TODO.*
+
+**Job (preview).** Take the decision from L5 and emit it through the appropriate channel. Per commitment #3 (wisp-as-interface), audio is primary; UI/haptic/visual indicators are supplementary. Output channel selection is intent-dependent (commitment #10) and meta-context-biased (commitment #14 — no companion-mode TTS during deep sleep).
+
+Components today: TTS via Kokoro (bone-conduction headphones), iOS chat UI rendering. Future: haptic, visual indicators.
 
 ---
 
