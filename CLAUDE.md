@@ -276,12 +276,16 @@ These are decisions made over the development arc that future code must honor. S
 - Pi 4 (flashed, SSH-able as `daybook` alias from Mac, MicroPython on ESP32 over USB)
 - ESP32 (one in use, more available), 2× ESP32-CAM, Arduino Uno
 - 3.5" TFT touchscreen (Pi HAT), 3D printer, lasers
-- Apple Watch S8/9 (continuous wear)
-- MacBook (dev) + 24/7 desktop PC (NVIDIA 4080 Super; future heavy-compute station)
+- Apple Watch S8 (continuous wear)
+- MacBook m5 Pro (dev) 
+- 24/7 desktop PC (NVIDIA 4080 Super; heavy local compute station)
+- Macbook Air
+- iPhone 17 pro 
+- TECKNET bone-conduction headphones
+- External Wireless Mics
 
 **Ordered:**
 - BioAmp EXG Pill (~10 days) — single-channel biopotential amplifier for EEG/EMG/ECG
-- TECKNET bone-conduction headphones (~2-3 days) — Regis's audio output for v1
 - ESP32-CAM-MB programmer adapter board (~2 days)
 
 **Embedding compute today:** Mac (MPS or CPU). When the Pi is running 24/7, embedding calls will route to the desktop's 4080 (not set up yet).
