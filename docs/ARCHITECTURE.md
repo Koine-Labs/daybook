@@ -131,11 +131,39 @@ The two axes are orthogonal: the same modality can appear under different intent
 
 **Why.** A purely reactive Regis (responds to events, learns from outcomes) is fundamentally limited — it can never ask "if I do X vs Y, how does the user's trajectory change?" That counterfactual reasoning is the difference between a chatbot and an empathic agent. The Thompson contextual bandit (current state) is the first seed; the destination is a system that models its own influence on predicted state at t+1. Purely reactive architectures are inconsistent with the long-term direction.
 
+### 14. The pipeline operates within a meta-context that biases every layer
+
+**Rule.** Two mutually exclusive, non-overlapping meta-contexts: **Waking** and **Sleep**. Each contains sub-contexts that further refine bias:
+
+- **Waking sub-contexts:** alert / working out / relaxed / focused / low-energy / social / ...
+- **Sleep sub-contexts:** REM / deep / core / awake-in-bed / ...
+
+Every layer's interpretation is conditioned on the active `(meta, sub)` context:
+
+| Layer | What meta-context biases |
+|---|---|
+| L2 — Signal processing | Feature extraction priorities (which features matter in this state) |
+| L3 — Fusion | Fusion weights and rules (which modalities dominate; how to combine) |
+| L4 — Prediction | Model selection and prior weighting (different ML problems per state) |
+| L5 — Decision | Action policies (Witness vs Companion mode — corollary of this commitment) |
+| L6 — Output | Channel selection and style (no TTS during deep sleep; voice volume; haptic intensity) |
+
+L1 captures uniformly; meta-context biases begin at L2.
+
+**Why.** Human cognition doesn't process inputs uniformly across all states. Background hum during deep sleep doesn't trigger attention; the same hum during alert work might. A system that flattens this — treating sleep as just another state dimension — fails to mirror how perception actually works. Meta-context as a cross-layer bias means every component naturally asks "how do I behave differently in this mode?" — and Regis's voice, perception, and decisions stay coherent across phases of the user's day.
+
+**Relationship to existing commitments.**
+- Commitment #5 (Regis dual-mode: Witness vs Companion) is the L5/L6 *corollary* of this commitment, scoped to persona/output.
+- Commitment #11 (semantic-first continuous sensing) is the L2 *foundation* — semantic packets carry the meta-context-relevant features at low cost.
+- Commitment #4 (Three I-Models) — the `regis_self` model's mode field is one expression of meta-context propagation.
+
+**Lineage.** Added 2026-05-21 PM. Identified during §3 layered-design conversation when the user observed that sleep isn't a state variable within the pipeline — it's a meta-context that biases the entire pipeline.
+
 ---
 
 ## 3. The layered design
 
-Daybook organizes around 6 horizontal layers. Each has one job, takes inputs from the layer below, produces outputs for the layer above. Walking the layers makes coverage gaps obvious. Writing the contracts makes parallel work possible — once each layer's contract is agreed, implementations are independent.
+Daybook organizes around 6 horizontal layers. Each has one job, takes inputs from the layer below, produces outputs for the layer above. Writing the contracts makes parallel work possible — once each layer's contract is agreed, implementations are independent.
 
 ```
 Layer 6 — Output             text → TTS / UI / future hardware effects
@@ -146,9 +174,44 @@ Layer 2 — Signal processing  raw sensor data → meaningful features (per moda
 Layer 1 — Sensors            raw input ingestion (intent-classified at the boundary)
 ```
 
-**Intent propagates through every layer.** As established in commitment #10, every event is classified as **explicit** (user-initiated, communication-intended) or **continuous** (ambient, passive) at the L1 boundary. That intent tag travels with the event through subsequent layers; each layer applies intent-aware logic where it matters. Layers 2-4 use intent to choose feature pipelines, fusion weights, and prediction model types; Layer 5 routes decisions by intent (commands vs state updates).
+**Two cross-cutting principles propagate through every layer:**
 
-For each layer below: **Job** · **Current components** · **Contract** · **Evolution**.
+**Intent + modality (per commitment #10).** Every event is classified along two orthogonal axes at the L1 boundary — Intent (Explicit / Continuous) and Modality (Voice / Text / Gesture / Biometric / Audio / Vision / BCI). Downstream layers route by whichever axis matters at that step: L2 routes by modality (which library to use); L3 and L4 route by `(intent, modality)`; L5 routes by intent.
+
+**Meta-context (per commitment #14).** The pipeline runs within one of two meta-contexts — Waking or Sleep — each with sub-contexts that further refine bias. Every layer's interpretation is conditioned on the active `(meta, sub)` context. Where a layer's meta-context bias is load-bearing, the layer notes it explicitly.
+
+For each layer below: **Job** · **Contract** · **Meta-context bias** · **Evolution**.
+
+> This document describes the **ideal** architecture. Where current implementation diverges, see §11 (Implementation gap index) and `STATUS.md`. Per-layer descriptions describe what should be, not what currently is.
+
+---
+
+### Layer 1 — Sensors
+
+**Job.** Ingest raw input from sources; persist as discrete events tagged with `(intent, modality)`. No interpretation — only schema normalization.
+
+**Two-axis classification at the boundary (per commitment #10):**
+
+Every event has both an intent and a modality:
+
+| | Voice | Text | Gesture | Biometric | Audio (non-voice) | Vision | BCI |
+|---|---|---|---|---|---|---|---|
+| **Explicit** | Spoken-to-Regis | Typed chat | Pinch / nod / wave | — | — | Looking-at-camera | — |
+| **Continuous** | Background mumble | — | Blink / jaw clench | HR / HRV | Room prosody | Scene / presence | EEG / EOG / EMG |
+
+Storage: intent determines the table; modality determines the row's `kind` (or content):
+- **Explicit** → `chat_messages` (voice/text), `user_actions` (gestures)
+- **Continuous** → `sensor_readings` (polymorphic via `kind`: `heart_rate`, `hrv`, `audio_context`, future `eeg_packet`, etc.)
+
+**Contract.**
+- *Inputs:* hardware/user events (HealthKit deltas, mic frames, typed text, future BCI samples, etc.)
+- *Outputs:* persistent rows in event tables, each implicitly tagged with `(intent, modality)` by destination table + `kind`
+- *Cadence:* per-event. No fixed clock; driven by source.
+- *Interpretation:* minimal — schema normalization only. Modality-specific feature extraction (Whisper STT, prosody features) happens at L2.
+
+**Meta-context bias.** L1 captures uniformly regardless of meta-context. Sleep vs Waking biases begin at L2. (L1 may eventually throttle explicit-intent capture during deep sleep — there's no reason to run STT continuously when the user is asleep — but this is an efficiency optimization, not a behavioral change.)
+
+**Evolution.** Polymorphic schema absorbs new modalities without migrations. Adding BCI is `kind='eeg_packet'`, not a new table. Modality coverage extends as hardware comes online.
 
 ---
 
@@ -216,7 +279,45 @@ How they're stored, how they're queried (cosine similarity for the first two, si
 
 ---
 
-## 6. Where Regis runs
+## 6. The sleep sub-system
+
+Sleep is one of two meta-contexts the pipeline operates within (per commitment #14). Architecturally it's not special — every layer's behavior is biased by whether the meta-context is Waking or Sleep. **Operationally, however, sleep is one of Daybook's most important product surfaces:**
+
+- The v1 validation wedge is *"≥50% improvement in weekly dream recall"*
+- The product thesis centers on always-on companionship *"especially attentive at night, where it monitors sleep and gently intervenes in dream patterns"*
+- A meaningful share of the codebase (classifier, sessions, dreams, cues, observer, witness persona) lives in the sleep domain
+
+This section documents the sleep sub-system as a unified concept, mapping each component to its place in the layered architecture. Commitment #14 establishes the architectural principle (meta-context as cross-layer bias); this section provides the unified product view.
+
+### Components of the sleep sub-system
+
+| Component | Layer | Role |
+|---|---|---|
+| **Sleep classifier** | L4 (Prediction) | Trained XGBoost on biometric features; predicts REM/non-REM per epoch. Lives at `apps/inference/classifier/`. |
+| **Sleep sessions** | L3 (Fusion) | Aggregated session boundaries (when sleep started/ended, duration, fragmentation). Stored in `sleep_sessions` table. |
+| **Dream recall** | L1 (Sensors) + L5 (Decision) | Morning capture flow: user speaks/types dream → STT → `dream_recalls` table → embedding. Major product surface for v1 validation. |
+| **Sleep cues** | L5/L6 (Decision/Output) | Gentle audio intervention during sleep (witness-mode TTS via bone-conduction). Gated by `cue_decision.py` safety rules. |
+| **Sleep observer** | L3 (Fusion, post-mortem) | Nightly post-mortem of sleep session → writes `regis_observations`. Lives at `apps/inference/sleep_observer.py`. |
+| **Witness persona** | L6 (Output) | Regis's sleep-mode posture — reverent, sparse, minimal. The L5/L6 corollary of meta-context #14 applied to Sleep. |
+
+### Sub-contexts within Sleep
+
+Per commitment #14, Sleep contains sub-contexts that further refine bias:
+
+- **REM** — dream-active; potential intervention window for nightmare disorder, lucid dreaming, etc. Cues should be especially gentle.
+- **Deep (Slow Wave Sleep)** — no cues; system in pure observation mode. Critical for recovery — interruption has measurable cost.
+- **Core (Light NREM)** — limited intervention OK if gated by safety rules.
+- **Awake in bed** — transitional; system may begin morning posture if duration suggests final waking.
+
+Each sub-context biases L4 (which prediction model fires), L5 (what cues are allowed), and L6 (output gating).
+
+### Why sleep gets its own section despite #14's elegance
+
+Per architectural principle, sleep follows commitment #14 like any meta-context — not special-cased. But sleep is rich enough across the codebase that documenting it scattered across per-layer bias notes would obscure the sub-system. This section provides the unified view; commitment #14 + per-layer bias notes provide the architectural integration. Both are needed.
+
+---
+
+## 7. Where Regis runs
 
 The deployment view — what runs where, today and in future phases.
 
@@ -263,7 +364,7 @@ Same code path. v1 prototype IS the v3 substrate. The host changes; the architec
 
 ---
 
-## 7. Cross-cutting concerns
+## 8. Cross-cutting concerns
 
 Things that touch multiple layers and don't fit cleanly into any one.
 
@@ -326,7 +427,7 @@ Honest current state:
 
 ---
 
-## 8. Evolution roadmap
+## 9. Evolution roadmap
 
 *Status: TODO (sequenced after §3 layered design is agreed).*
 
@@ -339,7 +440,7 @@ Expected structure:
 
 ---
 
-## 9. Open questions + references
+## 10. Open questions + references
 
 *Status: TODO.* The honest list of what we don't yet know — design decisions deferred, labeling strategies undecided, evaluation harnesses unbuilt. Plus links to subsystem deep dives and per-feature design docs as they're written:
 
@@ -348,6 +449,45 @@ Expected structure:
 - `docs/design/<feature>.md` (per-feature, as-needed)
 
 ---
+
+## 11. Implementation gap index
+
+Known architectural divergences between this ideal and current code. Each entry is a one-line pointer; see `STATUS.md` and Issue #2 for detail.
+
+This index is the **bridge between ARCHITECTURE.md (ideal) and STATUS.md (reality).** The bodies of all sections above describe what the system should be; this index acknowledges what hasn't caught up. **When a gap closes, its line is removed from this index** — the doc body never has to be edited.
+
+### Storage and persistence gaps
+
+- **Sleep classification storage:** Apple's `sleep_stage` rows currently land in `sensor_readings` (HK storage convenience). Ideal: upstream state in `user_state_estimate` or dedicated state table.
+- **Multiple sleep storage locations:** `sensor_readings.sleep_stage` + `sleep_sessions` + `user_state_estimate.stage_proba` all hold sleep data. Ideal: one canonical home per concept.
+- **`sensor_readings` is a misnomer:** holds raw L1 signals AND L2 features AND pre-classified state from third parties. Ideal: separation by conceptual layer.
+
+### Layer-implementation gaps
+
+- **L2 not centralized:** signal processing scattered across modality-specific modules (mic listener for prosody, `embeddings/` for text, `classifier/` for biometrics). Ideal: `apps/inference/features/` as the single home with per-modality submodules.
+- **Body-bridge L1→L3 shortcut:** body-bridge reads raw HR/HRV from L1 and applies heuristics directly. Ideal: formal L2 features (heartpy / neurokit2) producing FeatureVector → L3 fusion.
+- **Fusion engine doesn't exist as a separate concept:** today the substrate reads scattered data + body-bridge is the only synthesizer. Ideal: dedicated L3 fusion engine that combines all modality features into a unified `BeliefState`.
+- **L4 (Prediction) has no components:** zero predictive heads exist. Ideal: per-state-axis predictors (arousal at t+30min, REM probability, sleep onset, etc.).
+- **Meta-context biases not implemented at L2–L4:** commitment #14 declares cross-layer biasing; today only L5/L6 (persona — Witness vs Companion) honors this. Ideal: every layer applies meta-context bias.
+
+### Modality coverage gaps
+
+- **Vision ingestion:** ⚪ unimplemented (ESP32-CAM available).
+- **BCI ingestion + features:** ⚪ unimplemented (BioAmp EXG Pill incoming).
+- **Deliberate gestures:** ⚪ schema in `user_actions`, no ingestion code yet.
+- **Involuntary gestures (EMG/EOG):** ⚪ unimplemented — needs BCI hardware or vision.
+
+### Learning gaps
+
+- **Online learning loops:** only the Thompson bandit learns from data; no other components improve over time. Ideal: every predictor + decider learns from outcomes.
+- **No labeled training data pipeline:** future trained models require labels; no auto-labeling infrastructure exists. Ideal: multi-modal-LLM auto-labeling pass + self-report capture.
+- **Treatment-effect estimation (commitment #13):** bandit is the seed but counterfactual reasoning ("if Regis does X, predicted t+1 = ?") isn't implemented yet. Ideal: forward-looking decision models.
+
+### Documentation gaps
+
+- **Smoke tests for trait_decay + cluster_dormancy:** convention from CLAUDE.md says "smoke test before declaring done" — these nightly jobs ship without them.
+- **Subsystem deep-dive docs** (`docs/Architecture/FUSION.md`, etc.): planned but unwritten.
+
 
 ## How this document gets written
 
