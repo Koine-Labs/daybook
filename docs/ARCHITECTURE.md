@@ -86,26 +86,111 @@ How they're stored, how they're queried (cosine similarity for the first two, si
 
 ## 6. Where Regis runs
 
-*Status: TODO.* The deployment view.
+The deployment view — what runs where, today and in future phases.
 
-- **Today:** Python backend on Mac, FastAPI tunneled via Cloudflare (`daybook.koinelabs.com`), iOS + Watch apps as clients
-- **Soon:** Pi 4 takes over the always-on backend role
-- **Eventually:** custom wearable hardware
-- **Constant across all phases:** same code path; only the host changes (per commitment #9)
-- **Auth model:** `X-API-Key` for tunneled traffic, loopback bypass for local
-- **Embedding compute:** Mac MPS today → desktop GPU as scale demands → potentially on-device in v3
+### Today (v1)
+
+- **Backend (the brain):** Python, running on the founder's Mac. All apps (`chat`, `wisp`, `inference`, `recall`, `api`) plus the always-on scheduler in `apps/daybook.py`. Started via `python -m daybook`.
+- **Persistence:** Neon Postgres (cloud-hosted, PG 17 with pgvector).
+- **Bridge to clients:** FastAPI server (`apps/api/`) on `localhost:8000`, exposed publicly via Cloudflare Tunnel at `https://daybook.koinelabs.com`.
+- **Clients:** iOS app (iPhone + Apple Watch). Swift, native. Talks to the FastAPI bridge over HTTPS using an `X-API-Key` for auth. Never imports backend modules directly (per commitment #12).
+- **Voice:** Codex backend (gpt-5.2) via the founder's ChatGPT login — used as a frozen LLM, no fine-tuning.
+- **Embeddings:** BGE-M3 (1024-dim) running locally on the Mac (MPS-accelerated). Model cached at `~/.cache/huggingface/`.
+
+### Soon (v1.5 — Pi takeover)
+
+The Pi 4 takes over as the always-on backend host:
+- Same Python code, just runs on the Pi
+- Mac becomes a dev machine again
+- Mic + bone-conduction audio I/O moves to the Pi
+- Embedding compute may offload to the 24/7 desktop PC (NVIDIA 4080)
+
+### Eventually (v3 — custom wearable)
+
+The single-ear wearable form factor:
+- BCI + audio + camera tether, all on-body
+- Some inference moves on-device (Core ML / ONNX Runtime Mobile)
+- Cloud / Mac / desktop still handles heavy lifting
+
+### Constant across all phases (per commitment #9)
+
+Same code path. v1 prototype IS the v3 substrate. The host changes; the architecture doesn't. Whatever works on the Mac today is what will run on the wearable — we just keep evolving the same codebase.
+
+### Auth model
+
+- `X-API-Key` header for all FastAPI calls coming through Cloudflare Tunnel
+- Key lives in `.env.local` server-side and `Daybook-Local.plist` client-side (both gitignored)
+- Loopback bypass: requests from `localhost` skip the key (so dev tools work)
+- BUT middleware enforces the key whenever Cloudflare headers (`cf-connecting-ip` etc.) are present — prevents cloudflared-on-Mac from laundering unauthenticated requests through localhost (per commitment #12)
+
+### Embedding compute trajectory
+
+- **Today:** BGE-M3 on Mac MPS (~30-40s first call, ~200ms each subsequent)
+- **Pi era:** BGE-M3 too heavy for Pi 4; embedding calls route to the 24/7 desktop PC over local network
+- **Wearable era:** smaller distilled embedding model on-device, or cloud-served
 
 ---
 
 ## 7. Cross-cutting concerns
 
-*Status: TODO.* Things that don't fit neatly into one layer:
+Things that touch multiple layers and don't fit cleanly into any one.
 
-- **The nightly scheduler** — 11 scheduled jobs in `apps/daybook.py`, what each does and when
-- **The interject decider** — Thompson contextual bandit, outcome labeling loop, learned routing
-- **Error handling philosophy** — graceful degradation; hot paths never crash; log + return None on optional reads
-- **The substrate as single read point** — everything Regis perceives in a moment flows through `gather_substrate`
-- **Observability** — where logs go, what's monitored, what's not yet
+### The nightly scheduler
+
+`apps/daybook.py` runs an `APScheduler` BackgroundScheduler with 11 jobs:
+
+| Time | Job | What it does |
+|---|---|---|
+| 02:00 | `outcome_labeler` | Backfills `user_outcome` on past `interject_decisions` rows |
+| 03:00 | `nrem_consolidation` | Distills yesterday's chat into `regis_observations` |
+| 04:00 | `nightly_clustering` | HDBSCAN over embeddings → discovers/updates I-Models |
+| 04:30 | `trait_decay` | Pulls trait dials toward learned baselines (half-life 90d) |
+| 04:45 | `cluster_dormancy_sweep` | Marks clusters dormant after 60d of no activation |
+| 05:00 | `rem_dreaming` | Pairs distant observations → produces dream-thoughts |
+| 05:30 | `refresh_regis_self` | Synthesizes Regis's current self-portrait fingerprint |
+| 07:30 | `morning_brief` | The good-morning utterance (surfaces overnight dreams) |
+| 22:30 | `pre_sleep` | The wind-down utterance |
+| Every 25 min | `inner_pulse` | Smart-gated proactive thought loop |
+| Every 5 min | `body_state_estimate` | Live biometric → state translator (body-bridge) |
+
+Jobs can fail independently without bringing the daemon down. The scheduler runs as part of the same Python process as the mic listener when both are active via `python -m daybook`.
+
+### The interject decider
+
+`apps/inference/interject/decider.py` is the brain of "should Regis speak right now?" — a small but real learning system:
+
+- Multiple **triggers** (`morning_brief`, `pre_sleep`, `inner_pulse`, `post_recall`) each build a context and ask the decider for a verdict
+- Default mode: **fixed-weight scoring** (receptivity / novelty / silence / time-of-day combined with hand-set weights, threshold 0.65)
+- Optional mode (env-gated): **Thompson contextual bandit** in `learned_decider.py` that learns from outcomes — needs 50+ labels to activate; falls back to fixed-weight otherwise
+- Every decision is persisted to `interject_decisions` (with feature snapshot)
+- Every fired interjection eventually gets an outcome label (positive / neutral / negative / ignored) by the nightly `outcome_labeler` job
+- The outcome → bandit update loop is the only "real" online learning in the system today
+
+### Error handling philosophy
+
+Three rules, applied throughout:
+
+1. **Hot paths never crash on optional reads.** If `gather_substrate` can't fetch latest `user_state_estimate`, returns `None` and the prompt builder omits the section. No exception breaks the chat turn.
+2. **Optional writes log + return.** Embedding a Regis utterance fails? Log a warning, return. The moment is still persisted; novelty just isn't logged this time.
+3. **Required reads can raise.** If the LLM call genuinely fails (auth expired, network outage), the error propagates. Better a visible failure than silent wrong behavior.
+
+Specifically: novelty logging, prosody capture, trait drift, observer extraction — all wrapped in try/except + log. The chat turn itself can crash if the LLM is unreachable.
+
+### The substrate as single read point
+
+`gather_substrate(user_id, query_embedding)` is the **one read** that fetches Regis's perception substrate for any moment — trait dials, active I-Models, current prosody, regis_self fingerprint, relevant observations, current user state.
+
+Both the **chat handler** (responding to user messages) and the **wisp composer** (composing autonomous moments) call this same function. There are no parallel reader paths. Anything Regis sees comes through here.
+
+Consequence: changes to what's in the substrate land in both code paths automatically. No drift between "what Regis-the-chatbot knows" and "what Regis-the-autonomous-agent knows."
+
+### Observability
+
+Honest current state:
+- **Logs:** stdout/stderr via Python `logging`; captured by the host OS (systemd journal on Pi, Console.app on Mac)
+- **DB introspection:** ad-hoc — connect to Neon, run SELECTs
+- **No structured metrics yet:** no Prometheus, Grafana, or error-rate dashboards. Single-user scale = we debug from logs + DB queries
+- **Future:** when scale demands, observability becomes its own layer — but premature for N=1
 
 ---
 
