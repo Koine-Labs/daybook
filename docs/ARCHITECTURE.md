@@ -83,11 +83,24 @@ The inviolable rules of the system. Each commitment exists to protect against a 
 
 **Why.** "We'll do that in v2/v3" architectures usually never reach v2/v3. By building everything as one continuous codebase that gracefully degrades when hardware is missing, the system is always one step closer to the destination. Hardware adoption then enables existing software rather than triggering rewrites.
 
-### 10. Multi-channel input/output
+### 10. Input is classified by intent, not modality
 
-**Rule.** Three input channels: voice (explicit speech), continuous context (ambient audio + vision + BCI + biometrics), gestures (silent back-channel — tap / nod / grunt / blink). Output channels are voice, future haptic, future visual indicator. All three input channels are first-class.
+**Rule.** All input is classified into two categories at the L1 ingestion boundary, distinguished by user intent:
 
-**Why.** A voice-only interface is too high-friction for always-on companionship. Gestures matter: the user must dismiss / acknowledge / redirect silently. Continuous context is what makes Regis perceptive between explicit interactions.
+- **Explicit** — user-initiated, communication-intended.
+  Voice (typed text directly; spoken voice via STT → text), deliberate gestures (pinch, head shake, deliberate nod, hand wave).
+  Land in `chat_messages` and `user_actions`.
+
+- **Continuous** — ambient, passive sensing, no communication intent.
+  Biometrics, audio prosody, vision, BCI, involuntary gestures (EMG-detected blinks, micro-movements). Land in `sensor_readings` (polymorphic via `kind`).
+
+Modalities can cross-cut both categories (voice can be explicit speech or background mumbling; gestures can be deliberate commands or involuntary state signals). Each event is tagged with its intent at the L1 boundary.
+
+Output channels are voice (primary), future haptic, future visual indicator — all explicit-by-design.
+
+**Why.** Categorizing by modality muddles the design: "gestures" as one category conflates EMG-detected involuntary blinks (state signal) with Vision-Pro-style pinch-to-select (command), but these need fundamentally different routing downstream. The intent axis is what later layers care about: continuous signals feed Layer 3 (fusion) to update state estimates; explicit signals dispatch to Layer 5 (decision) as commands. Intent propagates through the whole pipeline with different interpretive weight at each layer — it's a typing system, not just an L1 tag.
+
+**Lineage.** Original v1 of this commitment (2026-05-17) framed inputs as three channels (voice / continuous context / gestures). Refined 2026-05-21 to intent-based classification after recognizing gestures cross-cut both categories. The "non-voice input is first-class" claim of v1 is preserved; the taxonomy is sharpened.
 
 ### 11. Semantic-first continuous sensing
 
@@ -111,27 +124,52 @@ The inviolable rules of the system. Each commitment exists to protect against a 
 
 ## 3. The layered design
 
-*Status: TODO (the heart of this document — needs real conversation).*
-
-Daybook organizes around 6 horizontal layers. Each has one job, takes inputs from the layer below, produces outputs for the layer above. For each layer this section will document:
-
-1. **Job** — one sentence: what this layer is responsible for
-2. **Current components** — what lives here today, with status
-3. **Contract** — what flows in, what flows out, at what cadence
-4. **Evolution path** — v1 (today) → v2 → v3 trajectory
-
-Layers, top to bottom:
+Daybook organizes around 6 horizontal layers. Each has one job, takes inputs from the layer below, produces outputs for the layer above. Walking the layers makes coverage gaps obvious. Writing the contracts makes parallel work possible — once each layer's contract is agreed, implementations are independent.
 
 ```
-Layer 6 — Output             (text → TTS / UI / future hardware effects)
-Layer 5 — Decision           (forecasts + outcomes → action choice)
-Layer 4 — Prediction         (state + trajectory → forecasts of future state)
-Layer 3 — Fusion             (per-modality features → unified user-state representation)
-Layer 2 — Signal processing  (raw sensor data → meaningful features, per modality)
-Layer 1 — Sensors            (raw data ingestion from biometrics, audio, vision, BCI, chat)
+Layer 6 — Output             text → TTS / UI / future hardware effects
+Layer 5 — Decision           forecasts + outcomes → action choice
+Layer 4 — Prediction         state + trajectory → data / context / action forecasts
+Layer 3 — Fusion             intent-tagged features → unified state representation
+Layer 2 — Signal processing  raw sensor data → meaningful features (per modality)
+Layer 1 — Sensors            raw input ingestion (intent-classified at the boundary)
 ```
 
-This is the section that answers *"do we have everything? does it fit together?"* Walking each layer makes coverage gaps obvious. It's also the section that legitimizes parallel agent work — once each layer's contract is written, implementations are independent.
+**Intent propagates through every layer.** As established in commitment #10, every event is classified as **explicit** (user-initiated, communication-intended) or **continuous** (ambient, passive) at the L1 boundary. That intent tag travels with the event through subsequent layers; each layer applies intent-aware logic where it matters. Layers 2-4 use intent to choose feature pipelines, fusion weights, and prediction model types; Layer 5 routes decisions by intent (commands vs state updates).
+
+For each layer below: **Job** · **Current components** · **Contract** · **Evolution**.
+
+---
+
+### Layer 1 — Sensors
+
+**Job.** Ingest raw input from sources; persist as discrete events tagged with intent. No deep interpretation — only normalization.
+
+**Intent categories (per commitment #10):**
+- **Explicit:** voice (typed text directly; spoken voice via STT → text), deliberate gestures (pinch, head shake, hand wave). Land in `chat_messages` / `user_actions`.
+- **Continuous:** biometrics, audio prosody, vision, BCI, involuntary gestures (EMG-detected blinks, micro-movements). Land in `sensor_readings` (polymorphic via `kind`).
+
+**Current components:**
+- ✅ HealthKit ingestion (iOS HealthKitClient → `/state/sensor_readings`)
+- ✅ Audio prosody capture (Mac mic listener → audio_context persistor → `sensor_readings`)
+- ✅ STT (Whisper, captures user voice as `chat_messages`)
+- ✅ Text chat (iOS / CLI → `chat_messages`)
+- ⚪ Deliberate gestures (schema in `user_actions`; no ingestion code yet — needs hardware/UI)
+- ⚪ Involuntary gestures (no ingestion yet — needs BCI/EMG hardware or vision)
+- ⚪ BCI raw signals (no ingestion yet — BioAmp EXG Pill incoming)
+- ⚪ Vision (no ingestion yet — ESP32-CAM available)
+
+**Contract.**
+- *Inputs:* hardware/user events (HealthKit deltas, mic frames, typed text, future BCI samples, etc.)
+- *Outputs:* persistent rows in event tables, each implicitly tagged with intent by its destination table (`chat_messages` / `user_actions` = explicit; `sensor_readings` = continuous)
+- *Cadence:* per-event. No fixed clock; driven by source.
+- *Interpretation:* minimal — schema normalization only. Whisper STT sits at the L1/L2 boundary; we treat captured speech-as-text as L1 output for downstream simplicity.
+
+**Evolution.**
+- **v1 (today):** biometrics + audio prosody + text/voice chat
+- **v1.5:** BCI + vision ingestion as additional `kind` values in `sensor_readings`
+- **v2:** gesture pipelines online — deliberate via `user_actions`, involuntary via `sensor_readings`
+- Polymorphic schema absorbs new modalities without migrations. Adding BCI is `kind='eeg_packet'`, not a new table.
 
 ---
 
