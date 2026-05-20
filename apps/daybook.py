@@ -37,6 +37,7 @@ Env-var overrides (passed through to component defaults):
   DAYBOOK_REGIS_SELF_HOUR          default 5    (regis_self projection refresh)
   DAYBOOK_REGIS_SELF_MIN           default 30
   DAYBOOK_INNER_PULSE_INTERVAL_MIN default 25   (proactive thought cadence, 24/7 smart-gated)
+  DAYBOOK_BODY_BRIDGE_INTERVAL_MIN default 5    (HealthKit → user_state_estimate translator)
   DAYBOOK_LEARNED_DECIDER          default off  (set to 1 to route decider through Thompson bandit)
 
 Ctrl-C shuts everything down cleanly.
@@ -71,6 +72,7 @@ def _make_scheduler(*, user_id: str):
     from chat.consolidator import consolidate_yesterday
     from chat.dreamer import run_rem_dreaming
     from chat.trait_decay import apply_nightly_decay
+    from inference.body_bridge import estimate_current_state
     from inference.imodels.cluster_dormancy import sweep_dormancy
     from inference.imodels.regis_self_projector import refresh_regis_self
     from inference.interject.clustering_trigger import run_nightly_clustering
@@ -99,6 +101,7 @@ def _make_scheduler(*, user_id: str):
     labeler_h = int(os.environ.get("DAYBOOK_OUTCOME_LABELER_HOUR", "2"))
     labeler_m = int(os.environ.get("DAYBOOK_OUTCOME_LABELER_MIN", "0"))
     pulse_interval = int(os.environ.get("DAYBOOK_INNER_PULSE_INTERVAL_MIN", "25"))
+    body_interval = int(os.environ.get("DAYBOOK_BODY_BRIDGE_INTERVAL_MIN", "5"))
 
     sched = DaybookScheduler(blocking=False)
     sched.register_daily(
@@ -149,6 +152,11 @@ def _make_scheduler(*, user_id: str):
     sched.register_interval(
         minutes=pulse_interval,
         func=fire_inner_pulse, name="inner_pulse",
+        user_id=user_id,
+    )
+    sched.register_interval(
+        minutes=body_interval,
+        func=estimate_current_state, name="body_state_estimate",
         user_id=user_id,
     )
     return sched
