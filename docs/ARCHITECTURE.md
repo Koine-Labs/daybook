@@ -27,11 +27,85 @@ If you're new to the repo, read `CLAUDE.md` first for orientation, then this doc
 
 ## 2. Architectural commitments
 
-*Status: TODO.* The inviolable rules of the system. Currently 12 (becoming ~14 as the fusion direction adds new ones). Each commitment gets:
-- **Rule** (1 sentence — what's locked)
-- **Why** (2-3 sentences — the reasoning that made it inviolable)
+The inviolable rules of the system. Each commitment exists to protect against a specific failure mode that would compromise the product. Locked unless explicitly re-opened in a design conversation; new code must not violate them.
 
-Migrated and expanded from `CLAUDE.md`. `CLAUDE.md` will keep a 1-liner-per-commitment list pointing back here for the depth.
+### 1. I-Model polymorphism
+
+**Rule.** Every event entity has `i_model_id UUID NULL`. Schema + retrieval hooks present from day one.
+
+**Why.** New event kinds (chat messages, observations, dream recalls, moments, intents, etc.) shouldn't trigger schema migrations to associate with I-Models. One nullable column per table absorbs that cost up-front. Without this, adding I-Model awareness later becomes a multi-table refactor.
+
+### 2. Content polymorphism
+
+**Rule.** `regis_moments.kind` is a pluggable discriminator; cue selection and downstream logic is content-agnostic.
+
+**Why.** New kinds of Regis utterance (sleep cue, walking remark, post-recall reflection, inner pulse, dream-thought, etc.) shouldn't require new tables. One log with a discriminator absorbs unbounded variety. Decision logic operates on the discriminator, not the content.
+
+### 3. Wisp-as-interface
+
+**Rule.** Audio output (eventually bone-conduction TTS) is the primary surface. Screens are for setup, debug, and explicit interaction.
+
+**Why.** The product's defining experience is intimacy through voice, not screen time. Designing for "voice first" rules out features that only make sense in a screen-centric product. The eventual form factor (single-ear wearable) literally has no screen.
+
+### 4. Three distinct I-Models
+
+**Rule.** `user_self` (what the system has discovered about the user) + `regis_of_user` (how Regis perceives the user specifically) + `regis_self` (Regis's own current state). All three are first-class entities in `i_model_clusters` distinguished by `model_owner`.
+
+**Why.** Conflating these confuses three fundamentally different things: who the user IS, how the system PERCEIVES them, and who REGIS IS. Each evolves under different update rules (user traits drift from real signal; Regis's perception updates from notable exchanges; Regis's self changes from his accumulated voice + nightly projection). Bundling them would force a single update mechanism that misrepresents at least two.
+
+### 5. Regis is dual-mode, not flat-toned
+
+**Rule.** Witness Mode during sleep (reverent, sparse). Companion Mode when awake (dry, teasing — canon TBATE energy). Same character, different posture based on user consciousness state.
+
+**Why.** A single tone makes Regis either too quiet for waking life or too chatty for sleep. Mode is determined by `moment_kind` today; eventually by live `user_state_estimate`. Same identity expressed through context-appropriate posture is honest; flattening to a single tone is not.
+
+### 6. Self-expanding I-Models
+
+**Rule.** I-Models are DISCOVERED from data via unsupervised clustering, not pre-defined. The three top-level categories are containers; sub-I-Models emerge from embeddings. Embeddings are many-to-many with clusters via `embedding_cluster_memberships`.
+
+**Why.** Pre-defined facet schemes (a fixed list of personality types or facets) are brittle and false. Real human variability emerges from real data. The system gains granularity as the user generates signal, rather than forcing the user into a pre-fab taxonomy.
+
+### 7. Moment polymorphism
+
+**Rule.** `regis_moments` is the generalized any-context Regis action log. Sleep cue, morning prompt, walking remark, conversation tease, inner pulse, dream-thought — all live here, distinguished by `kind`.
+
+**Why.** Separate tables per Regis-utterance type would create artificial boundaries and fragment downstream processing (memory, retrieval, outcome tracking, embedding indexing). One log keeps the discipline "anything Regis does is a Moment" — testable, queryable, evolvable.
+
+### 8. Generative Regis from day one (not scripted variants)
+
+**Rule.** `PERSONA.md` is the system prompt; an LLM composes utterances dynamically per moment. Scripted variants in `PERSONA.md` serve as few-shot examples, not the output bank.
+
+**Why.** Scripted output looks identical every time, creating brittle pattern recognition and a stale feel. Generative output uses retrieved context to compose appropriate utterances per moment. Changing Regis's voice means editing one persona file, not rewriting variant lists.
+
+### 9. Continuous build, not phased
+
+**Rule.** v1 prototype IS the v3 substrate. Don't defer features by phase; build them when foundational, even if the matching hardware lags.
+
+**Why.** "We'll do that in v2/v3" architectures usually never reach v2/v3. By building everything as one continuous codebase that gracefully degrades when hardware is missing, the system is always one step closer to the destination. Hardware adoption then enables existing software rather than triggering rewrites.
+
+### 10. Multi-channel input/output
+
+**Rule.** Three input channels: voice (explicit speech), continuous context (ambient audio + vision + BCI + biometrics), gestures (silent back-channel — tap / nod / grunt / blink). Output channels are voice, future haptic, future visual indicator. All three input channels are first-class.
+
+**Why.** A voice-only interface is too high-friction for always-on companionship. Gestures matter: the user must dismiss / acknowledge / redirect silently. Continuous context is what makes Regis perceptive between explicit interactions.
+
+### 11. Semantic-first continuous sensing
+
+**Rule.** All continuous sensor streams use semantic-first architecture: continuous low-bandwidth meaningful extraction (VAD, diarization, prosody for audio; YOLO, scene class, OCR for visual) → semantic packets stored as `sensor_readings`. Raw pixels and raw audio are discarded after processing. Cloud LLM calls (multimodal vision, full STT) are *triggered escalation only* — never continuous.
+
+**Why.** Continuous full-fidelity capture is impossible on battery, privacy, and cost grounds. The biological model is correct: the brain doesn't process every photon; it extracts features at low levels and escalates to focused attention selectively. Following this pattern is the only viable architecture for always-on awareness on real hardware.
+
+### 12. Native clients talk to FastAPI, never brain modules directly
+
+**Rule.** iOS, watchOS, and any future client speaks HTTP to `apps/api/`. They never import `chat`, `recall`, `wisp`, etc. The bridge is the seam. Auth via `X-API-Key` with loopback bypass.
+
+**Why.** Direct module imports across language boundaries (Swift → Python) couple platforms together and break independent evolution. The FastAPI bridge enforces a clean contract: backend evolves in Python, clients evolve in their native stack, the API is the only thing that needs versioning. Auth and tunnel concerns are isolated at the bridge.
+
+### 13. Regis is a controlled variable in his own predictive model
+
+**Rule.** The decision layer eventually models how Regis's actions shape predicted future state — decisions become forward-looking treatment-effect estimation, not just retrospective scoring of "did interjecting help."
+
+**Why.** A purely reactive Regis (responds to events, learns from outcomes) is fundamentally limited — it can never ask "if I do X vs Y, how does the user's trajectory change?" That counterfactual reasoning is the difference between a chatbot and an empathic agent. The Thompson contextual bandit (current state) is the first seed; the destination is a system that models its own influence on predicted state at t+1. Purely reactive architectures are inconsistent with the long-term direction.
 
 ---
 
