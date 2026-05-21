@@ -267,13 +267,102 @@ Sub-context further refines: **REM** elevates dream-recall preparation (sub-voca
 
 ### Layer 3 — Fusion
 
-*Status: TODO (the next focused conversation).*
+**Job.** Take FeatureSnapshots from L2 and fuse them into the system's current per-axis representation of the user. Hold that representation as the truth-of-record for *now*. Expose it to downstream consumers (Regis, the UI, L4) through read-only interfaces.
 
-**Job (preview).** Take FeatureSnapshots from all modalities and fuse them into a unified `BeliefState` — the system's current best representation of who the user is at this moment. Output: rows in `user_state_estimate` (or successor table) that downstream layers consume.
+It holds the most current, best-understood picture of the user — with honest representation, per dimension, of how current that picture actually is.
 
-This is where the body-bridge eventually lives in its proper architectural home. Today body-bridge does an L1→L3 shortcut (raw biometric data → state estimate); in the ideal, L3 receives FeatureSnapshots from L2 and fuses them across modalities.
+**State substrate — per-axis storage.** L3 holds state as a registry of independent axes. Each axis represents one dimension of the user (arousal, valence, focus, distress, social orientation, sleep_stage, etc.) and updates at its own cadence. For each axis, L3 stores:
 
-Routes by `(intent, modality)` (per commitment #10). Meta-context bias is load-bearing here — Sleep fusion weights HRV differently than Waking fusion.
+| Field | Meaning |
+|---|---|
+| `value` | Current best estimate (scalar, vector, categorical — or the sentinel `OFFLINE`) |
+| `timestamp` | When the fuser last wrote this axis |
+| `confidence` | The fuser's confidence at that time |
+| `source` | Which modality (or set of modalities) contributed |
+
+No global tick. Each axis updates independently, with write cadence driven by its underlying signal sources. Modalities span three orders of magnitude in cadence (BCI ~1s through dream recall ~24h); per-axis storage represents each at its honest cadence.
+
+> **Per-axis state is the truth-of-record.** Everything else L3 exposes — the BeliefState snapshot, composites, momentum — is derived from it.
+
+**Fusion mechanism — Bayesian, with swappable prior.** L3 produces axis values by Bayesian combination of incoming FeatureSnapshots with a prior. Each modality contributes a likelihood; the fuser combines the prior with active likelihoods to produce a posterior. The posterior's mean is the new axis value; the posterior's variance becomes the new confidence.
+
+Likelihoods are Gaussian by default. Per-axis combinator instances may use other distributions where the axis's nature requires it (categorical for sleep_stage, etc.); the architecture supports per-axis math.
+
+The prior is a swappable input. Default: smoothed-recent from the bounded backward window. The fuser interface accepts an alternative prior source per axis — reserved for the predictive-coding loop, where L4's short-horizon forecast may replace smoothed-recent as the prior once L4 exists and per-axis behavior justifies it.
+
+**Intent modulation — uniform ingestion, distinct axes.** Per commitment #10, every event carries an intent (Explicit / Continuous) and a modality. L3 honors this without exposing separate ingestion paths.
+
+L3 only sees FeatureSnapshots. L2 wraps explicit events (a spoken sentence, a typed message, a deliberate gesture) into FeatureSnapshots that carry the `(intent, modality)` tag. The tag drives downstream weighting inside the fuser.
+
+Continuous evidence updates *inferred* axes (e.g., `arousal_inferred`, `valence_inferred`). Explicit evidence updates *declared* axes (e.g., `state_declared`, `intent_declared`). The two coexist; consumers and composites may read either or both. L3 does not collapse them — an inferred reading and a declared reading are epistemically different facts.
+
+Semantic content from explicit events (the actual words) stays in `chat_messages`. L3 holds state, not content. L2 extracts state implications and writes them to L3's declared axes; the words themselves persist in the existing chat tables and are read separately by downstream consumers that need them.
+
+**Snapshot policy — the derived "current view" (BeliefState).** Most consumers (Regis especially) want a single current snapshot — one object that says "here's the state right now." This is the **BeliefState**: a view computed on demand from per-axis storage. It is not stored.
+
+Each axis declares a freshness threshold (the window during which its last value is considered current) and a staleness behavior. Both are declared per-axis in fusion config — values are derived from the source's natural cadence and the consumer's tolerance, and may be personalized per user as data accumulates.
+
+Staleness behaviors:
+- **Decay** — report the last value with confidence reduced in proportion to staleness. *Default.*
+- **Hide** — omit the axis; consumers see it as undefined.
+- **Predict** — call L4 for a short-horizon forecast and mark the value as predicted. Opt-in per axis; creates a hard dependency on L4.
+
+A BeliefState represents state at the moment of read; two reads milliseconds apart may differ. Consumers needing a stable view across a multi-step operation read once and cache for the operation's duration. Snapshot policy lives in L3 — reads do not take policy parameters.
+
+**Backward window — bounded recent history.** L3 maintains a short rolling buffer per axis (seconds to minutes, axis-specific) to support smoothing, momentum derivation, prior construction (the fuser's default prior is smoothed-recent from this buffer), and immediate-past queries.
+
+> **Hard boundary with L4.** L3 looks at the recent past only. Day-over-day comparisons, weekly rhythms, cyclical patterns all live in L4. The bound on L3's window is the architectural commitment that keeps the layers from collapsing into each other.
+
+The buffer is internal — substrate for snapshot freshness, momentum, and priors. Not exposed as a separate read interface. Consumers either read the BeliefState or query L4.
+
+**Composites — views, not storage.** Many user-meaningful states ("agitated," "in flow," "exhausted," "scattered") are combinations of primitive axes. These are views: pure functions over per-axis state.
+
+A composite returns a value (boolean, scalar, label) computed from named primitive axes. Composites live in a named registry, consistent across consumers. Each declares: name, input axes, derivation rule, and (optionally) a confidence model over its inputs' confidences. They are not stored; they have no writer. The definition can evolve without backfill — changing the rule re-derives historical queries against the new rule.
+
+> **If it has a writer, it's a primitive. If it's pure derivation from existing storage, it's a view.**
+
+A state detected *directly* by an L2 process (e.g., a model trained on dissociation signatures) is a primitive axis — L2 writes it, L3 stores it. The same name treated as a composite (derived from arousal + attention) would be a view. The line is "is there a writer," not "does it feel emergent."
+
+**Offline state — decay ≠ offline.** A modality going offline is a different epistemic object from a modality whose last reading is just old. L3 distinguishes them explicitly.
+
+`OFFLINE` is a value type. Each axis holds either `(value, confidence, timestamp, source)` or the sentinel `OFFLINE`. L3 marks an axis OFFLINE when L2 sends an explicit "modality offline" signal, when L2's heartbeat stops arriving, or when L3 times out (no writes for N times the expected cadence).
+
+When an input modality is OFFLINE, its likelihood is not included in the Bayesian product for any axis it contributes to. The posterior is computed from the prior and remaining modalities; the resulting confidence reflects the smaller input set.
+
+On reconnection, L3 cold-starts the axis — the fresh value replaces OFFLINE without interpolation or gap-filling. L3 makes no claims about what happened during the gap, regardless of gap duration.
+
+L3's writes to long-term storage include OFFLINE periods as such. Knowing when the system was blind is part of historical truth.
+
+OFFLINE propagates up the stack:
+- **L4** treats OFFLINE inputs as missing — either skips forecasts that depend on them or marks predictions as "partial inputs."
+- **L5** policies are axis-aware about blindness — sleep cues that depend on physiological readiness do not fire when HRV is offline; Regis may switch to a "diminished mode" when enough state is unknown.
+- **L6 / UI** renders OFFLINE distinctly from "known with low confidence" — the user can tell whether the system is uncertain or blind.
+
+**Contract.**
+- *Inputs:* `FeatureSnapshot {user_id, modality, intent, timestamp, features, confidence, meta_context}` from L2. Each snapshot writes to one or more axes (axis routing declared per-modality in fusion config). Writes are atomic per axis.
+- *Outputs — three read paths:*
+  1. **BeliefState read** — current view across all axes, with snapshot policy applied. Primary path for Regis and the UI.
+  2. **Per-axis read** — raw state of a named axis, no policy applied.
+  3. **Composite read** — computed value of a named composite.
+- *L4 access:* L4 reads per-axis state (including the bounded backward window) for forecasting. L4 does not write to L3. When the predictive-prior hook is activated for a given axis, L3 reads L4's forecast as the fusion prior in place of smoothed-recent.
+
+**Meta-context bias.** Per commitment #14, the active meta-context (`Waking` / `Sleep`) biases L3's fusion at every step. Implementation is faithful: distinct combinator functions per meta-context, each with its own active axes, feature inputs, and math. Dispatch is by context detection.
+
+At meta-context transitions:
+- Axes exclusive to the previous context freeze at last value, then become stale per snapshot policy.
+- Axes exclusive to the new context come online cold; first values arrive when relevant signals appear.
+- Shared axes continue under the new context's fuser.
+
+Sub-contexts (REM, deep, alert, focused, etc.) further specialize the combinator's behavior within a meta-context.
+
+**Evolution.** The architectural pattern absorbs new modalities and axes by registering them in the fusion config; the FeatureSnapshot ingestion path and per-axis storage shape are invariant. Migration target: replace the body-bridge L1→L3 shortcut (raw HR/HRV → user_state_estimate) with proper L2 features (heartpy/neurokit2 → FeatureSnapshot) consumed by L3's biometric likelihoods. See §11. Predictive priors per axis (L4 forecasts as Bayesian priors) become available once L4 exists and its forecasts demonstrably beat smoothed-recent.
+
+**Open questions.**
+- *Per-user calibration of freshness thresholds.* Defaults will be wrong for some users; personalization deferred until N > 1.
+- *Confidence model for composites.* The combination rule (min, product, Bayesian) is deferred. Placeholder: minimum input confidence.
+- *L3 writes to long-term storage.* Cadence and format of historical writes is a separate decision, likely tied to L4's needs.
+- *Concurrency for transactional multi-axis writes.* Per-axis writes are atomic; multi-axis transactional writes aren't supported. Flag if needed.
+- *Per-axis likelihood distributions.* The Gaussian default works for many physiological axes but breaks down for categorical or bimodal ones; per-axis distribution choice is open.
 
 ---
 
