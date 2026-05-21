@@ -338,13 +338,20 @@ OFFLINE propagates up the stack:
 - **L5** policies are axis-aware about blindness — sleep cues that depend on physiological readiness do not fire when HRV is offline; Regis may switch to a "diminished mode" when enough state is unknown.
 - **L6 / UI** renders OFFLINE distinctly from "known with low confidence" — the user can tell whether the system is uncertain or blind.
 
+**Historical persistence.** L3 writes every axis update to long-term storage as a side effect of fusion. Each write is one row in `user_state_estimate` carrying the per-axis shape — `(axis, timestamp, value, confidence, source, meta_context)` — same as in-memory state. The table is per-axis-row, not per-snapshot: there is no synchronized "all axes at once" row. This mirrors L3's in-memory architecture, where per-axis state is the truth-of-record both live and in history.
+
+Historical BeliefStates are reconstructed by selecting the latest row per axis at-or-before the target time. Consumers (primarily L4 for long-horizon forecasting) issue these queries directly against `user_state_estimate`.
+
+OFFLINE values persist as such — the historical record honestly reflects when the system was blind, not just what was known.
+
 **Contract.**
 - *Inputs:* `FeatureSnapshot {user_id, modality, intent, timestamp, features, confidence, meta_context}` from L2. Each snapshot writes to one or more axes (axis routing declared per-modality in fusion config). Writes are atomic per axis.
 - *Outputs — three read paths:*
   1. **BeliefState read** — current view across all axes, with snapshot policy applied. Primary path for Regis and the UI.
   2. **Per-axis read** — raw state of a named axis, no policy applied.
   3. **Composite read** — computed value of a named composite.
-- *L4 access:* L4 reads per-axis state (including the bounded backward window) for forecasting. L4 does not write to L3. When the predictive-prior hook is activated for a given axis, L3 reads L4's forecast as the fusion prior in place of smoothed-recent.
+- *Side-effect writes:* every axis update is persisted to `user_state_estimate` (see *Historical persistence* above).
+- *L4 access:* L4 reads in-memory per-axis state (including the bounded backward window) for short-horizon forecasting, and reads `user_state_estimate` for longer-horizon historical state. L4 does not write to L3. When the predictive-prior hook is activated for a given axis, L3 reads L4's forecast as the fusion prior in place of smoothed-recent.
 
 **Meta-context bias.** Per commitment #14, the active meta-context (`Waking` / `Sleep`) biases L3's fusion at every step. Implementation is faithful: distinct combinator functions per meta-context, each with its own active axes, feature inputs, and math. Dispatch is by context detection.
 
@@ -360,7 +367,6 @@ Sub-contexts (REM, deep, alert, focused, etc.) further specialize the combinator
 **Open questions.**
 - *Per-user calibration of freshness thresholds.* Defaults will be wrong for some users; personalization deferred until N > 1.
 - *Confidence model for composites.* The combination rule (min, product, Bayesian) is deferred. Placeholder: minimum input confidence.
-- *L3 writes to long-term storage.* Cadence and format of historical writes is a separate decision, likely tied to L4's needs.
 - *Concurrency for transactional multi-axis writes.* Per-axis writes are atomic; multi-axis transactional writes aren't supported. Flag if needed.
 - *Per-axis likelihood distributions.* The Gaussian default works for many physiological axes but breaks down for categorical or bimodal ones; per-axis distribution choice is open.
 
@@ -368,17 +374,117 @@ Sub-contexts (REM, deep, alert, focused, etc.) further specialize the combinator
 
 ### Layer 4 — Prediction
 
-*Status: TODO (the next focused conversation after L3).*
+**Job.** Take BeliefState + recent state trajectory from L3 (and historical fused state from `user_state_estimate`) and produce forecasts of future state. Forecasts serve L5's decision math primarily; L3 consumes forecasts as predictive priors when its swappable-prior hook is enabled.
 
-**Job (preview).** Take current `BeliefState` + recent state trajectory and produce forecasts of future state. Per yesterday's design conversation, prediction is **multi-faceted**:
+**Output shape.** Forecasts are distributional, per-axis, on-demand. The contract:
 
-- **Data prediction** — "what will HRV be in 30 min?" (regression on a sensor signal)
-- **Context/state prediction** — "how will the user's overall state evolve — energy, arousal, focus, distress?" (multi-dimensional state trajectory; this is the most product-relevant)
-- **Action prediction** — "will the user issue a command? engage with what?" (event prediction)
+`predict(axis, horizon, action=None) → (distribution, confidence, model_id, inputs_used, log_id)`
 
-Each prediction type has its own model family. L4 will hold a registry of per-state-axis predictors.
+- `axis` — any registered axis (continuous, categorical, or binary-event).
+- `horizon` — a time delta from now (or absolute time).
+- `action` — optional Regis-action descriptor. `None` returns the baseline forecast given current state. A specific action returns the counterfactual conditional on that action. The hook preserves commitment #13's destination from day one without requiring counterfactual machinery in v1.
+- Output — a distribution (mean + variance at minimum; richer forms per-axis) plus provenance.
 
-Per commitment #13, L4 eventually models counterfactuals (*"if Regis acts X, predicted t+1 = ?"*). Meta-context bias selects which prediction models are active.
+Events are modeled as binary axes (e.g., `user_speaking_within_10min`) predicted as probabilities. There is no separate event-prediction interface.
+
+Multi-horizon trajectories are assembled by consumers via repeated single-horizon calls. There is no bundled multi-horizon API.
+
+Per-axis predictors are independent. No joint distributions across axes in v1.
+
+**Predictor registry.** Predictors are organized in a registry keyed by `(axis, meta_context)`. Each axis has distinct predictors per active meta-context (Waking / Sleep), matching commitment #14's faithful per-context pattern. Horizon is a parameter passed to the predictor at call time, not a registry dimension.
+
+Each `(axis, meta_context)` entry declares:
+- The predictor implementation (function or model object).
+- The distribution shape it outputs (continuous Gaussian, categorical probabilities, Bernoulli for binary-events).
+- Historical-data dependencies — which tables, axes, and features the predictor reads.
+- Training procedure — how the predictor consumes prediction errors to update itself.
+- Cold-start fallback — what to return when no training data exists yet (literature-derived default or `PREDICTION_OFFLINE`).
+- Confidence policy — whether very-low-confidence predictions are returned as-is (default) or treated as failure.
+- Training cadence — `periodic`, `event-triggered`, or `continuous` (see *Learning loop*).
+
+Registry population is declarative (matching L3's fusion config pattern). Dispatch at `predict()` time uses the active meta-context to select the correct predictor.
+
+> **If an axis has no registered predictor for the active meta-context, `predict()` returns `PREDICTION_OFFLINE`.**
+
+**Inputs.** L4 reads from several sources, with each query pattern serving a different prediction need:
+
+| Source | Used for |
+|---|---|
+| **L3 in-memory state** (BeliefState + bounded backward window) | Short-horizon predictions (seconds to minutes) — current state + recent trajectory |
+| **`user_state_estimate`** (Postgres) | Long-horizon predictions (hours to weeks) — historical fused state queried directly |
+| **Embeddings + pgvector similarity** | Predictions that benefit from "find similar past contexts" lookup; secondary index, not primary historical store |
+| **Raw event tables** (`sensor_readings`, `chat_messages`, etc.) | Predictors needing sub-axis granularity (e.g., raw HR vs derived arousal); used sparingly |
+| **`prediction_log`** | Read by the training pass for prediction-error learning; not used during prediction itself |
+
+L4 does not write to L3. The only L4 → L3 flow is the predictive-prior hook (L3 reads L4's forecast as a Bayesian prior, opt-in per axis).
+
+**Counterfactual reasoning.** L4 owns the action-conditioning machinery. When `predict()` is called with a specific `action`, the predictor returns the counterfactual forecast — predicted state assuming Regis takes that action. L5 calls `predict()` once per candidate action it wants to compare, then uses the returned distributions to choose.
+
+The full causal-modeling machinery — estimating how Regis's actions actually shape user-state trajectories — accumulates over time as natural experiments and paired action-outcome data accumulate in `prediction_log` and `regis_moments`. This is commitment #13's destination. v1 starts with naïve action-conditioning placeholders (e.g., action shifts predictions by configured constants) and evolves toward proper causal modeling as data permits.
+
+**Failure modes — `PREDICTION_OFFLINE` ≠ low-confidence.** A prediction failure and a low-confidence prediction are different epistemic objects.
+
+`PREDICTION_OFFLINE` is a sentinel value (analogous to L3's `OFFLINE`) returned when prediction is genuinely impossible. L4 returns it when:
+- The predictor crashed during inference (logged as an error).
+- The predictor is in cold-start and the registry entry declares no fallback.
+- L3 inputs required by the predictor are themselves `OFFLINE` and the predictor cannot operate without them.
+- No predictor is registered for the `(axis, meta_context)` pair.
+
+Low-confidence predictions are not failures. A predictor returning a Gaussian with high variance is reporting honest uncertainty; the prediction is returned with its real confidence, and downstream consumers (primarily L5) decide what to do with it. L4 does not artificially hide low-confidence predictions.
+
+Cold-start fallbacks are declared per-predictor in the registry. A predictor with a fallback returns a default (literature-derived prior, baseline) marked `cold_start=true` in the provenance. A predictor without a fallback returns `PREDICTION_OFFLINE`.
+
+**Prediction logging.** Every prediction L4 produces is logged with full provenance: `(axis, horizon, made_at, prediction, action_conditioned_on, model_id, inputs_used, log_id)`. The log persists to `prediction_log` (new Postgres table, owned by L4).
+
+The log is the substrate for the universal prediction-error learning loop: every forecast becomes a training example once its horizon time arrives and actual state is known in `user_state_estimate`. This applies uniformly across all predictions, not just intervention or counterfactual ones. Counterfactual learning is a specialization where the prediction is conditioned on an action and the comparison happens with the action actually taken.
+
+Predictions themselves are computed on demand and not pre-computed or cached. The log is for training, not for serving.
+
+**Learning loop.** L4 predictors update via prediction-error training. The mechanism:
+
+1. A prediction made at time t is logged with full provenance.
+2. At time t + horizon, actual state is recorded in `user_state_estimate` by L3.
+3. The training pass reads logged predictions paired against actual state at horizon times, computes prediction errors, and updates predictor weights.
+
+Training cadence is per-predictor, declared in the registry:
+
+| Cadence | Trigger | Used by |
+|---|---|---|
+| `periodic` | Scheduler tick (default cadence) | Most predictors. Trains on prediction errors accumulated since last training. |
+| `event-triggered` | Specific events (meta-context transitions, full-session completion) | Predictors needing complete-session data (e.g., sleep classifier — trains on completed sleep session when Waking begins). |
+| `continuous` | Every prediction-actual pair as it becomes available | Rare; fast-converging models only. |
+
+Predictors that require stability during active use (long-running continuous-prediction loops with state continuity) flag this in their registry entry; their training is paused while they are in an active loop and resumes when the loop ends.
+
+Updated weights take effect on the next `predict()` call. The `prediction_log` records `model_id` for every prediction so historical analysis can attribute predictions to the model version that produced them.
+
+**Calibration as a first-class concern.** L4 tracks calibration alongside accuracy. A well-calibrated predictor's stated confidence matches its actual hit rate — when it reports 70% confidence, it is right 70% of the time. Calibration is meta-honesty: whether the *uncertainty itself* is truthful.
+
+Predictor training optimizes for calibration alongside (or constrained by) accuracy. Calibration metrics are surfaced per predictor; operators can see which predictors are well-calibrated and which over- or under-claim confidence. For an empath whose downstream layers act on stated confidence, calibration is a contract requirement, not a nice-to-have.
+
+**Contract.**
+- *Inputs:* L3 in-memory state (per-axis values + bounded backward window); `user_state_estimate` (historical fused state); embeddings index (similarity queries); raw event tables (rare, predictor-specific); `prediction_log` (training pass only).
+- *Outputs — primary interface:*
+  ```
+  predict(axis, horizon, action=None) → (distribution, confidence, model_id, inputs_used, log_id)
+  ```
+  Returns `PREDICTION_OFFLINE` sentinel for failure cases (see *Failure modes*).
+- *Side-effect writes:* every prediction is persisted to `prediction_log`. The training pass writes updated predictor weights/parameters to the registry-backing store.
+- *L5 access:* L5 reads predictions via `predict()`. L5 may call `predict()` multiple times per decision (once per candidate action) to compare counterfactual forecasts. L5 does not write to L4.
+- *L3 access (predictive prior hook):* when enabled per-axis, L3 calls `predict(axis, horizon=0, action=None)` to obtain a current-moment distribution it uses as the Bayesian prior in fusion. L3 does not otherwise read L4.
+
+**Meta-context bias.** Per commitment #14, L4 maintains distinct predictors per `(axis, meta_context)` pair. Sleep predictors and Waking predictors are separate code paths with their own historical-data dependencies, math, and training procedures. Dispatch happens at `predict()` time based on the active meta-context.
+
+Predictor training is also meta-context-aware: each context's predictors typically train on data from their own context, often event-triggered by the meta-context transition that ends a complete session. This naturally staggers training — sleep predictors train during waking hours (after a completed sleep session), waking predictors train during sleep (after a completed waking day) — avoiding the case where a predictor is being updated while actively producing live predictions in its own context.
+
+**Evolution.** L4 does not exist today (no predictors are built). Initial implementations come online as their respective input axes become available — biometric-derived predictors as L2 features stabilize, voice-derived predictors as prosody and STT mature, BCI-derived predictors when the BioAmp EXG Pill is online. The sleep classifier (currently at `apps/inference/classifier/`) is the closest existing component and will be wrapped as an L4 predictor as part of migration. Predictive priors for L3 come online once any individual predictor demonstrates better-than-smoothed-recent performance on a per-axis basis. See §11.
+
+**Open questions.**
+- *Predictor model versioning.* Beyond `model_id` in the prediction log, full version-control machinery (rollback, A/B comparison across versions, model lineage tracking) is deferred to implementation.
+- *Counterfactual learning machinery.* v1 uses naïve action-conditioning. True causal modeling — accumulating natural experiments or explicit experimentation to estimate Regis's actual effects on state trajectories — is deferred per commitment #13's destination.
+- *Self-report integration as training signal.* Mood reports, dream recalls, and declared-axis writes are obvious ground-truth sources. The specific pipeline (cadence, weighting vs inferred state, conflict resolution) is deferred.
+- *Multi-user generalization.* Per-user predictors vs shared models with personalization layers. Deferred until N > 1.
+- *Per-axis forecasting math.* Which model class fits which axis (regression, Bayesian, GP, small NN, eventually multimodal transformer). Lives in the subsystem doc (`docs/Architecture/PREDICTION.md` planned), not in the architecture overview.
 
 ---
 
