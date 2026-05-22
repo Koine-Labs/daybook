@@ -173,6 +173,18 @@ L1 captures uniformly; meta-context biases begin at L2.
 
 **Lineage.** Split from the original commitment #13 (2026-05-22) after independent review noted that "Regis as controlled variable" conflated discrete action selection with continuous influence modeling — different architectural bets with different data needs.
 
+### Commitment review process
+
+Commitments are inviolable rules new code must honor, but they are not immutable. They may be **split** (as #13 → #13 + #15 in v0.8), **refined** (clarified scope, sharper rule), or **superseded** (replaced by a different formulation) when:
+
+- A focused design conversation surfaces a flaw or internal contradiction.
+- Independent review (outside readers, post-mortem analysis) demonstrates the commitment misrepresents the system.
+- Implementation experience proves the commitment unworkable in practice.
+
+When a commitment changes, the change is recorded in a **Lineage** note at the bottom of the commitment with date and brief reason. Numbering is preserved — refined commitments keep their number; split commitments retain the original number for the most direct successor and assign new numbers (taken from the end of the list) for new offshoots. Superseded commitments are kept in the doc with a `Superseded by #N` header rather than deleted, so the lineage is traceable.
+
+Retirement (full removal) is rare and explicit — only when a commitment is no longer architecturally meaningful (e.g., it described a transitional state that has been fully replaced). Retired commitments move to a Lineage appendix rather than being deleted.
+
 ---
 
 ## 3. The layered design
@@ -316,9 +328,27 @@ No global tick. Each axis updates independently, with write cadence driven by it
 
 **v2 — Bayesian combiners (per-axis, deferred).** Once per-axis calibration data accumulates (paired observation-and-truth data from self-report, dream recall, or external reference), individual axes can migrate to Bayesian combiners that derive posterior distributions from per-modality likelihood functions. In this regime, confidence becomes posterior variance and uncertainty arithmetic is honest end-to-end. Migration happens **per-axis**, not all-at-once — some axes (those with cleaner ground truth) reach v2 sooner than others. v1 and v2 combiners coexist within the same L3 instance.
 
+**Hierarchical priors for v2.** v2 priors are constructed hierarchically rather than personal-only:
+
+- **Population priors** come from published literature (HRV-arousal correlations, sleep-stage feature distributions from PSG studies, prosody-emotion baselines), validation cohorts, and demographic baselines. These give v2 a sensible starting prior at zero personal data.
+- **Personal priors** come from per-user data accumulated through the prediction-log learning loop, plus pre-existing historical imports (the user's Apple Health history, prior wearable exports). Aakash's 10-year Apple Health import is treated as calibration substrate — not just historical record — for axes where it provides ground-truth signal (sleep stage, HR/HRV-derived arousal, activity-derived energy).
+- **Migration is gradual.** A v2 axis starts predominantly population-priored and shifts toward personal as data accumulates. Mixing weight is per-axis and reflects how informative each source is for that axis.
+
+This is what makes v2 *shippable* rather than aspirational. Without hierarchical priors, v2 requires months of per-user calibration before any axis can migrate. With them, an axis migrates as soon as a credible population prior exists and enough personal data is available to refine it.
+
+**Prior sources by axis (illustrative).** Each axis declares its prior sources in the fusion config:
+
+| Axis | v1 prior source | v2 prior source |
+|---|---|---|
+| `arousal_inferred` | smoothed-recent | HRV literature (population) + Apple Health 10y baseline (personal) |
+| `sleep_stage` | smoothed-recent (categorical) | PSG validation studies (population) + HK sleep labels (personal) |
+| `valence_inferred` | smoothed-recent | prosody-emotion literature (population) + accumulated paired data (personal) |
+| `attention_inferred` | smoothed-recent | BCI alpha-band norms (population) + per-session calibration (personal) |
+| `meta_context` | smoothed-recent (categorical, hysteresis) | sleep + activity feature distributions from prior cohorts (population) + user's own history (personal) |
+
 **Swappable combinator slot.** The architectural shape (per-axis storage, snapshot policy, combinator interface) is invariant across v1 and v2. Migrating an axis from deterministic to Bayesian is a swap of the combinator implementation behind the existing interface — no external contract change for consumers.
 
-**Swappable prior input.** Each combiner accepts a prior. Default: smoothed-recent from the bounded backward window. A future predictive-coding integration — L4's short-horizon forecast as prior — is supported per axis as an opt-in alternative, available once L4 exists and per-axis behavior justifies it.
+**Swappable prior input.** Each combiner accepts a prior. Default in v1: smoothed-recent from the bounded backward window. Default in v2: the hierarchical-prior blend described above. A future predictive-coding integration — L4's short-horizon forecast as prior — is supported per axis as an additional opt-in alternative, available once L4 exists and per-axis behavior justifies it.
 
 **Intent modulation — uniform ingestion, distinct axes.** Per commitment #10, every event carries an intent (Explicit / Continuous) and a modality. L3 honors this without exposing separate ingestion paths.
 
@@ -410,6 +440,7 @@ Migration targets:
 **Open questions.**
 - *Per-user calibration of freshness thresholds.* Defaults will be wrong for some users; personalization deferred until N > 1.
 - *Confidence model for composites.* The combination rule (min, product, Bayesian) is deferred. Placeholder: minimum input confidence.
+- *Declared vs inferred conflict resolution.* When a declared axis (e.g., `arousal_declared` via "I'm fine") contradicts the corresponding inferred axis (e.g., `arousal_inferred` from HRV), the resolution policy lives at L5, not L3. L3 surfaces both faithfully; downstream decides what Regis does with the conflict.
 - *Concurrency for transactional multi-axis writes.* Per-axis writes are atomic; multi-axis transactional writes aren't supported. Flag if needed.
 - *Per-axis likelihood distributions.* The Gaussian default works for many physiological axes but breaks down for categorical or bimodal ones; per-axis distribution choice is open.
 
@@ -511,6 +542,8 @@ Predictor training optimizes for calibration alongside (or constrained by) accur
 - Axes with **estimator-vs-estimator** comparison (calibration is aspirational): inferred axes like `arousal_inferred`, `valence_inferred`. The "actual state at horizon time" comes from L3's fuser, which is itself an estimator. Calibration measured this way tells us whether the predictor matches the fuser — not whether either matches reality.
 
 Per-axis predictor entries declare their ground-truth source and a calibration-meaningfulness flag. Calibration metrics are honest about which axes they can validate genuinely and which are reporting predictor-fuser agreement. Self-report integration (mood reports, dream recalls, explicit declarations) is one of the routes for upgrading aspirational calibration to meaningful calibration over time.
+
+**Calibration state surfaced per axis.** Each predictor reports a `calibration_state` per axis: `cold_start` (no data, using fallback), `calibrating` (data accumulating, predictor learning), `calibrated` (sufficient data, predictor stable within target calibration tolerance). Downstream consumers — especially L6 / UI — read this state to surface honest framing ("Regis is still learning your baseline for [X]") rather than treating predictions as fully reliable. The state is part of the prediction's provenance; it is a system-wide epistemic property, not a product polish concern.
 
 **Contract.**
 - *Inputs:* L3 in-memory state (per-axis values + bounded backward window); `user_state_estimate` (historical fused state); embeddings index (similarity queries); raw event tables (rare, predictor-specific); `prediction_log` (training pass only).
@@ -646,6 +679,31 @@ The single-ear wearable form factor:
 - BCI + audio + camera tether, all on-body
 - Some inference moves on-device (Core ML / ONNX Runtime Mobile)
 - Cloud / Mac / desktop still handles heavy lifting
+
+### What runs where, by layer
+
+The host evolves across phases, but the layered architecture imposes a per-layer compute profile that constrains where each layer can live. Honest mapping:
+
+| Layer | v1 (today, Mac) | v1.5 (Pi takeover) | v3 (wearable) |
+|---|---|---|---|
+| **L1** — edge capture clients | Mac (mic listener, gesture detector); iPhone/Watch via API; HealthKit sync | Pi (mic, gesture, intent edge classifiers); phone via API; HealthKit | On-body devices (BCI, mic, camera, IMU) with on-device intent tagging |
+| **L1** — storage | Neon Postgres (cloud) | Neon Postgres (cloud) | Neon Postgres (cloud) |
+| **L2** — feature extraction | Mac (heartpy, librosa, sentence-transformers, Whisper, YOLO) | TBD — lightweight features (HR/HRV, audio VAD) on Pi; heavier (embeddings, YOLO, full Whisper) on the desktop PC (4080) over local network | Distilled feature extractors on-device for low-bandwidth axes; heavier compute cloud / desktop |
+| **L3** — fusion (in-memory) | Mac (Python process) | TBD — lightweight v1 deterministic combiners on Pi; v2 Bayesian combiners likely too heavy for Pi alone | Distributed: fast axes on-device, slower axes cloud/desktop |
+| **L3** — historical persistence | Neon Postgres (cloud) | Neon Postgres (cloud) | Neon Postgres (cloud) |
+| **L4** — prediction | Not built yet | TBD — training nightly on desktop PC; short-horizon inference likely on Pi (latency-sensitive); long-horizon on desktop | Same shape, more on-device for short horizons |
+| **L5** — decision (bandit + decider) | Mac (`learned_decider.py`) | Pi (small, fits) | On-device (latency-critical) |
+| **L6** — output (TTS, UI) | Mac (Kokoro TTS); iOS / Watch native | Pi (TTS for bone-conduction); iOS / Watch native | On-device (TTS, haptic, visual indicator) |
+| **LLM client** | Mac (Codex via Aakash's ChatGPT login) | Pi or Mac depending on auth/network; cloud LLM is network-dependent regardless | Cloud for general LLM; small distilled models on-device |
+| **Embeddings** | Mac MPS (BGE-M3, 1024-dim) | Desktop PC (4080) over local network | Smaller distilled model on-device, or cloud-served |
+
+**Open architectural questions for v1.5:**
+
+- *Where does L3's v2 Bayesian fusion run?* Per-axis combiners with hierarchical-prior math are not viable on Pi 4 alone for all axes. Likely split: deterministic v1 combiners stay on Pi for hot paths; v2 Bayesian combiners run on the desktop PC and write results back to `user_state_estimate` for the Pi to read.
+- *Where does L4 inference run?* Training is batch (nightly) — desktop PC. Short-horizon inference must avoid a network round-trip on every BeliefState read; either runs on Pi or is cached locally with a TTL.
+- *BeliefState read latency.* When L3's hot paths live on the Pi and L4 inference is local, BeliefState reads are sub-millisecond. When fusion or prediction crosses the network boundary, the latency budget becomes a real product concern (especially for live cue gating during sleep).
+
+Commitment #9 (v1 IS v3 substrate) holds at the **code** level — same modules everywhere — but the **deployment** picture is genuinely distributed by v1.5. The architecture supports this because the layers communicate through Postgres (network-transparent) and through the FastAPI bridge (HTTP-based). Cross-host calls between layers are possible without code rewrites; what changes is where each layer is hosted.
 
 ### Constant across all phases (per commitment #9)
 
