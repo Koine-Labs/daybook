@@ -59,6 +59,8 @@ The inviolable rules of the system. Each commitment exists to protect against a 
 
 **Why.** A single tone makes Regis either too quiet for waking life or too chatty for sleep. Mode is determined by `moment_kind` today; eventually by live `user_state_estimate`. Same identity expressed through context-appropriate posture is honest; flattening to a single tone is not.
 
+**Tension with commitment #6 (acknowledged).** The dual-mode binary is a v1 framing — useful because it ships, matches product intent, and maps cleanly to the two meta-contexts. Real Regis postures over time will be richer than a binary (morning-groggy, post-conflict-careful, social-quiet, walking-curious, alert-focused, anxious-comforting). The destination is **posture as a discovered axis on `regis_self`** — analogous to user-side I-Models, emerging from accumulated context+utterance+outcome data rather than pre-defined enums. Until that discovery substrate is online, the binary is the right shippable surface; afterward, modes become discovered postures and #5 is superseded by #6's pattern applied to Regis.
+
 ### 6. Self-expanding I-Models
 
 **Rule.** I-Models are DISCOVERED from data via unsupervised clustering, not pre-defined. The three top-level categories are containers; sub-I-Models emerge from embeddings. Embeddings are many-to-many with clusters via `embedding_cluster_memberships`.
@@ -85,7 +87,7 @@ The inviolable rules of the system. Each commitment exists to protect against a 
 
 ### 10. Input is classified by intent AND modality
 
-**Rule.** Every input event is classified along two orthogonal axes at the L1 ingestion boundary:
+**Rule.** Every input event is classified along two orthogonal axes at the L1 ingestion boundary. Intent is assigned at the **edge** — by the capture client / channel through which the event arrives (wake-word detector, chat endpoint, gesture recognizer, sensor sync path) — before the event reaches L1 storage. L1 itself does not derive intent from raw signal; it receives pre-tagged events.
 
 **Axis 1 — Intent** (user communication-intent):
 - **Explicit** — user-initiated, communication-intended
@@ -125,11 +127,11 @@ The two axes are orthogonal: the same modality can appear under different intent
 
 **Why.** Direct module imports across language boundaries (Swift → Python) couple platforms together and break independent evolution. The FastAPI bridge enforces a clean contract: backend evolves in Python, clients evolve in their native stack, the API is the only thing that needs versioning. Auth and tunnel concerns are isolated at the bridge.
 
-### 13. Regis is a controlled variable in his own predictive model
+### 13. Outcome-driven action selection
 
-**Rule.** The decision layer eventually models how Regis's actions shape predicted future state — decisions become forward-looking treatment-effect estimation, not just retrospective scoring of "did interjecting help."
+**Rule.** Regis's discrete-action choices (interject vs not, witness vs companion, content kind A vs B) are learned from observed outcomes via online learning. The Thompson contextual bandit (`learned_decider.py`) is the v1 mechanism; the pattern generalizes — any time L5 picks among finite options, the choice is informed by outcome labels accumulated over time. Every fired decision gets persisted with its feature snapshot; outcomes are labeled by nightly jobs; the bandit (or successor) updates from these labels.
 
-**Why.** A purely reactive Regis (responds to events, learns from outcomes) is fundamentally limited — it can never ask "if I do X vs Y, how does the user's trajectory change?" That counterfactual reasoning is the difference between a chatbot and an empathic agent. The Thompson contextual bandit (current state) is the first seed; the destination is a system that models its own influence on predicted state at t+1. Purely reactive architectures are inconsistent with the long-term direction.
+**Why.** Hand-coded action rules don't adapt to the specific user. Outcome-driven selection lets the system improve at picking the right discrete action without explicit retuning — and provides the substrate of paired (action, outcome) data that the modeled-influence commitment (#15) eventually consumes.
 
 ### 14. The pipeline operates within a meta-context that biases every layer
 
@@ -150,6 +152,8 @@ Every layer's interpretation is conditioned on the active `(meta, sub)` context:
 
 L1 captures uniformly; meta-context biases begin at L2.
 
+**Canonical writer.** The active `meta_context` is itself a categorical axis in L3 (see §3 Layer 3 / Meta-context bias). L3 fuses it from sleep-classifier output, activity signals, and temporal context, and applies hysteresis to avoid rapid flipping. Every other layer (and L3's own per-axis fusers) reads `meta_context` from L3. There is one canonical writer and one canonical read point — no implicit chicken-and-egg.
+
 **Why.** Human cognition doesn't process inputs uniformly across all states. Background hum during deep sleep doesn't trigger attention; the same hum during alert work might. A system that flattens this — treating sleep as just another state dimension — fails to mirror how perception actually works. Meta-context as a cross-layer bias means every component naturally asks "how do I behave differently in this mode?" — and Regis's voice, perception, and decisions stay coherent across phases of the user's day.
 
 **Relationship to existing commitments.**
@@ -158,6 +162,16 @@ L1 captures uniformly; meta-context biases begin at L2.
 - Commitment #4 (Three I-Models) — the `regis_self` model's mode field is one expression of meta-context propagation.
 
 **Lineage.** Added 2026-05-21 PM. Identified during §3 layered-design conversation when the user observed that sleep isn't a state variable within the pipeline — it's a meta-context that biases the entire pipeline.
+
+### 15. Regis as a modeled controlled variable in state prediction
+
+**Rule.** Beyond outcome-driven action selection (commitment #13), the system eventually models how Regis's actions causally shape user-state trajectories — "if Regis says X vs Y vs stays silent, predicted state at t+1 differs by Z." This is causal inference / treatment-effect estimation territory, distinct from action selection. The L4 `predict(axis, horizon, action)` interface preserves this destination from day one via the optional `action` parameter; v1 implementations may return naïve action-conditioning placeholders, evolving toward proper causal modeling as data accumulates.
+
+**Why.** An empath that only reacts to past outcomes (commitment #13) can never reason "if I do this differently, the user's trajectory changes." That counterfactual reasoning is the difference between learning-from-outcomes and modeling-influence. Conflating it with #13's action selection obscures the architectural choice: action selection works at N=1 with light data; influence modeling needs accumulated paired (action → state-change) data across many similar contexts, or explicit experimentation, or a causal model. Different data requirements, different evaluation strategies, different failure modes — splitting the commitment makes that explicit.
+
+**Relationship.** Commitment #13 produces the substrate (paired action-outcome data from every fired decision); commitment #15 consumes it (estimating Regis's actual influence on state). The two compose: outcome-driven selection improves which actions Regis takes; influence modeling improves how Regis reasons about what those actions will do.
+
+**Lineage.** Split from the original commitment #13 (2026-05-22) after independent review noted that "Regis as controlled variable" conflated discrete action selection with continuous influence modeling — different architectural bets with different data needs.
 
 ---
 
@@ -188,9 +202,21 @@ For each layer below: **Job** · **Contract** · **Meta-context bias** · **Evol
 
 ### Layer 1 — Sensors
 
-**Job.** Ingest raw input from sources; persist as discrete events tagged with `(intent, modality)`. No interpretation — only schema normalization.
+**Job.** Ingest events from intent-tagged input channels; persist as discrete rows. Intent tagging happens at the edge (wake-word detectors, chat endpoints, gesture recognizers, sensor sync paths) before events reach L1 storage. L1 itself performs schema normalization and persistence; it does not derive intent from raw signal, and it does not perform per-modality feature extraction (that is L2's job).
 
-**Two-axis classification at the boundary (per commitment #10):**
+**Edge intent classification.** Intent (Explicit vs Continuous) is determined by the channel through which an event arrives, not by post-hoc analysis at storage time. Each input channel has a known intent declared by its capture client:
+
+- chat API → explicit text
+- wake-word-gated voice → explicit speech
+- ambient mic listener → continuous voice (prosody, environmental audio)
+- HealthKit sync → continuous biometric
+- deliberate gesture detector → explicit gesture
+- ambient camera → continuous vision (scene, presence)
+- involuntary biometric (blink, jaw clench, EMG) → continuous gesture
+
+The detectors that route signals into these channels — wake-word models, VAD/diarization, gesture classifiers, etc. — live at the **edge** (in capture clients, mic listeners, gesture recognizers). They are part of the L1 ingestion path but logically distinct from L1 storage. L1 receives pre-tagged events; it does not re-classify them.
+
+**Two-axis classification (per commitment #10):**
 
 Every event has both an intent and a modality:
 
@@ -204,10 +230,10 @@ Storage: intent determines the table; modality determines the row's `kind` (or c
 - **Continuous** → `sensor_readings` (polymorphic via `kind`: `heart_rate`, `hrv`, `audio_context`, future `eeg_packet`, etc.)
 
 **Contract.**
-- *Inputs:* hardware/user events (HealthKit deltas, mic frames, typed text, future BCI samples, etc.)
-- *Outputs:* persistent rows in event tables, each implicitly tagged with `(intent, modality)` by destination table + `kind`
+- *Inputs:* hardware/user events from edge capture clients, each arriving pre-tagged with `(intent, modality)` by the channel they came through.
+- *Outputs:* persistent rows in event tables, each carrying `(intent, modality)` via destination table + `kind`.
 - *Cadence:* per-event. No fixed clock; driven by source.
-- *Interpretation:* minimal — schema normalization only. Modality-specific feature extraction (Whisper STT, prosody features) happens at L2.
+- *Interpretation:* schema normalization and persistence only. Modality-specific feature extraction (Whisper STT on explicit speech, prosody features on continuous audio, etc.) happens at L2.
 
 **Meta-context bias.** L1 captures uniformly regardless of meta-context. Sleep vs Waking biases begin at L2. (L1 may eventually throttle explicit-intent capture during deep sleep — there's no reason to run STT continuously when the user is asleep — but this is an efficiency optimization, not a behavioral change.)
 
@@ -271,7 +297,7 @@ Sub-context further refines: **REM** elevates dream-recall preparation (sub-voca
 
 It holds the most current, best-understood picture of the user — with honest representation, per dimension, of how current that picture actually is.
 
-**State substrate — per-axis storage.** L3 holds state as a registry of independent axes. Each axis represents one dimension of the user (arousal, valence, focus, distress, social orientation, sleep_stage, etc.) and updates at its own cadence. For each axis, L3 stores:
+**State substrate — per-axis storage.** L3 holds state as a registry of independent axes. Each axis represents one dimension of the user (arousal, valence, focus, distress, social orientation, sleep_stage, `meta_context`, etc.) and updates at its own cadence. For each axis, L3 stores:
 
 | Field | Meaning |
 |---|---|
@@ -284,11 +310,15 @@ No global tick. Each axis updates independently, with write cadence driven by it
 
 > **Per-axis state is the truth-of-record.** Everything else L3 exposes — the BeliefState snapshot, composites, momentum — is derived from it.
 
-**Fusion mechanism — Bayesian, with swappable prior.** L3 produces axis values by Bayesian combination of incoming FeatureSnapshots with a prior. Each modality contributes a likelihood; the fuser combines the prior with active likelihoods to produce a posterior. The posterior's mean is the new axis value; the posterior's variance becomes the new confidence.
+**Fusion mechanism — deterministic combiners (v1), Bayesian evolution (v2).** L3 produces axis values via per-axis combiners. Each axis has a registered combiner that reads its input FeatureSnapshots and produces a value plus a confidence number.
 
-Likelihoods are Gaussian by default. Per-axis combinator instances may use other distributions where the axis's nature requires it (categorical for sleep_stage, etc.); the architecture supports per-axis math.
+**v1 — deterministic combiners with declared confidence.** Each combiner is an explicit rule: weighted aggregation of inputs with declared weights, threshold logic, or simple state machines for categorical axes. Confidence is a *declared property of the rule under varying input conditions* — for example, "confidence 0.7 if all inputs fresh and within expected ranges; 0.4 if one input missing; 0.2 if inputs disagree beyond threshold." Confidence is not derived from probability theory in v1; it is a calibration the rule author specifies. Downstream consumers should read v1 confidence as a hand-set quality signal, not a posterior probability.
 
-The prior is a swappable input. Default: smoothed-recent from the bounded backward window. The fuser interface accepts an alternative prior source per axis — reserved for the predictive-coding loop, where L4's short-horizon forecast may replace smoothed-recent as the prior once L4 exists and per-axis behavior justifies it.
+**v2 — Bayesian combiners (per-axis, deferred).** Once per-axis calibration data accumulates (paired observation-and-truth data from self-report, dream recall, or external reference), individual axes can migrate to Bayesian combiners that derive posterior distributions from per-modality likelihood functions. In this regime, confidence becomes posterior variance and uncertainty arithmetic is honest end-to-end. Migration happens **per-axis**, not all-at-once — some axes (those with cleaner ground truth) reach v2 sooner than others. v1 and v2 combiners coexist within the same L3 instance.
+
+**Swappable combinator slot.** The architectural shape (per-axis storage, snapshot policy, combinator interface) is invariant across v1 and v2. Migrating an axis from deterministic to Bayesian is a swap of the combinator implementation behind the existing interface — no external contract change for consumers.
+
+**Swappable prior input.** Each combiner accepts a prior. Default: smoothed-recent from the bounded backward window. A future predictive-coding integration — L4's short-horizon forecast as prior — is supported per axis as an opt-in alternative, available once L4 exists and per-axis behavior justifies it.
 
 **Intent modulation — uniform ingestion, distinct axes.** Per commitment #10, every event carries an intent (Explicit / Continuous) and a modality. L3 honors this without exposing separate ingestion paths.
 
@@ -327,7 +357,7 @@ A state detected *directly* by an L2 process (e.g., a model trained on dissociat
 
 `OFFLINE` is a value type. Each axis holds either `(value, confidence, timestamp, source)` or the sentinel `OFFLINE`. L3 marks an axis OFFLINE when L2 sends an explicit "modality offline" signal, when L2's heartbeat stops arriving, or when L3 times out (no writes for N times the expected cadence).
 
-When an input modality is OFFLINE, its likelihood is not included in the Bayesian product for any axis it contributes to. The posterior is computed from the prior and remaining modalities; the resulting confidence reflects the smaller input set.
+When an input modality is OFFLINE, the combiner excludes it from the axis computation. In v1 (deterministic combiners), this means the rule operates on remaining inputs with a declared confidence-reduction for the missing modality. In v2 (Bayesian combiners), the OFFLINE modality's likelihood is omitted from the posterior product, and confidence narrows naturally with fewer informative inputs.
 
 On reconnection, L3 cold-starts the axis — the fresh value replaces OFFLINE without interpolation or gap-filling. L3 makes no claims about what happened during the gap, regardless of gap duration.
 
@@ -353,16 +383,29 @@ OFFLINE values persist as such — the historical record honestly reflects when 
 - *Side-effect writes:* every axis update is persisted to `user_state_estimate` (see *Historical persistence* above).
 - *L4 access:* L4 reads in-memory per-axis state (including the bounded backward window) for short-horizon forecasting, and reads `user_state_estimate` for longer-horizon historical state. L4 does not write to L3. When the predictive-prior hook is activated for a given axis, L3 reads L4's forecast as the fusion prior in place of smoothed-recent.
 
-**Meta-context bias.** Per commitment #14, the active meta-context (`Waking` / `Sleep`) biases L3's fusion at every step. Implementation is faithful: distinct combinator functions per meta-context, each with its own active axes, feature inputs, and math. Dispatch is by context detection.
+**Meta-context bias.** Per commitment #14, the active meta-context (`Waking` / `Sleep`) biases L3's fusion at every step.
+
+**`meta_context` is itself a categorical axis in L3** — fused from sleep-classifier output, activity signals, and temporal context. L3 owns its production; every other layer (and L3's own per-axis fusers when biasing themselves) reads `meta_context` from L3's per-axis state. This closes the loop: there is one canonical writer for "what mode is the user in," and one canonical read point.
+
+L3's meta-context fuser runs first in each fusion cycle; other axes' fusers read the current `meta_context` value to select their per-context combinator.
+
+**Hysteresis on transitions.** `meta_context` does not flip on single observations. The fuser requires sustained signal change (window-and-threshold per direction — falling asleep commits more slowly than waking) to avoid rapid mode-switching during boundary periods (drowsy-but-not-asleep, awake-but-still-in-bed). Boundary periods themselves can be represented as sub-contexts.
+
+Implementation is **faithful per-context**: distinct combinator functions per `meta_context` value, each with its own active axes, feature inputs, and math. Dispatch is by `meta_context` axis read.
 
 At meta-context transitions:
 - Axes exclusive to the previous context freeze at last value, then become stale per snapshot policy.
 - Axes exclusive to the new context come online cold; first values arrive when relevant signals appear.
 - Shared axes continue under the new context's fuser.
 
-Sub-contexts (REM, deep, alert, focused, etc.) further specialize the combinator's behavior within a meta-context.
+Sub-contexts (REM, deep, alert, focused, awake-in-bed, etc.) further specialize the combinator's behavior within a meta-context.
 
-**Evolution.** The architectural pattern absorbs new modalities and axes by registering them in the fusion config; the FeatureSnapshot ingestion path and per-axis storage shape are invariant. Migration target: replace the body-bridge L1→L3 shortcut (raw HR/HRV → user_state_estimate) with proper L2 features (heartpy/neurokit2 → FeatureSnapshot) consumed by L3's biometric likelihoods. See §11. Predictive priors per axis (L4 forecasts as Bayesian priors) become available once L4 exists and its forecasts demonstrably beat smoothed-recent.
+**Evolution.** The architectural pattern absorbs new modalities and axes by registering them in the fusion config; the FeatureSnapshot ingestion path and per-axis storage shape are invariant.
+
+Migration targets:
+- Replace the body-bridge L1→L3 shortcut (raw HR/HRV → `user_state_estimate`) with proper L2 features (heartpy/neurokit2 → FeatureSnapshot) consumed by L3's biometric combiners. See §11.
+- Per-axis migration from deterministic v1 combiners to Bayesian v2 combiners as calibration data accumulates per axis (paired observation-and-truth data from self-report, dream recall, or external reference).
+- Predictive priors per axis (L4 forecasts replacing smoothed-recent as combiner priors) become available once L4 exists and its forecasts demonstrably beat smoothed-recent.
 
 **Open questions.**
 - *Per-user calibration of freshness thresholds.* Defaults will be wrong for some users; personalization deferred until N > 1.
@@ -382,7 +425,7 @@ Sub-contexts (REM, deep, alert, focused, etc.) further specialize the combinator
 
 - `axis` — any registered axis (continuous, categorical, or binary-event).
 - `horizon` — a time delta from now (or absolute time).
-- `action` — optional Regis-action descriptor. `None` returns the baseline forecast given current state. A specific action returns the counterfactual conditional on that action. The hook preserves commitment #13's destination from day one without requiring counterfactual machinery in v1.
+- `action` — optional Regis-action descriptor. `None` returns the baseline forecast given current state. A specific action returns the counterfactual conditional on that action. The hook preserves commitment #15's destination (modeled influence on state) from day one without requiring causal-modeling machinery in v1.
 - Output — a distribution (mean + variance at minimum; richer forms per-axis) plus provenance.
 
 Events are modeled as binary axes (e.g., `user_speaking_within_10min`) predicted as probabilities. There is no separate event-prediction interface.
@@ -420,7 +463,7 @@ L4 does not write to L3. The only L4 → L3 flow is the predictive-prior hook (L
 
 **Counterfactual reasoning.** L4 owns the action-conditioning machinery. When `predict()` is called with a specific `action`, the predictor returns the counterfactual forecast — predicted state assuming Regis takes that action. L5 calls `predict()` once per candidate action it wants to compare, then uses the returned distributions to choose.
 
-The full causal-modeling machinery — estimating how Regis's actions actually shape user-state trajectories — accumulates over time as natural experiments and paired action-outcome data accumulate in `prediction_log` and `regis_moments`. This is commitment #13's destination. v1 starts with naïve action-conditioning placeholders (e.g., action shifts predictions by configured constants) and evolves toward proper causal modeling as data permits.
+The full causal-modeling machinery — estimating how Regis's actions actually shape user-state trajectories — accumulates over time as natural experiments and paired action-outcome data accumulate in `prediction_log` and `regis_moments`. This is commitment #15's destination. v1 starts with naïve action-conditioning placeholders (e.g., action shifts predictions by configured constants) and evolves toward proper causal modeling as data permits. The naïve-placeholder vs causal-model distinction is surfaced in the prediction's provenance so consumers can tell whether they are reading a real counterfactual or a hand-set shift.
 
 **Failure modes — `PREDICTION_OFFLINE` ≠ low-confidence.** A prediction failure and a low-confidence prediction are different epistemic objects.
 
@@ -462,6 +505,13 @@ Updated weights take effect on the next `predict()` call. The `prediction_log` r
 
 Predictor training optimizes for calibration alongside (or constrained by) accuracy. Calibration metrics are surfaced per predictor; operators can see which predictors are well-calibrated and which over- or under-claim confidence. For an empath whose downstream layers act on stated confidence, calibration is a contract requirement, not a nice-to-have.
 
+**Ground truth varies by axis.** Calibration requires comparing predicted distributions against actual outcomes — and "actual" is not uniformly available across axes:
+
+- Axes with **real ground truth** (calibration is meaningful): `sleep_stage` (classifier output validated against Apple HK labels and eventually polysomnography); raw biometric values (HR, HRV — instrument-measured); declared axes (`arousal_declared` is itself the ground truth when the user states it); event axes with observable outcomes (`user_speaking_within_10min` resolves on observation).
+- Axes with **estimator-vs-estimator** comparison (calibration is aspirational): inferred axes like `arousal_inferred`, `valence_inferred`. The "actual state at horizon time" comes from L3's fuser, which is itself an estimator. Calibration measured this way tells us whether the predictor matches the fuser — not whether either matches reality.
+
+Per-axis predictor entries declare their ground-truth source and a calibration-meaningfulness flag. Calibration metrics are honest about which axes they can validate genuinely and which are reporting predictor-fuser agreement. Self-report integration (mood reports, dream recalls, explicit declarations) is one of the routes for upgrading aspirational calibration to meaningful calibration over time.
+
 **Contract.**
 - *Inputs:* L3 in-memory state (per-axis values + bounded backward window); `user_state_estimate` (historical fused state); embeddings index (similarity queries); raw event tables (rare, predictor-specific); `prediction_log` (training pass only).
 - *Outputs — primary interface:*
@@ -481,7 +531,7 @@ Predictor training is also meta-context-aware: each context's predictors typical
 
 **Open questions.**
 - *Predictor model versioning.* Beyond `model_id` in the prediction log, full version-control machinery (rollback, A/B comparison across versions, model lineage tracking) is deferred to implementation.
-- *Counterfactual learning machinery.* v1 uses naïve action-conditioning. True causal modeling — accumulating natural experiments or explicit experimentation to estimate Regis's actual effects on state trajectories — is deferred per commitment #13's destination.
+- *Counterfactual learning machinery.* v1 uses naïve action-conditioning. True causal modeling — accumulating natural experiments or explicit experimentation to estimate Regis's actual effects on state trajectories — is deferred per commitment #15.
 - *Self-report integration as training signal.* Mood reports, dream recalls, and declared-axis writes are obvious ground-truth sources. The specific pipeline (cadence, weighting vs inferred state, conflict resolution) is deferred.
 - *Multi-user generalization.* Per-user predictors vs shared models with personalization layers. Deferred until N > 1.
 - *Per-axis forecasting math.* Which model class fits which axis (regression, Bayesian, GP, small NN, eventually multimodal transformer). Lives in the subsystem doc (`docs/Architecture/PREDICTION.md` planned), not in the architecture overview.
@@ -494,7 +544,7 @@ Predictor training is also meta-context-aware: each context's predictors typical
 
 **Job (preview).** Take predictions + user-outcome history + current explicit input + meta-context and decide what action (if any) Regis takes. Routes by **intent** (per commitment #10) — explicit events dispatch as commands, continuous state updates feed posture decisions (Witness vs Companion mode per commitment #5).
 
-Components today: the Thompson contextual bandit (`learned_decider.py`) is the seed. Eventually closes the treatment-effect estimation loop from commitment #13.
+Components today: the Thompson contextual bandit (`learned_decider.py`) implements commitment #13's outcome-driven action selection. The treatment-effect estimation loop (commitment #15) consumes its accumulated paired data over time.
 
 ---
 
@@ -620,6 +670,38 @@ Same code path. v1 prototype IS the v3 substrate. The host changes; the architec
 
 Things that touch multiple layers and don't fit cleanly into any one.
 
+### Privacy, consent, and audit trail
+
+Daybook's product layering (consumer empath → clinical-grade extension → wearable form factor, per `POSITIONING.md`) requires privacy and consent treatment to be load-bearing in the architecture, not retrofitted. Privacy/consent constrains every storage write, every retrieval read, every cross-process boundary. The commitments below apply whether or not a clinical extension is active — they are foundational, not optional.
+
+**Per-row consent metadata.** Every entity that holds user-derived information carries consent metadata. Minimum schema: `(consent_scope, consent_granted_at, consent_grantor)` per row.
+
+- `consent_scope` — what the user has agreed to (e.g., `personal_use`, `share_with_therapist`, `share_for_research`, `model_training`).
+- `consent_granted_at` — timestamp of the active grant.
+- `consent_grantor` — typically the user themselves; may be a delegate (e.g., a clinician acting under documented authority).
+
+Reads filter by current consent scope. Writes capture the active consent context. Consent can be tightened (revoked) but never silently broadened.
+
+**User-driven deletion.** The user can request deletion at three granularities: per-row (specific events), per-time-range (all data within a window), per-modality / per-axis (all data of a kind). Deletion is soft-tombstoned in primary storage with a hard-delete grace window, and propagated to embeddings, clustering memberships, and any derived indexes. Composite axes recompute correctly because they have no stored values.
+
+**Sensitive-content tagging.** Content sensitive by category (trauma narratives, dream content involving abuse, clinical observations about suicidal ideation, identity-disclosure content) is tagged at ingestion — by simple heuristics in L1/L2 or by explicit user marking. Downstream layers respect the tags: sensitive content is excluded from default retrieval indexes, not sent to non-private LLM endpoints, and treated with elevated logging.
+
+**Therapist audit trail** (clinical extension). When a credentialed therapist accesses user data, every read is logged with `(therapist_id, accessed_at, scope, purpose_code)`. The audit log is itself user-readable — the user can see what their therapist saw, when, and why.
+
+**Architectural implications across the layers.**
+- L1 polymorphic tables (`sensor_readings`, `chat_messages`, `user_actions`, `regis_moments`, `dream_recalls`) carry consent columns.
+- L2 feature extraction inherits sensitivity tags from L1 inputs; derived features inherit by default.
+- L3 reads filter by active scope; the BeliefState surfaces only consent-allowed axes for a given consumer.
+- L4 training pass honors consent scopes — predictors operating under `model_training` scope skip rows with `personal_use_only` consent.
+- L6 output channels (TTS, UI) honor sensitivity tags in what they surface to whom.
+- The FastAPI bridge (commitment #12) enforces consent at the request boundary, alongside auth.
+
+**Open questions** (deferred to implementation / clinical conversations):
+- Specific consent UI — how the user grants and revokes consent in the iOS app.
+- HIPAA-grade encryption-at-rest — required for the clinical tier; v1 prototype runs on personal hardware.
+- Data residency — Neon (current cloud Postgres) is US-hosted; clinical contexts may require region-specific hosting.
+- Consent inheritance during clustering — what scope a discovered I-Model carries if its constituent embeddings span multiple scopes.
+
 ### The nightly scheduler
 
 `apps/daybook.py` runs an `APScheduler` BackgroundScheduler with 11 jobs:
@@ -638,7 +720,18 @@ Things that touch multiple layers and don't fit cleanly into any one.
 | Every 25 min | `inner_pulse` | Smart-gated proactive thought loop |
 | Every 5 min | `body_state_estimate` | Live biometric → state translator (body-bridge) |
 
-Jobs can fail independently without bringing the daemon down. The scheduler runs as part of the same Python process as the mic listener when both are active via `python -m daybook`.
+Jobs can fail independently without bringing the daemon down (APScheduler isolates failures per-job). The scheduler runs as part of the same Python process as the mic listener when both are active via `python -m daybook`.
+
+**Concurrency and failure semantics.** Several jobs have implicit data dependencies: `trait_decay` (04:30) reads cluster activations updated by `nightly_clustering` (04:00); `cluster_dormancy_sweep` (04:45) reads activations updated by clustering and trait passes; `refresh_regis_self` (05:30) reads observations updated by `nrem_consolidation` (03:00). The scheduler does not currently enforce these dependencies — jobs fire at declared times regardless of whether their predecessors completed.
+
+Architectural commitments for the ideal:
+
+- **Idempotency** — every job is written to be safely re-runnable. Existing pattern: observation distillation keyed by `(date, source_id)` skips already-processed rows.
+- **Declared dependencies** — jobs declare what they depend on; the scheduler enforces ordering or defers dependent jobs if their predecessors haven't completed.
+- **Retry semantics** — transient errors retry with backoff; permanent errors log and surface alerts.
+- **Partial-failure recovery** — long-running jobs (clustering especially) checkpoint progress so a mid-run failure doesn't restart from zero.
+
+Today, idempotency is partially in place; dependency enforcement, retry layer, and checkpointing are not. See §11.
 
 ### The interject decider
 
@@ -717,6 +810,7 @@ This index is the **bridge between ARCHITECTURE.md (ideal) and STATUS.md (realit
 ### Layer-implementation gaps
 
 - **L2 not centralized:** signal processing scattered across modality-specific modules (mic listener for prosody, `embeddings/` for text, `classifier/` for biometrics). Ideal: `apps/inference/features/` as the single home with per-modality submodules.
+- **`feature_engine.py` is a legacy L2 stab:** `apps/inference/feature_engine.py` (+ `main.py` import + `tests/test_feature_engine.py`) implements real-time biometric/audio feature extraction from the prior FastAPI-inference-server era. Not wired into the current pipeline (chat/wisp/recall/daybook.py don't import it). Decision pending: fold its logic into the eventual `apps/inference/features/` reorganization, or retire it. Until then, do not wire new code against it.
 - **Body-bridge L1→L3 shortcut:** body-bridge reads raw HR/HRV from L1 and applies heuristics directly. Ideal: formal L2 features (heartpy / neurokit2) producing FeatureSnapshot → L3 fusion.
 - **Fusion engine doesn't exist as a separate concept:** today the substrate reads scattered data + body-bridge is the only synthesizer. Ideal: dedicated L3 fusion engine that combines all modality features into a unified `BeliefState`.
 - **L4 (Prediction) has no components:** zero predictive heads exist. Ideal: per-state-axis predictors (arousal at t+30min, REM probability, sleep onset, etc.).
@@ -733,7 +827,7 @@ This index is the **bridge between ARCHITECTURE.md (ideal) and STATUS.md (realit
 
 - **Online learning loops:** only the Thompson bandit learns from data; no other components improve over time. Ideal: every predictor + decider learns from outcomes.
 - **No labeled training data pipeline:** future trained models require labels; no auto-labeling infrastructure exists. Ideal: multi-modal-LLM auto-labeling pass + self-report capture.
-- **Treatment-effect estimation (commitment #13):** bandit is the seed but counterfactual reasoning ("if Regis does X, predicted t+1 = ?") isn't implemented yet. Ideal: forward-looking decision models.
+- **Treatment-effect estimation (commitment #15):** bandit produces paired (action, outcome) data but counterfactual reasoning ("if Regis does X, predicted t+1 = ?") isn't implemented yet. Ideal: causal model consumed by L4's `predict(axis, horizon, action)` interface.
 
 ### Documentation gaps
 
