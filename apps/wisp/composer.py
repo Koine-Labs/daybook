@@ -54,8 +54,49 @@ class SubstrateContext:
         return {"_stub": True, "_reason": "substrate rebuild pending Phase 6"}
 
 
+def _read_recent_observations(user_id: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Most recent regis_observations for this user."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT observation, observed_at
+            FROM regis_observations
+            WHERE user_id = %s
+            ORDER BY observed_at DESC
+            LIMIT %s
+            """,
+            (user_id, limit),
+        )
+        rows = cur.fetchall()
+    return [{"content": r[0], "observed_at": r[1].isoformat() if r[1] else None} for r in rows]
+
+
+def _read_current_traits(user_id: str) -> dict[str, float]:
+    """Latest value per Regis trait from regis_trait_history."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT ON (trait_name) trait_name, value
+            FROM regis_trait_history
+            WHERE user_id = %s
+            ORDER BY trait_name, changed_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return {r[0]: float(r[1]) for r in rows}
+
+
 def gather_substrate(*, user_id: str, query_embedding: Any = None) -> SubstrateContext:  # noqa: ARG001
-    return SubstrateContext()
+    """Assemble the context Regis composes from: observations, traits, current state.
+
+    I-Model fields stay at empty defaults until self-expansion (#6) lands.
+    """
+    return SubstrateContext(
+        relevant_observations=_read_recent_observations(user_id, 5),
+        regis_traits=_read_current_traits(user_id),
+        current_user_state=_read_latest_state(user_id),
+    )
 
 
 def embed_regis_moment(user_id: str, moment_id: str, text: str) -> None:  # noqa: ARG001
@@ -355,11 +396,15 @@ def _build_user_prompt(
             )
 
     observations = substrate.relevant_observations
-    notable_obs = [o for o in observations if "observation" in o]
-    if notable_obs:
+    if observations:
         parts.extend(["", "# Things you've previously noticed about this person"])
-        for o in notable_obs:
-            parts.append(f"  (sim {o['similarity']}) {o['observation']}")
+        for o in observations:
+            # Support both retrieval format (observation + similarity) and
+            # direct DB read format (content + observed_at).
+            if "observation" in o:
+                parts.append(f"  (sim {o['similarity']}) {o['observation']}")
+            elif "content" in o:
+                parts.append(f"  {o['content']}")
 
     if retrieved:
         retrieved_block = json.dumps(retrieved, indent=2)
