@@ -170,8 +170,6 @@ def main() -> int:
             session_id = body["sessions"][0]["id"]
             code, sbody = _request("GET", f"{base}/sessions/{session_id}")
             _print_response(f"GET /sessions/{session_id}", code, sbody)
-            code, sbody = _request("GET", f"{base}/sessions/{session_id}/state")
-            _print_response(f"GET /sessions/{session_id}/state", code, sbody)
 
         code, body = _request("GET", f"{base}/observations?limit=5")
         _print_response("GET /observations", code, body)

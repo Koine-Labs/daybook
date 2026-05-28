@@ -27,6 +27,7 @@ import type {
   IModelID,
   IModelNoveltyLogID,
   InterjectDecisionID,
+  IModelID,
   IntentID,
   MoodReportID,
   RegisMomentID,
@@ -443,9 +444,11 @@ export interface RegisTrait {
 }
 
 /**
- * Continuous empathic read of the user, produced by RealtimeClassifier every
- * 30s during a session. v1 fills stage_proba; v1.5+ (with EEG) fills
- * arousal/valence/presence.
+ * Continuous empathic read of the user — one row PER AXIS (reshaped from the
+ * old wide-row shape in migration 0009). Each row carries a single axis's
+ * estimate at a point in time. L3 fusion and the sleep classifier each write
+ * rows for the axes they own; readers take the latest row per axis
+ * (DISTINCT ON (axis) ... ORDER BY axis, timestamp DESC).
  *
  * This is the substrate Regis queries to "know" what the user is feeling
  * without being told.
@@ -453,22 +456,21 @@ export interface RegisTrait {
 export interface UserStateEstimate {
   id: UserStateEstimateID;
   userId: UserID;
-  sessionId: SleepSessionID | null;
-  estimatedAt: ISODateTime;
-  /** Probabilities over sleep stages. Binary REM: {"REM": 0.7}. Multi-class: full dict. */
-  stageProba: Record<string, number> | null;
-  /** -1 (deeply calm) to 1 (highly activated). Null until EEG online. */
-  arousal: number | null;
-  /** -1 (negative affect) to 1 (positive). Null until EEG online. */
-  valence: number | null;
-  /** 0.0 to 1.0 — how strongly the user is "in" the estimated state. */
-  presence: number | null;
-  /** 0.0 to 1.0 — model's confidence in the estimate as a whole. */
+  /** e.g. 'sleep_stage', 'arousal_inferred', 'meta_context', 'state_declared', 'cognitive_load'. */
+  axis: string;
+  timestamp: ISODateTime;
+  /** Polymorphic per-axis value: {"category": "focused"} | {"scalar": 0.55} | {"label": "REM", "prob": 0.71}. */
+  value: Record<string, unknown>;
+  /** 0.0 to 1.0 — model's confidence in this axis estimate. */
   confidence: number | null;
-  /** Which model produced this estimate: 'realtime_v1', 'realtime_v1_5_eeg', etc. */
-  source: string;
-  /** Snapshot of feature vector for debugging. Stripped from production reads. */
-  features: Record<string, number> | null;
+  /** Which producer wrote this: 'L3.fusion.meta_context', 'classifier.binary_rem', etc. */
+  source: string | null;
+  /** Denormalized active meta-context: 'waking', 'sleep', or sub-context like 'waking/focused'. */
+  metaContext: string | null;
+  /** Commitment #1 — soft I-Model reference. */
+  iModelId: IModelID | null;
+  sessionId: SleepSessionID | null;
+  createdAt: ISODateTime;
 }
 
 // =============================================================================
