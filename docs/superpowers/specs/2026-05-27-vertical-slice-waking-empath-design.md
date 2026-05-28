@@ -283,15 +283,23 @@ Exit criteria:
 
 **Goal:** Mic doesn't just listen for wake-word — it produces semantic packets continuously. (Stretch) EEG feeding cognitive_load axis.
 
+**Realigned 2026-05-28 (post-Week-2).** Core building blocks are re-pullable from `v0-pre-rebuild` `apps/inference/audio_context/` (`vad.py` Silero, `diarization.py` resemblyzer+sklearn clustering, `prosody.py` librosa, `processor.py`, `persistor.py`) — but the tag does UNSUPERVISED clustering ("speaker 0/1"), persists one flat `audio_segment` kind, and has no `consent_scope`. Week 3 adds: speaker *identity* (enroll Aakash → classify), a differentiated packet taxonomy, the Privacy Policy #1 state machine, the `audio_social_context` axis, YAMNet ambient, and folds continuous listening into ONE unified always-on mic loop in `apps/voice/loop.py` (shared with the Week 2 wake-word path — no two-process mic contention). Deps: `silero-vad`, `resemblyzer`, `librosa` (new); `torch`, `scikit-learn` (present); `tensorflow-hub`+`tensorflow` for YAMNet, isolated as a lazy backend so its import can't break the core pipeline.
+
+Packet taxonomy (`sensor_readings`, `consent_scope="mic_continuous_v1"`):
+- `audio_social_context` — `{speaker: "aakash"|"other"|"both"|"none", num_speakers, vad_active}`, written at speech/silence transitions. Drives the axis.
+- `audio_prosody` — `{energy, pitch_mean_hz, pitch_std_hz, tone}`, Aakash-only (privacy-gated).
+- `audio_ambient` — `{top_classes, scores}`, YAMNet, every 5s during silence (privacy-gated).
+
 Exit criteria:
-- [ ] Silero VAD running on mic stream, writes social_context packets at speech/silence transitions
-- [ ] Speaker embedding enrolled for Aakash; per-utterance speaker classification
-- [ ] librosa prosody (F0, energy, speaking_rate) extracted on Aakash-only speech, written as `audio_semantic` packets
-- [ ] YAMNet ambient classifier running every 5s during silence
-- [ ] `audio_social_context` axis lit in `fusion/axes/`
-- [ ] Privacy Policy #1 enforced: non-Aakash voice → 30s pause + silence buffer on prosody + ambient
+- [ ] `apps/inference/audio_context/` re-pulled (vad/diarization/prosody/processor/persistor); deps added + installed; `python -m audio_context.smoke_test` passes
+- [ ] `apps/inference/audio_context/speaker_id.py` — `enroll(user_id, wav_paths)` (resemblyzer centroid → persisted) + `identify(embedding) -> "aakash"|"other"` (cosine threshold); Aakash enrolled from reference clips
+- [ ] `persistor`/`processor` updated to the differentiated packet taxonomy above + `consent_scope`; `CONSENT_SCOPES["mic"]="mic_continuous_v1"` added to `consent.py`
+- [ ] Privacy Policy #1 enforced (locked §5): non-Aakash voice → write only `audio_social_context` `{speaker:"other"/"both"}`; suppress prosody + ambient + STT for that window + 30s silence buffer. Unit-tested state machine.
+- [ ] `apps/inference/audio_context/ambient.py` — YAMNet behind a lazy backend (`classify_ambient(audio, sr) -> list[{class, score}]`), graceful "unavailable" fallback
+- [ ] `apps/inference/fusion/axes/audio_social_context.py` — reads recent `audio_social_context` packets → `AxisEstimate` (alone/with_other); arousal_inferred lightly refined from prosody tone
+- [ ] `apps/voice/loop.py` — ONE always-on mic loop: each block feeds wake-word detection AND a rolling VAD buffer; on speech-segment end → identify → privacy gate → social/prosody packets; during silence → ambient every 5s; wake-word fire → existing `run_turn`. Hardware-free smoke with injected audio.
 - [ ] STRETCH: BioAmp wired (Pi or direct-USB), `apps/inference/capture/eeg.py` writes alpha/beta/theta packets at 1Hz, `cognitive_load` axis lit
-- [ ] STATUS.md + REBUILD_PLAN.md updated
+- [ ] ARCHITECTURE.md + STATUS.md updated; theory-aligner pass (standing rule)
 - [ ] Tag `mvp-week-3-end`
 
 ### Week 4: Decision layer + outcome logging + Friday-review query
