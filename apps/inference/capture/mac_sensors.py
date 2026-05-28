@@ -17,6 +17,7 @@ from pathlib import Path
 INF_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(INF_DIR))
 
+from consent import CONSENT_SCOPES  # noqa: E402
 from db import get_conn  # noqa: E402
 from features.snapshot import FeatureSnapshot  # noqa: E402
 
@@ -77,8 +78,8 @@ def write_snapshot(snap: FeatureSnapshot) -> None:
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO sensor_readings (user_id, kind, recorded_at, source, payload)
-            VALUES (%s, %s, %s, %s, %s::jsonb)
+            INSERT INTO sensor_readings (user_id, kind, recorded_at, source, payload, consent_scope)
+            VALUES (%s, %s, %s, %s, %s::jsonb, %s)
             """,
             (
                 snap.user_id,
@@ -89,6 +90,7 @@ def write_snapshot(snap: FeatureSnapshot) -> None:
                     **snap.payload,
                     "meta_context_hint": snap.meta_context_hint,
                 }),
+                CONSENT_SCOPES["mac"],
             ),
         )
         conn.commit()

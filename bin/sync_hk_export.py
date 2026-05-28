@@ -3,7 +3,11 @@
 
 Reads an Apple Health export XML (typically ~/Library/Mobile Documents/... or
 ~/Downloads/export.xml) and inserts only records newer than the last sync
-cutoff. Writes sleep stages and HR (extend later for HRV, SpO2, resp).
+cutoff. This is the single canonical HealthKit writer: it emits the full
+`apple_health_*` kind namespace (HR, HRV, SpO2, respiratory rate, temperature,
+sleep stage) into `sensor_readings`. The legacy `parse_apple_health.py` is
+deprecated and must not be re-run; `sleep_sessions` +
+`sleep_stage_classifications` are frozen classifier-training data.
 
 Usage:
     bin/sync_hk_export.py /path/to/export.xml
@@ -25,16 +29,30 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "apps" / "inference"))
 
+from consent import CONSENT_SCOPES  # noqa: E402
 from db import get_conn  # noqa: E402
 
 DEFAULT_USER_ID = "61c18d4c-1c20-408a-bd5f-f5f88fd9922f"
 STATE_PATH = Path.home() / ".daybook" / "sync_state.json"
 
-# HealthKit type identifiers we care about for Week 1.
-# Extend later for HRV (HKQuantityTypeIdentifierHeartRateVariabilitySDNN),
-# SpO2, respiratory rate, etc.
+# HealthKit type identifiers → canonical apple_health_* kinds.
 TYPE_HR = "HKQuantityTypeIdentifierHeartRate"
+TYPE_HRV = "HKQuantityTypeIdentifierHeartRateVariabilitySDNN"
+TYPE_SPO2 = "HKQuantityTypeIdentifierOxygenSaturation"
+TYPE_RESP = "HKQuantityTypeIdentifierRespiratoryRate"
+TYPE_BODY_TEMP = "HKQuantityTypeIdentifierBodyTemperature"
 TYPE_SLEEP = "HKCategoryTypeIdentifierSleepAnalysis"
+
+# Quantity types share one code path: (kind, counter_key).
+QUANTITY_KINDS: dict[str, tuple[str, str]] = {
+    TYPE_HR: ("apple_health_hr", "hr"),
+    TYPE_HRV: ("apple_health_hrv", "hrv"),
+    TYPE_SPO2: ("apple_health_spo2", "spo2"),
+    TYPE_RESP: ("apple_health_respiratory_rate", "respiratory_rate"),
+    TYPE_BODY_TEMP: ("apple_health_temperature", "temperature"),
+}
+
+KIND_SLEEP = "apple_health_sleep_stage"
 
 # Apple sleep category values → our internal labels.
 SLEEP_STAGE_MAP = {
@@ -88,7 +106,16 @@ def sync(
     print(f"Sync starting. cutoff={cutoff} dry_run={dry_run}", flush=True)
 
     new_rows: list[tuple] = []
-    counters = {"hr": 0, "sleep": 0, "skipped_before_cutoff": 0, "skipped_other_type": 0}
+    counters = {
+        "hr": 0,
+        "hrv": 0,
+        "spo2": 0,
+        "respiratory_rate": 0,
+        "temperature": 0,
+        "sleep": 0,
+        "skipped_before_cutoff": 0,
+        "skipped_other_type": 0,
+    }
     latest_ts_seen: datetime | None = None
 
     for rec in iter_records(xml_path):
@@ -104,24 +131,31 @@ def sync(
             continue
 
         source_name = rec.get("sourceName", "")
-        if rec_type == TYPE_HR:
+        quantity = QUANTITY_KINDS.get(rec_type or "")
+        if quantity is not None:
+            kind, counter_key = quantity
             new_rows.append(
                 (
                     user_id,
                     "apple_health",
-                    "apple_health_hr",
+                    kind,
                     start,
-                    json.dumps({"bpm": float(rec["value"]), "source": source_name}),
+                    json.dumps({
+                        "value": float(rec["value"]),
+                        "unit": rec.get("unit", ""),
+                        "source": source_name,
+                    }),
+                    CONSENT_SCOPES["hk"],
                 )
             )
-            counters["hr"] += 1
+            counters[counter_key] += 1
         elif rec_type == TYPE_SLEEP:
             stage = SLEEP_STAGE_MAP.get(rec.get("value", ""), "unknown")
             new_rows.append(
                 (
                     user_id,
                     "apple_health",
-                    "apple_health_sleep_stage",
+                    KIND_SLEEP,
                     start,
                     json.dumps({
                         "stage": stage,
@@ -129,6 +163,7 @@ def sync(
                         "source": source_name,
                         "duration_s": int((end - start).total_seconds()),
                     }),
+                    CONSENT_SCOPES["hk"],
                 )
             )
             counters["sleep"] += 1
@@ -148,8 +183,8 @@ def sync(
     with get_conn() as conn, conn.cursor() as cur:
         cur.executemany(
             """
-            INSERT INTO sensor_readings (user_id, source, kind, recorded_at, payload)
-            VALUES (%s, %s, %s, %s, %s::jsonb)
+            INSERT INTO sensor_readings (user_id, source, kind, recorded_at, payload, consent_scope)
+            VALUES (%s, %s, %s, %s, %s::jsonb, %s)
             """,
             new_rows,
         )
@@ -176,6 +211,8 @@ def _cli() -> int:
         return 1
 
     since = datetime.fromisoformat(args.since) if args.since else None
+    if since is not None and since.tzinfo is None:
+        since = since.replace(tzinfo=timezone.utc)  # date-only --since is UTC midnight
     counters = sync(xml_path=args.xml_path, since=since, user_id=args.user_id, dry_run=args.dry_run)
     print(f"DONE. {counters}", flush=True)
     return 0

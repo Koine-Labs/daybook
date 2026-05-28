@@ -36,9 +36,16 @@ router = APIRouter(prefix="/state", tags=["state"])
 # client can't dump unbounded inserts in one call.
 _MAX_BATCH = 200
 
-# Kinds we know how to interpret. Anything else gets rejected silently
-# (counted in `rejected`).
-_KNOWN_KINDS = {"heart_rate", "hrv", "sleep_stage", "temperature"}
+# Canonical HealthKit kind namespace (apple_health_*). Anything else gets
+# rejected silently (counted in `rejected`).
+_KNOWN_KINDS = {
+    "apple_health_hr",
+    "apple_health_hrv",
+    "apple_health_spo2",
+    "apple_health_respiratory_rate",
+    "apple_health_temperature",
+    "apple_health_sleep_stage",
+}
 
 
 @router.post("/sensor_readings", response_model=SensorIngestResponse)
@@ -118,7 +125,7 @@ def body_summary(
                 (payload->>'value')::float
             ))
             FROM sensor_readings
-            WHERE user_id = %s AND kind = 'hrv' AND recorded_at >= %s
+            WHERE user_id = %s AND kind = 'apple_health_hrv' AND recorded_at >= %s
             """,
             (user_id, cutoff),
         )
@@ -137,7 +144,7 @@ def body_summary(
                 )
             )
             FROM sensor_readings
-            WHERE user_id = %s AND kind = 'heart_rate' AND recorded_at >= %s
+            WHERE user_id = %s AND kind = 'apple_health_hr' AND recorded_at >= %s
               AND COALESCE(
                   (payload->>'bpm')::float,
                   (payload->>'value')::float
@@ -163,10 +170,10 @@ def body_summary(
 
         # Last sleep — prefer the legacy `sleep_sessions` table (populated by
         # parse_apple_health.py), but fall back to rolling up recent
-        # `sleep_stage` rows from `sensor_readings` so live HealthKit uploads
-        # produce a sleep line too. Without this fallback the live pipeline
-        # would silently never compose "you slept Xh Ym" once the historical
-        # import ages out.
+        # `apple_health_sleep_stage` rows from `sensor_readings` so live
+        # HealthKit uploads produce a sleep line too. Without this fallback
+        # the live pipeline would silently never compose "you slept Xh Ym"
+        # once the historical import ages out.
         cur.execute(
             """
             SELECT duration_seconds, ended_at
@@ -184,20 +191,19 @@ def body_summary(
         else:
             # Live-data fallback: sum durations of recent non-awake sleep
             # stages. Window of 18h covers a normal night plus naps without
-            # picking up the previous calendar day's session.
+            # picking up the previous calendar day's session. The
+            # apple_health_sleep_stage payload carries `end` (ISO) +
+            # `duration_s` + a lowercase `stage` label.
             cur.execute(
                 """
                 SELECT
-                    SUM(EXTRACT(EPOCH FROM (
-                        (payload->>'endAt')::timestamptz
-                        - (payload->>'startAt')::timestamptz
-                    ))) AS sleep_seconds,
-                    MAX((payload->>'endAt')::timestamptz) AS latest_end
+                    SUM((payload->>'duration_s')::float) AS sleep_seconds,
+                    MAX((payload->>'end')::timestamptz) AS latest_end
                 FROM sensor_readings
                 WHERE user_id = %s
-                  AND kind = 'sleep_stage'
+                  AND kind = 'apple_health_sleep_stage'
                   AND recorded_at >= NOW() - INTERVAL '18 hours'
-                  AND payload->>'stage' NOT IN ('AWAKE', 'IN_BED', 'UNKNOWN')
+                  AND payload->>'stage' NOT IN ('awake', 'in_bed', 'unknown')
                 """,
                 (user_id,),
             )
@@ -250,7 +256,7 @@ def body_series(
                        (payload->>'value')::float
                    ))
             FROM sensor_readings
-            WHERE user_id = %s AND kind = 'hrv' AND recorded_at >= %s
+            WHERE user_id = %s AND kind = 'apple_health_hrv' AND recorded_at >= %s
             GROUP BY day
             """,
             (user_id, start),
@@ -267,7 +273,7 @@ def body_series(
                        (payload->>'value')::float
                    ))
             FROM sensor_readings
-            WHERE user_id = %s AND kind = 'heart_rate' AND recorded_at >= %s
+            WHERE user_id = %s AND kind = 'apple_health_hr' AND recorded_at >= %s
             GROUP BY day
             """,
             (user_id, start),
