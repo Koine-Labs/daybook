@@ -11,10 +11,8 @@ from api.schemas import (
     SessionDetail,
     SessionListItem,
     SessionListResponse,
-    SessionStateResponse,
     StageRow,
     StageSummary,
-    StateRow,
 )
 
 from db import get_conn  # noqa: E402
@@ -129,46 +127,6 @@ def get_session(
         stage_summary=_stage_summary(counts),
         stages=stages,
     )
-
-
-@router.get("/{session_id}/state", response_model=SessionStateResponse)
-def get_session_state(
-    session_id: str,
-    user_id: str = Depends(current_user_id),
-) -> SessionStateResponse:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT 1 FROM sleep_sessions WHERE id = %s AND user_id = %s",
-            (session_id, user_id),
-        )
-        if cur.fetchone() is None:
-            raise HTTPException(status_code=404, detail="session not found")
-
-        cur.execute(
-            """
-            SELECT estimated_at, stage_proba, arousal, valence, presence,
-                   confidence, source
-            FROM user_state_estimate
-            WHERE session_id = %s
-            ORDER BY estimated_at ASC
-            """,
-            (session_id,),
-        )
-        rows = cur.fetchall()
-
-    states = [
-        StateRow(
-            estimated_at=r[0],
-            stage_proba=r[1],
-            arousal=float(r[2]) if r[2] is not None else None,
-            valence=float(r[3]) if r[3] is not None else None,
-            presence=float(r[4]) if r[4] is not None else None,
-            confidence=float(r[5]) if r[5] is not None else None,
-            source=r[6],
-        )
-        for r in rows
-    ]
-    return SessionStateResponse(session_id=session_id, states=states)
 
 
 def _stage_summary(counts: dict[str, int]) -> StageSummary:

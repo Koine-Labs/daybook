@@ -152,21 +152,6 @@ class SessionDetail(BaseModel):
     stages: list[StageRow] = []
 
 
-class StateRow(BaseModel):
-    estimated_at: datetime
-    stage_proba: dict[str, Any] | None = None
-    arousal: float | None = None
-    valence: float | None = None
-    presence: float | None = None
-    confidence: float | None = None
-    source: str
-
-
-class SessionStateResponse(BaseModel):
-    session_id: str
-    states: list[StateRow]
-
-
 # ---------------------------------------------------------------------------
 # Observations
 # ---------------------------------------------------------------------------
