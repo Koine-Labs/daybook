@@ -11,6 +11,6 @@ from __future__ import annotations
 CONSENT_SCOPES: dict[str, str] = {
     "mac": "mac_activity_v1",
     "hk": "apple_health_v1",
-    # "voice": "mic_continuous_v1",  # reserved — Week 3 continuous-mic opt-in
+    "voice": "mic_continuous_v1",  # Week 3 continuous-mic opt-in
     # "eeg": "eeg_continuous_v1",   # reserved — BioAmp EXG Pill onboarding
 }

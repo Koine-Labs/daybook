@@ -15,6 +15,8 @@ def main() -> int:
     p.add_argument("--user-id", default=DEFAULT_USER_ID)
     p.add_argument("--once", action="store_true", help="Run a single turn then exit.")
     p.add_argument("--text", default=None, help="With --once: skip the mic, use this text as the transcript.")
+    p.add_argument("--continuous", action="store_true",
+                   help="Always-on: wake-word + privacy-gated continuous semantics on one mic stream.")
     args = p.parse_args()
 
     if args.once:
@@ -26,6 +28,11 @@ def main() -> int:
               f"spoken={result.spoken} mode={result.mode}")
         if result.utterance_text:
             print(f"Regis: {result.utterance_text}")
+        return 0
+
+    if args.continuous:
+        from voice.loop import listen_continuous
+        listen_continuous(user_id=args.user_id)
         return 0
 
     listen_forever(user_id=args.user_id)

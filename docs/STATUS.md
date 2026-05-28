@@ -1,6 +1,32 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-28 — MVP Week 2 (state-aware voice loop) implemented.**
+**Last updated: 2026-05-28 — MVP Week 3 (continuous-mic semantic pipeline) implemented.**
+
+## 2026-05-28 — MVP Week 3: continuous-mic semantic pipeline
+
+**Shipped (branch `feat/week-3-continuous-mic`):**
+- Re-pulled from `v0-pre-rebuild`: `apps/inference/audio_context/` (VAD via silero, diarization + prosody via resemblyzer/librosa). New base deps: `silero-vad`, `resemblyzer`, `librosa`. YAMNet (`tensorflow`/`-hub`) is an **optional** dep group, never in the base install.
+- `audio_context/speaker_id.py` — enroll a voice centroid from reference clips; `identify()` returns `self` / `other` / `unknown` by cosine similarity (threshold 0.75).
+- `audio_context/writer.py` — three differentiated `sensor_readings` packet kinds (`audio_social_context`, `audio_prosody`, `audio_ambient`), each stamped `consent_scope=mic_continuous_v1`. SQL verified live (insert→readback→delete).
+- `audio_context/privacy.py` — **Privacy Policy #1** as a pure, unit-tested state machine: non-self voice → presence marker only + suppress prosody/ambient/STT for the window **+ 30s buffer**. `unknown` speaker fails safe to `other`.
+- `audio_context/ambient.py` — YAMNet ambient classifier behind a lazy, fail-soft backend (returns `[]` when TF absent); clip-level `mean(axis=0)` reduction.
+- `fusion/axes/audio_social_context.py` — L3 axis (`alone` / `with_other`). **Three L3 axes now live** (`meta_context`, `sleep_stage`, `audio_social_context`).
+- `apps/voice/` — `ContinuousProcessor` (pure, injectable I/O) + `listen_continuous()`: ONE always-on mic stream does wake-word **and** privacy-gated continuous semantics (no second mic / no process contention). `run_turn`/`listen_forever` untouched. `cli.py --continuous`.
+- **Verified:** 46 tests + voice/fusion smokes green; ambient fail-soft confirmed; writer SQL exercised against live Neon. Built via a parallel subagent workflow (5 modules + integration), each spec+quality reviewed, all review nits resolved by the orchestrator.
+
+**Manual follow-ups (the unlocks):**
+- **Enroll Aakash's voice** — record 3–5 clips → `audio_context.speaker_id.enroll(...)`. Until then `identify` returns `unknown` and the privacy gate conservatively suppresses prosody/ambient (fail-safe, but no rich signal yet).
+- **Enable ambient** — `uv pip install ".[ambient]"` from `apps/inference`; until then the loop writes no `audio_ambient` packets.
+- Window cadence (`window_seconds=3.0`) + `fresh_for_seconds` are first-guesses; tune once living with it. The 30s privacy buffer is the locked §5 value.
+- EEG stretch deferred until the BioAmp EXG Pill is in hand.
+
+**Theory-aligner gate (2026-05-28):** ALIGNED-WITH-GAPS, no blockers. Privacy Policy #1 verified fail-safe in code. Two findings fixed in-branch: the `audio_social_context` axis was orphaned (renamed `compute_*`→`fuse_recent`, wired into the fusion runner, verified packet→fuse→persist→composer-read) and the dead ungated `persist_packet`/`persistor.py` were removed (only the gated `writer.py` writes audio now). Two findings **deferred** (logged, not blocking):
+- **#14 meta-context biasing** — the continuous pipeline runs uniformly regardless of Waking/Sleep meta-context. Agnostic, not violating; wire meta-context-conditioned behavior (e.g., suppress prosody analysis during deep sleep) when the sleep path is live.
+- **`suppressed_for` audit stamp** — when the privacy gate suppresses, the social-context presence marker is still written but does not yet stamp the 0009 `suppressed_for` JSONB column. Add for a complete audit trail.
+
+**Next:** EEG axis (`cognitive_load`) when hardware lands; L4 prediction scaffolds; learned decider.
+
+---
 
 ## 2026-05-28 — MVP Week 2: state-aware voice loop
 

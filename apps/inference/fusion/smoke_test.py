@@ -23,6 +23,7 @@ if str(INF_DIR) not in sys.path:
 from db import get_conn  # noqa: E402
 
 from capture.mac_sensors import capture_once, write_snapshot  # noqa: E402
+from fusion.axes import audio_social_context as asc_axis  # noqa: E402
 from fusion.axes import meta_context as mc_axis  # noqa: E402
 from fusion.axes import sleep_stage as ss_axis  # noqa: E402
 from fusion.belief_state import BeliefState  # noqa: E402
@@ -52,12 +53,23 @@ def main() -> int:
     else:
         print(f"[3/5] sleep_stage fused: {ss_est.value['label']} (active={ss_est.value['active']})")
 
+    # 3b. Fuse audio_social_context (None unless the continuous mic loop has
+    # recently written an audio_social_context packet).
+    asc_est = asc_axis.fuse_recent(user_id=user_id, now=now)
+    if asc_est is None:
+        print("[3/5] audio_social_context: none (no recent mic packet — expected if loop idle)")
+    else:
+        print(f"[3/5] audio_social_context fused: {asc_est.value['category']}")
+
     # 4. Write to user_state_estimate.
     mc_id = write_axis_estimate(user_id, mc_est)
     print(f"[4/5] meta_context written to user_state_estimate id={mc_id}")
     if ss_est is not None:
         ss_id = write_axis_estimate(user_id, ss_est)
         print(f"[4/5] sleep_stage written to user_state_estimate id={ss_id}")
+    if asc_est is not None:
+        asc_id = write_axis_estimate(user_id, asc_est)
+        print(f"[4/5] audio_social_context written to user_state_estimate id={asc_id}")
 
     # 5. Read back as BeliefState and assert axes present + fresh.
     bs = BeliefState(user_id=user_id)
