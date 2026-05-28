@@ -256,29 +256,35 @@ def _mode_for_kind(kind: str) -> str:
 
 
 def _read_latest_state(user_id: str) -> dict[str, Any] | None:
-    """Get the most recent user_state_estimate row."""
+    """Latest per-axis user_state_estimate rows, dict keyed by axis.
+
+    Post-migration 0009 (per-axis-row schema). Returns
+    {axis: {value, confidence, source, timestamp, meta_context}}
+    or None if no rows.
+    """
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT estimated_at, stage_proba, arousal, valence, presence, confidence, source
+            SELECT DISTINCT ON (axis)
+                axis, value, confidence, source, timestamp, meta_context
             FROM user_state_estimate
             WHERE user_id = %s
-            ORDER BY estimated_at DESC
-            LIMIT 1
+            ORDER BY axis, timestamp DESC
             """,
             (user_id,),
         )
-        row = cur.fetchone()
-    if row is None:
+        rows = cur.fetchall()
+    if not rows:
         return None
     return {
-        "estimated_at": row[0].isoformat() if row[0] else None,
-        "stage_proba": row[1],
-        "arousal": row[2],
-        "valence": row[3],
-        "presence": row[4],
-        "confidence": row[5],
-        "source": row[6],
+        row[0]: {
+            "value": row[1],
+            "confidence": row[2],
+            "source": row[3],
+            "timestamp": row[4].isoformat() if row[4] else None,
+            "meta_context": row[5],
+        }
+        for row in rows
     }
 
 
