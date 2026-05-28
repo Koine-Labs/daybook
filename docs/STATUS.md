@@ -20,6 +20,10 @@
 - Window cadence (`window_seconds=3.0`) + `fresh_for_seconds` are first-guesses; tune once living with it. The 30s privacy buffer is the locked §5 value.
 - EEG stretch deferred until the BioAmp EXG Pill is in hand.
 
+**Theory-aligner gate (2026-05-28):** ALIGNED-WITH-GAPS, no blockers. Privacy Policy #1 verified fail-safe in code. Two findings fixed in-branch: the `audio_social_context` axis was orphaned (renamed `compute_*`→`fuse_recent`, wired into the fusion runner, verified packet→fuse→persist→composer-read) and the dead ungated `persist_packet`/`persistor.py` were removed (only the gated `writer.py` writes audio now). Two findings **deferred** (logged, not blocking):
+- **#14 meta-context biasing** — the continuous pipeline runs uniformly regardless of Waking/Sleep meta-context. Agnostic, not violating; wire meta-context-conditioned behavior (e.g., suppress prosody analysis during deep sleep) when the sleep path is live.
+- **`suppressed_for` audit stamp** — when the privacy gate suppresses, the social-context presence marker is still written but does not yet stamp the 0009 `suppressed_for` JSONB column. Add for a complete audit trail.
+
 **Next:** EEG axis (`cognitive_load`) when hardware lands; L4 prediction scaffolds; learned decider.
 
 ---
