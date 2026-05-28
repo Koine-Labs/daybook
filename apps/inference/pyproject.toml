@@ -25,6 +25,10 @@ dependencies = [
     # Streaming STT for the wake-word path (Week 2). stt_streaming defaults to
     # faster-whisper small.en/int8; stt.py uses recall.whisper_client (openai-whisper).
     "faster-whisper>=1.0.0",
+    # Wake-word detection (Week 2). openWakeWord runs the ONNX wake model;
+    # ships on built-in 'hey_jarvis' until the custom 'hey_regis.onnx' is trained.
+    "openwakeword>=0.6.0",
+    "onnxruntime>=1.17.0",
 ]
 
 [project.optional-dependencies]
