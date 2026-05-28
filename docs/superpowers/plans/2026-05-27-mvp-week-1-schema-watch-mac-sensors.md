@@ -25,7 +25,7 @@
 - All timestamps are tz-aware UTC. Never strip timezone.
 - Neon migrations are applied via psycopg from Python (the connection string has special chars that break `psql` arg parsing).
 - For the schema migration (Tasks 2-4), use the Neon MCP tools (`mcp__Neon__prepare_database_migration` + `complete_database_migration`) which create a temp branch, let you verify, then promote to main.
-- Tasks 2-4 (migration) live on feature branch `mvp/week-1/migration-0009` and land via PR. All other tasks commit direct to `main`.
+- **Workflow: PR-per-task-cluster (8 PRs total).** Each PR groups 1-3 tasks by topical cohesion and dependency. See "PR structure" + "Worktree workflow" sections below. PR titles match the cards on the **Daybook MVP** GitHub Project board.
 
 ## File structure for Week 1
 
@@ -61,7 +61,101 @@ docs/REBUILD_PLAN.md                   (week-1 checked off)
 
 ---
 
+## PR structure (8 PRs, parallel-friendly)
+
+Every task in this plan lives inside exactly one PR. PRs cluster tasks by topical cohesion and dependency. The Daybook MVP GitHub Project board has one card per PR.
+
+| PR | Title | Tasks | Branch | Depends on |
+|---|---|---|---|---|
+| **#1** | Preflight: python-multipart + FeatureSnapshot | 1, 5 | `mvp/week-1/pr1-preflight` | — |
+| **#2** | Migration 0009: per-axis-row state + prediction_log + consent | 2, 3, 4 | `mvp/week-1/migration-0009` | — |
+| **#3** | Apple Health sync (`bin/sync_hk_export.py`) | 6 | `mvp/week-1/pr3-apple-health-sync` | #2 (writes to sensor_readings) |
+| **#4** | Mac sensors capture (`capture/mac_sensors.py`) | 7 | `mvp/week-1/pr4-mac-sensors` | #1 (FeatureSnapshot), #2 (sensor_readings shape) |
+| **#5** | Fusion primitives (BeliefState + writer) | 8 | `mvp/week-1/pr5-fusion-primitives` | #2 (user_state_estimate shape) |
+| **#6** | meta_context axis | 9 | `mvp/week-1/pr6-meta-context-axis` | #4 (mac_activity data), #5 (AxisEstimate) |
+| **#7** | sleep_stage axis | 10 | `mvp/week-1/pr7-sleep-stage-axis` | #3 (apple_health_sleep_stage data), #5 (AxisEstimate) |
+| **#8** | End-to-end smoke + Week-1 closeout | 11, 12 | `mvp/week-1/pr8-smoke-closeout` | #6, #7 |
+
+### Dependency graph + parallel waves
+
+```
+Wave 1 (concurrent):   #1 ──┐
+                       #2 ──┼── all three can start at the same time
+                       (#3 needs #2 merged before it can start running its smoke;
+                        the code for #3 can be written in parallel)
+
+Wave 2 (after #1, #2): #4 (depends on #1, #2)
+                       #5 (depends on #2)
+                       — these two can run concurrent with each other
+
+Wave 3 (after #4, #5): #6 (depends on #4, #5)
+                       #7 (depends on #3, #5)
+                       — these two can run concurrent with each other
+
+Wave 4 (after #6, #7): #8
+```
+
+With 2-3 worktrees + 2-3 Claude sessions, you can realistically compress Week 1 from ~5-6 days to ~3 days. Without parallelism, work the PRs in dependency order: #1 → #2 → #3 → #4 → #5 → #6 → #7 → #8.
+
+---
+
+## Worktree workflow (one worktree per active PR branch)
+
+To work multiple PRs in parallel without git tripping over itself, use git worktrees. Convention:
+
+```bash
+# Root repo stays at /Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook (main branch).
+# Each worktree lives under ~/Code/daybook-worktrees/<branch-slug>/
+
+mkdir -p ~/Code/daybook-worktrees
+
+# Example: spin up worktree for PR #1
+cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook"
+git worktree add ~/Code/daybook-worktrees/pr1-preflight -b mvp/week-1/pr1-preflight main
+
+# Then work in that worktree:
+cd ~/Code/daybook-worktrees/pr1-preflight
+# ...do the task work...
+git push -u origin mvp/week-1/pr1-preflight
+gh pr create --title "PR #1 — Preflight: python-multipart + FeatureSnapshot" --body "$(cat <<EOF
+Closes PR #1 card on Daybook MVP board.
+Implements Tasks 1 (python-multipart) + 5 (FeatureSnapshot).
+
+## Test plan
+- [x] python-multipart installs cleanly; FastAPI bridge starts
+- [x] features/test_snapshot.py: 3 tests passing
+
+Spec: docs/superpowers/specs/2026-05-27-vertical-slice-waking-empath-design.md
+Plan: docs/superpowers/plans/2026-05-27-mvp-week-1-schema-watch-mac-sensors.md
+EOF
+)"
+
+# After PR merges, clean up the worktree:
+gh pr merge <pr-number> --squash --delete-branch
+cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook"
+git pull
+git worktree remove ~/Code/daybook-worktrees/pr1-preflight
+```
+
+The repo also has a `superpowers:using-git-worktrees` skill if you want a more guided setup.
+
+### PR commit + close-out checklist (every PR)
+
+Each PR ends with the same 4 steps:
+
+1. `git push -u origin <branch>`
+2. `gh pr create --title "<PR # — title>" --body "<body referencing spec + plan + tasks closed + test plan>"`
+3. Self-review the diff in the GitHub UI (read each file, check it does what you intended)
+4. `gh pr merge <pr-number> --squash --delete-branch`
+5. Move the Project board card to **Done**
+
+Per-task "Step N: Commit" blocks inside each Task below stay the same — they're commits *within* the PR branch. The PR's create/merge happen at the end of the last task in the cluster.
+
+---
+
 ## Task 1: Unblock FastAPI bridge — add python-multipart
+
+**PR:** #1 (Preflight). Cluster with Task 5.
 
 **Files:**
 - Modify: `apps/inference/requirements.txt`
@@ -118,6 +212,8 @@ EOF
 ---
 
 ## Task 2: Write migration 0009 SQL — per-axis-row reshape + prediction_log + consent columns
+
+**PR:** #2 (Migration 0009). Tasks 2, 3, 4 all live in this PR.
 
 **Files:**
 - Create: `apps/inference/migrations/0009_per_axis_state_and_prediction_log.sql`
@@ -309,6 +405,8 @@ EOF
 
 ## Task 3: Apply migration 0009 to a Neon temp branch, verify backfill correctness
 
+**PR:** #2 (Migration 0009). Verification step inside the PR — no commit, just Neon-side verification.
+
 **Files:**
 - No code changes (verification only)
 
@@ -386,6 +484,8 @@ The temp branch is now ready. Note the `migrationId` for the next task.
 
 ## Task 4: Promote migration to main Neon branch + open PR
 
+**PR:** #2 (Migration 0009). **Final task in this PR** — promote to Neon main, push branch, open PR, self-review, merge.
+
 **Files:**
 - No code changes (verification only) — but this is where the migration goes live
 
@@ -440,6 +540,8 @@ Verify `main` is now ahead with the migration commit.
 ---
 
 ## Task 5: Create FeatureSnapshot envelope dataclass
+
+**PR:** #1 (Preflight). Cluster with Task 1. **Final task in PR #1** — open + merge PR at end of this task.
 
 **Files:**
 - Create: `apps/inference/features/__init__.py`
@@ -598,6 +700,8 @@ EOF
 ---
 
 ## Task 6: Apple Health incremental sync script — `bin/sync_hk_export.py`
+
+**PR:** #3 (Apple Health sync). Single task = single PR. Branch off PR #2 once merged.
 
 **Files:**
 - Create: `bin/sync_hk_export.py`
@@ -925,6 +1029,8 @@ EOF
 
 ## Task 7: Mac sensors capture daemon — `apps/inference/capture/mac_sensors.py`
 
+**PR:** #4 (Mac sensors capture). Single task = single PR. Depends on PR #1 (FeatureSnapshot) + PR #2 (sensor_readings shape) both merged.
+
 **Files:**
 - Create: `apps/inference/capture/__init__.py`
 - Create: `apps/inference/capture/mac_sensors.py`
@@ -1174,6 +1280,8 @@ EOF
 ---
 
 ## Task 8: BeliefState dataclass + per-axis writer — `apps/inference/fusion/`
+
+**PR:** #5 (Fusion primitives). Single task = single PR. Depends on PR #2 (user_state_estimate shape). **Parallel with PR #4** — both can be worked simultaneously.
 
 **Files:**
 - Create: `apps/inference/fusion/__init__.py`
@@ -1431,6 +1539,8 @@ EOF
 
 ## Task 9: meta_context axis fusion — `apps/inference/fusion/axes/meta_context.py`
 
+**PR:** #6 (meta_context axis). Single task = single PR. Depends on PR #4 (mac_activity data) + PR #5 (AxisEstimate). **Parallel with PR #7.**
+
 **Files:**
 - Create: `apps/inference/fusion/axes/__init__.py`
 - Create: `apps/inference/fusion/axes/meta_context.py`
@@ -1646,6 +1756,8 @@ EOF
 
 ## Task 10: sleep_stage axis fusion — `apps/inference/fusion/axes/sleep_stage.py`
 
+**PR:** #7 (sleep_stage axis). Single task = single PR. Depends on PR #3 (apple_health_sleep_stage data) + PR #5 (AxisEstimate). **Parallel with PR #6.**
+
 **Files:**
 - Create: `apps/inference/fusion/axes/sleep_stage.py`
 - Create: `apps/inference/fusion/axes/test_sleep_stage.py`
@@ -1808,6 +1920,8 @@ EOF
 
 ## Task 11: End-to-end fusion smoke test
 
+**PR:** #8 (End-to-end smoke + Week-1 closeout). Cluster with Task 12. Depends on PRs #6 + #7 merged.
+
 **Files:**
 - Create: `apps/inference/fusion/smoke_test.py`
 
@@ -1959,6 +2073,8 @@ EOF
 ---
 
 ## Task 12: Week 1 closeout — update STATUS.md + REBUILD_PLAN.md + tag
+
+**PR:** #8 (End-to-end smoke + Week-1 closeout). **Final task in PR #8** — open + merge PR at end of this task. Then tag `mvp-week-1-end` on `main` after PR #8 merges.
 
 **Files:**
 - Modify: `docs/STATUS.md`
