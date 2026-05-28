@@ -1,6 +1,27 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-28 — MVP Week 1 complete.**
+**Last updated: 2026-05-28 — MVP Week 2 (state-aware voice loop) implemented.**
+
+## 2026-05-28 — MVP Week 2: state-aware voice loop
+
+**Shipped (branch `feat/week-2-voice-loop`):**
+- Re-pulled from `v0-pre-rebuild`: `apps/inference/audio/` (TTS), `wake_word/` (detector + intent; `handlers.py` deferred — needs scrapped `gesture/`). STT (`llm/stt*.py`) already survived on main.
+- New deps in `apps/inference/pyproject.toml`: `sounddevice`, `soundfile`, `faster-whisper`, `openwakeword`, `onnxruntime`. TTS ships on macOS `say` (kokoro optional); wake-word on built-in `hey_jarvis` until custom model trained.
+- `apps/inference/fusion/loader.py::load_belief_state(user_id)` — DB per-axis rows → freshness-gated `BeliefState`.
+- `apps/wisp/composer.py` — `_read_latest_state` now routes through `load_belief_state` (stale axes dropped, commitment #14); `gather_substrate()` stub replaced with real readers (observations + traits + current state).
+- `apps/voice/` — new runtime: `run_turn()` orchestrates wake → STT → `classify_intent` → `compose_utterance` → `speak`; `listen_forever()` mic loop; `cli.py` (`--once/--text`); hardware-free `smoke_test.py`.
+- **Verified end-to-end live:** `run_turn` with real composer produced a state-aware Companion-mode reply ("A little frayed, a little wired…"). 27 tests + voice/fusion/wake smokes green.
+
+**One-time setup on a fresh venv:** `python -c "import openwakeword; openwakeword.utils.download_models()"` (detector does not auto-download base models).
+
+**Known follow-ups (logged, not blocking):**
+- `wake_word/command_intent.classify_intent` false-positives on short questions containing command keywords (e.g. "right" in "how am I right now?" → ACKNOWLEDGE). Harmless today (only DISMISS/SCRATCH_THAT short-circuit a turn); tighten in Week 3.
+- Per-axis `fresh_for_seconds` likely needs tuning — Apple-Health-derived axes (hours old) gate out of the waking read by design; revisit when `meta_context` writes every 30s.
+- "Hey Regis" custom wake model still to train (manual, `wake_word/training/README.md`).
+
+**Next:** Week 3 — continuous mic semantic pipeline (VAD + diarization + prosody + ambient) + EEG stretch. Per spec §8.
+
+---
 
 ## 2026-05-28 — MVP Week 1 complete
 
