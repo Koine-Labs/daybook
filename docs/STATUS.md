@@ -1,6 +1,6 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-19 (Native iOS + watchOS apps live. FastAPI bridge gated with API key. Cloudflare Tunnel at `https://daybook.koinelabs.com` makes the Mac brain reachable from the phone anywhere on the internet.)**
+**Last updated: 2026-05-24 (Architecture commitment #16 added: L4 prediction operates in latent space — JEPA-family world model, LeWM recipe as v1 target. L4 + L5 sections reframed accordingly. See `docs/ARCHITECTURE.md §2.16`. Prior: 2026-05-19 — Native iOS + watchOS apps live. FastAPI bridge gated with API key. Cloudflare Tunnel at `https://daybook.koinelabs.com` makes the Mac brain reachable from the phone anywhere on the internet.)**
 
 The single page that answers "where are we, where are we going, what's blocking us?" Updated after substantive work lands. Open this any session when you need orientation.
 

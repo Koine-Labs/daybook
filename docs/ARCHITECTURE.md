@@ -171,7 +171,37 @@ L1 captures uniformly; meta-context biases begin at L2.
 
 **Relationship.** Commitment #13 produces the substrate (paired action-outcome data from every fired decision); commitment #15 consumes it (estimating Regis's actual influence on state). The two compose: outcome-driven selection improves which actions Regis takes; influence modeling improves how Regis reasons about what those actions will do.
 
-**Lineage.** Split from the original commitment #13 (2026-05-22) after independent review noted that "Regis as controlled variable" conflated discrete action selection with continuous influence modeling — different architectural bets with different data needs.
+**Lineage.** Split from the original commitment #13 (2026-05-22) after independent review noted that "Regis as controlled variable" conflated discrete action selection with continuous influence modeling — different architectural bets with different data needs. Refined 2026-05-24 to point at commitment #16 (JEPA-family world model) as the architectural substrate that makes the destination implementable — v1 naïve action-conditioning placeholders compose into the world model's action-conditioning branch as data accumulates, rather than being thrown away.
+
+### 16. Prediction operates in latent space (JEPA-family world model)
+
+**Rule.** L4 predictors implement the **Joint Embedding Predictive Architecture (JEPA)** pattern: an **encoder** maps observations to a compact latent state; a **predictor** forecasts future latent state conditioned on an optional action embedding; and consumers compare/plan in latent space rather than in raw signal space. The v1 implementation target is the **LeWM recipe** ([le-wm.github.io](https://le-wm.github.io/)): ~15M parameters, single-GPU end-to-end training, two losses (latent prediction + **SIGReg** Gaussian regularizer), Cross-Entropy Method planning over candidate actions. No pretrained encoders are required — the architecture trains stably from scratch.
+
+This is an architectural-shape commitment, not a library lock-in. Variants of JEPA that satisfy the same invariants (latent-space prediction, action conditioning, anti-collapse regularization, planning-by-rollout) substitute freely; the invariants are the lock.
+
+**Why.** Prediction in raw signal space (next HR value, next pixel, next sample) wastes capacity on detail the system doesn't need and can't usefully act on. Prediction in latent space — embeddings that capture *meaning* — focuses capacity where signal-to-noise is highest, and aligns prediction with how the rest of the system already represents the user (clusters of embeddings, semantic packets, fused per-axis state). The encoder/predictor split also gives a natural insertion point for action conditioning: the predictor reads `(current latent state, action embedding) → predicted next latent state`, which is precisely what commitment #15 (Regis as modeled controlled variable) requires to ever become real.
+
+LeWM specifically is chosen as the v1 target because it solves the collapse problem (the historical reason hobbyist JEPA implementations fail: the encoder discovers it can trivially "predict" the future by outputting a constant) with a single-knob regularizer (SIGReg, forcing latent embeddings to a Gaussian distribution), runs end-to-end on a single GPU at small parameter counts, and bundles all three pieces an empath needs — encoder, action-conditioned predictor, planner — in one published recipe.
+
+**Cross-layer implications.**
+
+- **L2 — Encoders.** Where L2 already has its own representational outputs (BGE-M3 text embeddings, biometric feature vectors, future BCI bandpower vectors), JEPA training generalizes as a self-supervised objective: predict next embedding from current. **SIGReg** generalizes as the anti-collapse regularizer for any L2 encoder trained on the Daybook signal flow.
+- **L3 — Latent state.** Per-axis state in L3 remains the truth-of-record for downstream reads (commitment #4, commitment #14 dispatch). Under #16, L3 axes may also be expressible as projections of a unified latent state (the world model's encoder output). v1 keeps per-axis storage; the unified latent representation is consumed by L4 for prediction and (in v2) by L5 for planning, not stored as L3 state.
+- **L4 — Predictors.** Predictors implement JEPA: encoder + action-conditioned predictor + per-axis projection heads. Training is end-to-end via latent-space prediction loss + SIGReg, not direct ground-truth axis regression. Axis-level calibration happens at the projection heads (against `user_state_estimate` history). Multiple `(axis, meta_context)` registry entries may share an underlying world model, with the registry routing to axis-specific heads.
+- **L5 — Planning.** Action selection in v2 uses CEM (or equivalent rollout-based) planning over the world model: sample candidate Regis actions, query L4 with each, compare predicted next-state embeddings against goal-state embeddings, pick the action whose predicted trajectory best matches the goal. The Thompson bandit (commitment #13) remains v1; the transition to world-model planning happens per-axis as the action-conditioning branch becomes calibrated.
+- **L6 — Surprise/novelty.** A JEPA world model produces a natural **prediction-error signal** — actual next embedding vs predicted next embedding. High prediction error = novelty/surprise = an event worth Regis attending to. This becomes the foundation for "what should Regis notice," replacing today's hand-tuned threshold rules.
+
+**Relationship to existing commitments.**
+
+- **#6 (Self-expanding I-Models)** — Same architectural family: representations of the user are *discovered* from data, not pre-specified. #6 covers the *static structure* of those representations (clusters of embeddings); #16 covers their *dynamics* (how they evolve over time and respond to Regis's actions). Together they describe a unified empath substrate.
+- **#11 (Semantic-first continuous sensing)** — Both commitments share the bet that meaning lives in latent space, not signal space. #11 is the *capture-side* bet (extract semantic packets, discard raw); #16 is the *prediction-side* bet (model the future in latent space, not raw).
+- **#13 (Outcome-driven action selection)** — Produces the paired (action, outcome) data the JEPA world model consumes for training its action-conditioning branch. #13 is the v1 mechanism (Thompson bandit); the world-model planner (#16) is the v2 successor.
+- **#15 (Regis as modeled controlled variable)** — #16 specifies the *architectural shape* that makes #15's destination implementable. #15 is the goal (treatment-effect estimation); #16 is the predictor architecture that produces those counterfactuals.
+- **#9 (Continuous build, not phased)** — #16 honors #9 by committing to the v3-substrate architecture from day one. v1 predictors are scaffolds that compose into the world model as data accumulates, not throwaway placeholders.
+
+**What v1 looks like.** The full LeWM stack is not built tomorrow. v1 predictors land as per-axis regression heads (per the L4 registry pattern) with the *interface* shaped for the world-model destination: every prediction call already accepts an action argument; every prediction is logged with provenance distinguishing learned-counterfactual from hand-set-placeholder; every predictor's training pass reads the same `prediction_log` substrate. The encoder/predictor/SIGReg machinery lands once enough multimodal (state, action, next-state) triples exist to train it — likely 4–8 weeks of real interaction data. Until then, the architecture-shaped scaffolding generates the data flywheel that the world model consumes.
+
+**Lineage.** Added 2026-05-24 after independent research surfaced LeWM (le-wm.github.io) as a practical, single-GPU, end-to-end JEPA recipe that resolves the historical collapse problem with a single regularizer. Before #16, commitment #15 specified the destination (modeled influence) without committing to architectural shape; v1 implementations would have defaulted to per-axis regression with hand-tuned action-conditioning, which doesn't compose into the world-model substrate the destination requires. #16 locks in latent-space prediction as the architectural shape from day one, so v1 placeholder implementations evolve naturally toward the JEPA destination rather than being thrown away. The decision converges with #6 and #11 — Daybook independently arrived at JEPA-shaped commitments because *any* always-on empath substrate that processes continuous biometric signal converges on "predict in latent space, not signal space."
 
 ### Commitment review process
 
@@ -450,20 +480,24 @@ Migration targets:
 
 **Job.** Take BeliefState + recent state trajectory from L3 (and historical fused state from `user_state_estimate`) and produce forecasts of future state. Forecasts serve L5's decision math primarily; L3 consumes forecasts as predictive priors when its swappable-prior hook is enabled.
 
+**Architecture — JEPA-family world model (per commitment #16).** L4 predictors implement the Joint Embedding Predictive Architecture pattern: an **encoder** maps inputs (per-axis history, FeatureSnapshots, embeddings) to a compact **latent state**; a **predictor** forecasts future latent state conditioned on an optional **action embedding**; **projection heads** produce axis-specific distributional outputs from the latent state. The v1 implementation target is the LeWM recipe (single-GPU, ~15M parameters, two-loss end-to-end training with SIGReg as the anti-collapse regularizer).
+
+The registry-and-axis interface (described below) remains the consumer-facing surface — `predict(axis, ...)` returns one axis's forecast — but underneath, predictors may **share an underlying world model** with axis-specific projection heads. Sharing is the architectural target; the registry doesn't require it (some axes with categorical or event-shaped outputs may use stand-alone predictors that don't share the world model).
+
 **Output shape.** Forecasts are distributional, per-axis, on-demand. The contract:
 
 `predict(axis, horizon, action=None) → (distribution, confidence, model_id, inputs_used, log_id)`
 
 - `axis` — any registered axis (continuous, categorical, or binary-event).
 - `horizon` — a time delta from now (or absolute time).
-- `action` — optional Regis-action descriptor. `None` returns the baseline forecast given current state. A specific action returns the counterfactual conditional on that action. The hook preserves commitment #15's destination (modeled influence on state) from day one without requiring causal-modeling machinery in v1.
-- Output — a distribution (mean + variance at minimum; richer forms per-axis) plus provenance.
+- `action` — optional Regis-action descriptor (a categorical action type, or an embedded action vector in the world-model's action space). `None` returns the baseline forecast given current latent state. A specific action returns the counterfactual conditional on that action — implemented as `predictor(latent_state, encode_action(action))` under the JEPA architecture. The hook preserves commitment #15's destination (modeled influence on state) from day one.
+- Output — a distribution (mean + variance at minimum; richer forms per-axis) plus provenance. Provenance includes whether the action-conditioning is a calibrated learned branch of the world model or a hand-set v1 placeholder, so consumers know what they're reading.
 
 Events are modeled as binary axes (e.g., `user_speaking_within_10min`) predicted as probabilities. There is no separate event-prediction interface.
 
-Multi-horizon trajectories are assembled by consumers via repeated single-horizon calls. There is no bundled multi-horizon API.
+Multi-horizon trajectories are assembled by consumers via repeated single-horizon calls. There is no bundled multi-horizon API. (Internally, the predictor may roll out the world model autoregressively in latent space — predicted latent at t+1 fed back as input for t+2 — and project from each rollout step to produce the requested horizon's output. This is an implementation detail of the predictor, not part of the consumer-facing contract.)
 
-Per-axis predictors are independent. No joint distributions across axes in v1.
+Per-axis predictors are **independent at the interface level** — even when they share an underlying world model at the implementation level. Joint distributions across axes are not exposed in v1; consumers wanting multi-axis predictions issue multiple calls.
 
 **Predictor registry.** Predictors are organized in a registry keyed by `(axis, meta_context)`. Each axis has distinct predictors per active meta-context (Waking / Sleep), matching commitment #14's faithful per-context pattern. Horizon is a parameter passed to the predictor at call time, not a registry dimension.
 
@@ -492,9 +526,9 @@ Registry population is declarative (matching L3's fusion config pattern). Dispat
 
 L4 does not write to L3. The only L4 → L3 flow is the predictive-prior hook (L3 reads L4's forecast as a Bayesian prior, opt-in per axis).
 
-**Counterfactual reasoning.** L4 owns the action-conditioning machinery. When `predict()` is called with a specific `action`, the predictor returns the counterfactual forecast — predicted state assuming Regis takes that action. L5 calls `predict()` once per candidate action it wants to compare, then uses the returned distributions to choose.
+**Counterfactual reasoning.** L4 owns the action-conditioning machinery. The action input is part of the JEPA architecture (commitment #16): `(current latent state, action embedding) → predicted next latent state`. When `predict()` is called with a specific `action`, the predictor produces the counterfactual forecast — predicted state assuming Regis takes that action — by routing through the action-conditioned branch of the world model. L5 calls `predict()` once per candidate action it wants to compare, then uses the returned distributions to choose.
 
-The full causal-modeling machinery — estimating how Regis's actions actually shape user-state trajectories — accumulates over time as natural experiments and paired action-outcome data accumulate in `prediction_log` and `regis_moments`. This is commitment #15's destination. v1 starts with naïve action-conditioning placeholders (e.g., action shifts predictions by configured constants) and evolves toward proper causal modeling as data permits. The naïve-placeholder vs causal-model distinction is surfaced in the prediction's provenance so consumers can tell whether they are reading a real counterfactual or a hand-set shift.
+The full causal-modeling machinery — calibrating how Regis's actions actually shape user-state trajectories — accumulates as paired (action, outcome) data lands in `prediction_log`, `regis_moments`, and `interject_decisions`. This is commitment #15's destination; commitment #16 names the predictor shape (encoder + action-conditioned predictor) that makes it concrete. v1 starts with hand-engineered action representations (categorical action types, or sparse embeddings derived from existing Regis intervention kinds) and naïve action-conditioning (the predictor's action branch is either an identity placeholder or a configured-constant shift). As data accumulates, the action branch trains under the same JEPA objective as the rest of the world model, and the predictor becomes a calibrated counterfactual engine rather than a placeholder. The placeholder-vs-calibrated distinction is surfaced in the prediction's provenance.
 
 **Failure modes — `PREDICTION_OFFLINE` ≠ low-confidence.** A prediction failure and a low-confidence prediction are different epistemic objects.
 
@@ -514,11 +548,13 @@ The log is the substrate for the universal prediction-error learning loop: every
 
 Predictions themselves are computed on demand and not pre-computed or cached. The log is for training, not for serving.
 
-**Learning loop.** L4 predictors update via prediction-error training. The mechanism:
+**Learning loop.** L4 predictors update via prediction-error training. Under commitment #16, the core training objective is **latent-space prediction loss + SIGReg regularization** — the predictor learns to forecast embeddings of future state, and SIGReg keeps the latent space from collapsing. Axis-level calibration (against actual axis values from `user_state_estimate`) happens at the projection heads, downstream of the latent prediction. Stand-alone per-axis predictors that don't share the world model train via direct ground-truth regression as before.
+
+The mechanism:
 
 1. A prediction made at time t is logged with full provenance.
-2. At time t + horizon, actual state is recorded in `user_state_estimate` by L3.
-3. The training pass reads logged predictions paired against actual state at horizon times, computes prediction errors, and updates predictor weights.
+2. At time t + horizon, actual state is recorded in `user_state_estimate` by L3 (and the corresponding latent representation is computed by the encoder).
+3. The training pass reads logged predictions paired against actual latent state at horizon times, computes embedding-space prediction errors (plus SIGReg on the latent distribution and projection-head losses on the axis outputs), and updates encoder/predictor/head weights.
 
 Training cadence is per-predictor, declared in the registry:
 
@@ -560,14 +596,22 @@ Per-axis predictor entries declare their ground-truth source and a calibration-m
 
 Predictor training is also meta-context-aware: each context's predictors typically train on data from their own context, often event-triggered by the meta-context transition that ends a complete session. This naturally staggers training — sleep predictors train during waking hours (after a completed sleep session), waking predictors train during sleep (after a completed waking day) — avoiding the case where a predictor is being updated while actively producing live predictions in its own context.
 
-**Evolution.** L4 does not exist today (no predictors are built). Initial implementations come online as their respective input axes become available — biometric-derived predictors as L2 features stabilize, voice-derived predictors as prosody and STT mature, BCI-derived predictors when the BioAmp EXG Pill is online. The sleep classifier (currently at `apps/inference/classifier/`) is the closest existing component and will be wrapped as an L4 predictor as part of migration. Predictive priors for L3 come online once any individual predictor demonstrates better-than-smoothed-recent performance on a per-axis basis. See §11.
+**Evolution.** L4 does not exist today as a coherent layer (no world model is trained, no predictor registry is built). The migration is staged:
+
+1. **v1 — per-axis scaffolds (stand-alone predictors, non-world-model branch).** Initial implementations come online as their respective input axes become available — biometric-derived predictors as L2 features stabilize, voice-derived predictors as prosody and STT mature, BCI-derived predictors when the BioAmp EXG Pill is online. The existing sleep classifier (XGBoost at `apps/inference/classifier/`) wraps as the first stand-alone per-axis predictor in the registry — an axis with categorical output that doesn't share a world model is exactly the case #16 carves out as legitimate stand-alone. Every v1 predictor honors the `predict(axis, horizon, action)` interface so its call sites compose forward.
+2. **v2 — JEPA world model lands (commitment #16).** Once ~4–8 weeks of paired (state, action, next-state) data has accumulated via #13's outcome-driven decisions, the LeWM recipe trains end-to-end on the desktop PC's 4080. Axes whose predictors share the world model migrate their projection heads onto it; axes that don't (sleep classifier, event-shaped binary axes) stay stand-alone in the registry. The transition is per-axis-class, not all-at-once.
+3. **v3 — predictive priors and rolling counterfactual.** Predictive priors for L3 come online once any individual predictor demonstrates better-than-smoothed-recent performance on a per-axis basis. CEM-style L5 planning over the world model activates per action-class once the action-conditioning branch is calibrated.
+
+See §11 for current gaps.
 
 **Open questions.**
 - *Predictor model versioning.* Beyond `model_id` in the prediction log, full version-control machinery (rollback, A/B comparison across versions, model lineage tracking) is deferred to implementation.
-- *Counterfactual learning machinery.* v1 uses naïve action-conditioning. True causal modeling — accumulating natural experiments or explicit experimentation to estimate Regis's actual effects on state trajectories — is deferred per commitment #15.
+- *Action embedding space.* Commitments #16 + #15 require an embedding space for Regis's actions. The space's shape (categorical kind tokens + a continuous utterance-embedding vector? a learned action codebook? a unified embedding via the same text encoder used for utterances?) is deferred to the world-model implementation. v1 uses a small categorical kind enum as a placeholder.
+- *Goal-state specification for L5 planning.* Once L5 transitions to CEM-style world-model planning (commitment #16, L5 implication), goal states must be specified in the world model's latent space. The pipeline for deriving goal embeddings — averaged latent states from labeled "good outcome" sessions, hand-specified per-context targets, or user-specified preferences — is deferred.
+- *Cold-start training data volume.* The JEPA recipe needs sufficient (state, action, next-state) triples to train without collapse. Estimated threshold is weeks-to-months of real interaction. The crossover point at which the world-model implementation supersedes v1 per-axis regression scaffolding is data-driven, not date-driven.
 - *Self-report integration as training signal.* Mood reports, dream recalls, and declared-axis writes are obvious ground-truth sources. The specific pipeline (cadence, weighting vs inferred state, conflict resolution) is deferred.
-- *Multi-user generalization.* Per-user predictors vs shared models with personalization layers. Deferred until N > 1.
-- *Per-axis forecasting math.* Which model class fits which axis (regression, Bayesian, GP, small NN, eventually multimodal transformer). Lives in the subsystem doc (`docs/Architecture/PREDICTION.md` planned), not in the architecture overview.
+- *Multi-user generalization.* Per-user predictors vs shared world models with personalization layers. JEPA's strength is that per-user fine-tuning over a population-pretrained world model is a clean path; deferred until N > 1.
+- *Per-axis forecasting math (non-world-model branch).* Which model class fits which axis when not sharing the world model (regression, Bayesian, GP, small NN). Lives in the subsystem doc (`docs/Architecture/PREDICTION.md` planned), not in the architecture overview.
 
 ---
 
@@ -577,7 +621,12 @@ Predictor training is also meta-context-aware: each context's predictors typical
 
 **Job (preview).** Take predictions + user-outcome history + current explicit input + meta-context and decide what action (if any) Regis takes. Routes by **intent** (per commitment #10) — explicit events dispatch as commands, continuous state updates feed posture decisions (Witness vs Companion mode per commitment #5).
 
-Components today: the Thompson contextual bandit (`learned_decider.py`) implements commitment #13's outcome-driven action selection. The treatment-effect estimation loop (commitment #15) consumes its accumulated paired data over time.
+**Action-selection evolution.**
+
+- **v1 — Thompson contextual bandit (commitment #13).** `learned_decider.py` selects among discrete action options using outcome-labeled history. Works at N=1 with light data. Substrate today.
+- **v2 — World-model planning over JEPA predictor (commitment #16).** Once the L4 world model's action-conditioning branch is calibrated enough, L5 samples candidate Regis actions, queries L4 with each (`predict(axis, horizon, action=candidate)`), compares predicted next-state embeddings against goal-state embeddings in latent space, and selects the action whose predicted trajectory best matches the goal. Algorithm: Cross-Entropy Method (CEM) sampling, as in LeWM. The Thompson bandit doesn't disappear — it remains valuable for actions whose downstream effects are too coarse or too rare to model — but for the major action categories (interject vs witness, content-kind selection, cue timing) the world-model planner supersedes hand-tuned scoring as data permits.
+
+The transition is per-action-class, not all-at-once: action categories where the world model is well-calibrated transition to planner-driven selection; categories where it isn't stay on the bandit. Commitment #16's provenance signaling (placeholder vs calibrated action-conditioning) is what L5 reads to decide which mechanism to use per action class.
 
 ---
 
@@ -628,7 +677,7 @@ This section documents the sleep sub-system as a unified concept, mapping each c
 
 | Component | Layer | Role |
 |---|---|---|
-| **Sleep classifier** | L4 (Prediction) | Trained XGBoost on biometric features; predicts REM/non-REM per epoch. Lives at `apps/inference/classifier/`. |
+| **Sleep classifier** | L4 (Prediction) | Trained XGBoost on biometric features; predicts REM/non-REM per epoch. Lives at `apps/inference/classifier/`. Under commitment #16, this is a stand-alone per-axis predictor (categorical output, non-world-model branch) — registered in L4's predictor registry without sharing the JEPA encoder/predictor. |
 | **Sleep sessions** | L3 (Fusion) | Aggregated session boundaries (when sleep started/ended, duration, fragmentation). Stored in `sleep_sessions` table. |
 | **Dream recall** | L1 (Sensors) + L5 (Decision) | Morning capture flow: user speaks/types dream → STT → `dream_recalls` table → embedding. Major product surface for v1 validation. |
 | **Sleep cues** | L5/L6 (Decision/Output) | Gentle audio intervention during sleep (witness-mode TTS via bone-conduction). Gated by `cue_decision.py` safety rules. |
@@ -871,7 +920,7 @@ This index is the **bridge between ARCHITECTURE.md (ideal) and STATUS.md (realit
 - **`feature_engine.py` is a legacy L2 stab:** `apps/inference/feature_engine.py` (+ `main.py` import + `tests/test_feature_engine.py`) implements real-time biometric/audio feature extraction from the prior FastAPI-inference-server era. Not wired into the current pipeline (chat/wisp/recall/daybook.py don't import it). Decision pending: fold its logic into the eventual `apps/inference/features/` reorganization, or retire it. Until then, do not wire new code against it.
 - **Body-bridge L1→L3 shortcut:** body-bridge reads raw HR/HRV from L1 and applies heuristics directly. Ideal: formal L2 features (heartpy / neurokit2) producing FeatureSnapshot → L3 fusion.
 - **Fusion engine doesn't exist as a separate concept:** today the substrate reads scattered data + body-bridge is the only synthesizer. Ideal: dedicated L3 fusion engine that combines all modality features into a unified `BeliefState`.
-- **L4 (Prediction) has no components:** zero predictive heads exist. Ideal: per-state-axis predictors (arousal at t+30min, REM probability, sleep onset, etc.).
+- **L4 (Prediction) has no components:** zero predictive heads exist; no predictor registry; no `prediction_log` table. Ideal (per commitment #16): a shared JEPA world model (encoder + action-conditioned predictor) with per-axis projection heads (arousal at t+30min, REM probability, sleep onset, etc.), plus stand-alone per-axis predictors for axes that don't share the world model (sleep classifier, event-shaped binary axes). v1 scaffolds land as per-axis stand-alones with the world-model interface already in place; the shared world model lands when paired-data volume permits.
 - **Meta-context biases not implemented at L2–L4:** commitment #14 declares cross-layer biasing; today only L5/L6 (persona — Witness vs Companion) honors this. Ideal: every layer applies meta-context bias.
 
 ### Modality coverage gaps
@@ -886,6 +935,8 @@ This index is the **bridge between ARCHITECTURE.md (ideal) and STATUS.md (realit
 - **Online learning loops:** only the Thompson bandit learns from data; no other components improve over time. Ideal: every predictor + decider learns from outcomes.
 - **No labeled training data pipeline:** future trained models require labels; no auto-labeling infrastructure exists. Ideal: multi-modal-LLM auto-labeling pass + self-report capture.
 - **Treatment-effect estimation (commitment #15):** bandit produces paired (action, outcome) data but counterfactual reasoning ("if Regis does X, predicted t+1 = ?") isn't implemented yet. Ideal: causal model consumed by L4's `predict(axis, horizon, action)` interface.
+- **JEPA world model (commitment #16):** no encoder/predictor/SIGReg machinery exists. v1 predictors land as per-axis regression scaffolds with the L4 interface shaped for the world-model destination (every prediction logs provenance distinguishing placeholder vs calibrated action-conditioning). Ideal: shared encoder + action-conditioned predictor + projection heads, trained end-to-end via the LeWM recipe on accumulated (state, action, next-state) triples. Estimated 4–8 weeks of real interaction data before the world-model implementation supersedes per-axis scaffolding.
+- **CEM-style L5 planning (commitment #16, L5 implication):** L5 today selects actions via the Thompson bandit (`learned_decider.py`) or fixed-weight scoring. The world-model planner — sample candidate actions, query L4 for predicted next-state embedding per candidate, pick the closest to a goal embedding — depends on a calibrated world model and is unimplemented.
 
 ### Documentation gaps
 
