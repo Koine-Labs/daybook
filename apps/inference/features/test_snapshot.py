@@ -48,3 +48,28 @@ def test_naive_timestamp_rejected():
             source="watch.hr_30s",
             payload={},
         )
+
+
+def test_intent_defaults_to_continuous():
+    snap = FeatureSnapshot(
+        user_id="61c18d4c-1c20-408a-bd5f-f5f88fd9922f",
+        timestamp=datetime(2026, 5, 27, 15, 0, tzinfo=timezone.utc),
+        modality="biometric",
+        source="watch.hr_30s",
+        payload={"hr_mean": 68.2},
+    )
+    assert snap.intent == "continuous"
+
+
+def test_explicit_intent_roundtrips():
+    snap = FeatureSnapshot(
+        user_id="61c18d4c-1c20-408a-bd5f-f5f88fd9922f",
+        timestamp=datetime(2026, 5, 27, 15, 0, tzinfo=timezone.utc),
+        modality="voice",
+        source="mic.speech",
+        payload={"transcript": "hello"},
+        intent="explicit",
+    )
+    assert snap.intent == "explicit"
+    d = snap.to_dict()
+    assert d["intent"] == "explicit"
