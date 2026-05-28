@@ -22,6 +22,9 @@ dependencies = [
     # (no dep); kokoro is optional. sounddevice/soundfile back playback + WAV.
     "sounddevice>=0.4.6",
     "soundfile>=0.12.1",
+    # Streaming STT for the wake-word path (Week 2). stt_streaming defaults to
+    # faster-whisper small.en/int8; stt.py uses recall.whisper_client (openai-whisper).
+    "faster-whisper>=1.0.0",
 ]
 
 [project.optional-dependencies]
