@@ -1,6 +1,25 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-24 (Architecture commitment #16 added: L4 prediction operates in latent space — JEPA-family world model, LeWM recipe as v1 target. L4 + L5 sections reframed accordingly. See `docs/ARCHITECTURE.md §2.16`. Prior: 2026-05-19 — Native iOS + watchOS apps live. FastAPI bridge gated with API key. Cloudflare Tunnel at `https://daybook.koinelabs.com` makes the Mac brain reachable from the phone anywhere on the internet.)**
+**Last updated: 2026-05-27 — REBUILD IN PROGRESS.**
+
+v0 implementation scrapped (commits `6aae6f5` + `8dd0a33` deleted iOS, chat handler, realtime classifier, cue decider, body-bridge, sleep observer, audio chain, and adjacent v0 modules). The rebuild proceeds per `docs/REBUILD_PLAN.md`, targeting the architecture in `docs/ARCHITECTURE.md`.
+
+**Phase 0 safety net in place:**
+- Code: tag `v0-pre-rebuild` at commit `22f6ffb` (on origin)
+- Data: Neon branch `pre-rebuild-snapshot` (`br-muddy-bonus-apu2y8kw`, all 22 tables intact)
+
+**What actually runs tonight (post-cleanup):**
+- `python -m recall.capture --text "..."` — dream-recall logging (writes `dream_recalls` + embedding)
+- `apps/api/` FastAPI bridge — surviving routes: `health`, `recall`, `dreams`, `observations`, `sessions`, `persona`, `state`. Chat + compose routes deleted pending Phase 6/8 rebuild.
+- `apps/wisp/composer.py` — LLM-composes from persona + explicit_context only; substrate (retrieval, traits, prosody, I-Models) returns in Phase 6
+- BGE-M3 embeddings + Codex LLM client (`apps/inference/{embeddings,llm}`) — fully functional
+- Trained sleep classifier model file (`apps/inference/classifier/models/production_binary_rem.json`) — preserved; not yet wired
+
+**Nothing else from v0 currently runs.** Sleep cues, autonomous interject, sleep observer, chat handler, native iOS/Watch apps, Pi daemon (broken — Pi chat needs to migrate imports) — all gone until their replacement layers land per REBUILD_PLAN.md.
+
+The historical body below this banner describes pre-scrap state and is progressively out of date. Each completed rebuild phase will update its relevant section.
+
+**Prior — last pre-rebuild update (2026-05-24):** Architecture commitment #16 added (JEPA-family world model, LeWM recipe v1 target). L4 + L5 sections reframed accordingly. See `docs/ARCHITECTURE.md §2.16`.
 
 The single page that answers "where are we, where are we going, what's blocking us?" Updated after substantive work lands. Open this any session when you need orientation.
 

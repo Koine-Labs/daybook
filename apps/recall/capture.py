@@ -21,7 +21,6 @@ sys.path.insert(0, str(INFERENCE_DIR))
 
 from db import get_conn  # noqa: E402
 from embeddings import embed_and_store  # noqa: E402
-from imodels import log_novelty_observation  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -134,24 +133,6 @@ def capture(
         embed_error = str(e)
         logger.warning("Embedding failed (continuing): %s", e)
 
-    # Novelty signal: dream recall is direct user-state evidence. Vector
-    # reused from embed_and_store above. Failure must never block the
-    # recall write path.
-    if embedding_id is not None and dream_vec is not None:
-        try:
-            log_novelty_observation(
-                user_id=user_id,
-                state_snapshot={
-                    "source_type": "dream_recall",
-                    "source_id": dream_id,
-                    "depth": depth,
-                    "text_preview": text[:200],
-                },
-                embedding=dream_vec,
-            )
-        except Exception as e:
-            logger.warning("novelty logging failed (recall): %s", e)
-
     regis_utterance: str | None = None
     compose_error: str | None = None
     composition_seconds: float | None = None
@@ -179,16 +160,6 @@ def capture(
         except Exception as e:
             compose_error = str(e)
             logger.warning("Composer failed (continuing): %s", e)
-
-    try:
-        from interject.post_recall_trigger import post_recall_trigger
-        post_recall_trigger(
-            user_id=user_id,
-            dream_recall_id=dream_id,
-            dream_text=text,
-        )
-    except Exception as e:
-        logger.warning("post_recall trigger failed: %s", e)
 
     return DreamCapture(
         dream_recall_id=dream_id,

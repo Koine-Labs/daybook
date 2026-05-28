@@ -2,6 +2,8 @@
 
 This file orients Claude Code sessions working in this repo. Read this first, then read `docs/STATUS.md` for current state.
 
+> **REBUILD IN PROGRESS (started 2026-05-27).** The v0 implementation has been substantially scrapped (commits `6aae6f5` + `8dd0a33`) to make room for the architecture-aligned rebuild described in `docs/ARCHITECTURE.md` and sequenced in `docs/REBUILD_PLAN.md`. Sections below — especially the repo layout and quick-start commands — describe pre-scrap structure and are progressively out of date. **For what actually runs tonight, read `docs/STATUS.md` first.** Phase 0 safety net: tag `v0-pre-rebuild` at `22f6ffb`, Neon branch `pre-rebuild-snapshot`.
+
 ## What this project is
 
 **Daybook is an always-on AI empath companion that knows you through your body.** Continuous biometric / neural sensing (Apple Watch today, BCI via BioAmp EXG Pill in days, custom wearable later) + a persistent character (**Regis**, a will-o-wisp TBATE-inspired) that evolves with the user over years.

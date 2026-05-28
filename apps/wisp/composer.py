@@ -27,9 +27,39 @@ sys.path.insert(0, str(INFERENCE_DIR))
 from db import get_conn  # noqa: E402
 from llm import ChatClient  # noqa: E402
 from embeddings import embed, retrieve_similar  # noqa: E402
-from imodels.substrate import SubstrateContext, gather_substrate  # noqa: E402
 
-from .embedding_hook import embed_regis_moment  # noqa: E402
+
+# --- Substrate stubs ---
+# gather_substrate / embed_regis_moment / SubstrateContext lived in
+# apps/inference/imodels/ + apps/wisp/embedding_hook.py before the v0 scrap
+# (commit 8dd0a33). These minimal stubs let composer.py import cleanly and
+# LLM-compose from persona + explicit_context. Retrieval, traits, prosody,
+# I-Models, and regis_self return when apps/inference/retrieval/ lands in
+# Phase 6 of the rebuild and composer.py relocates to apps/inference/output/.
+
+
+@dataclass
+class SubstrateContext:
+    current_prosody: list[dict[str, Any]] = field(default_factory=list)
+    regis_traits: dict[str, float] = field(default_factory=dict)
+    regis_self: dict[str, Any] | None = None
+    active_i_models: list[dict[str, Any]] = field(default_factory=list)
+    relevant_observations: list[dict[str, Any]] = field(default_factory=list)
+    active_i_model_cluster_ids: list[Any] = field(default_factory=list)
+    primary_i_model_cluster_id: Any = None
+    current_user_state: dict[str, Any] | None = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"_stub": True, "_reason": "substrate rebuild pending Phase 6"}
+
+
+def gather_substrate(*, user_id: str, query_embedding: Any = None) -> SubstrateContext:  # noqa: ARG001
+    return SubstrateContext()
+
+
+def embed_regis_moment(user_id: str, moment_id: str, text: str) -> None:  # noqa: ARG001
+    return None
+
 
 # PERSONA.md sits next to this file in apps/wisp/
 PERSONA_PATH = Path(__file__).resolve().parent / "PERSONA.md"

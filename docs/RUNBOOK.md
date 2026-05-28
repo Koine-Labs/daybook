@@ -2,6 +2,25 @@
 
 **What command do I type to use X?** Answers here.
 
+> **REBUILD IN PROGRESS (started 2026-05-27).** Most scenarios below depended on v0 modules that have been scrapped (`apps/chat/`, `apps/inference/realtime.py`, `apps/inference/cue_decision.py`, `apps/daybook.py`, the `audio/` TTS chain, etc.). They are progressively out of date and will be rewritten as rebuild phases land per `docs/REBUILD_PLAN.md`.
+>
+> **What actually runs tonight:**
+>
+> ```bash
+> # Dream-recall capture (works):
+> cd $REPO/apps && source inference/.venv/bin/activate
+> python -m recall.capture --text "I dreamed about..."
+> python -m recall.capture   # interactive mic recording
+>
+> # FastAPI bridge (limited — chat + compose routes deleted, others work):
+> cd $REPO/apps && source inference/.venv/bin/activate
+> cd api && uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+>
+> # LLM + embeddings smoke tests (unaffected):
+> [venv] python -m llm.smoke_test
+> [venv] python -m embeddings.smoke_test
+> ```
+
 This doc is scenario-driven. Skim the **scenarios** section first, then look up specific services + one-shots below as needed.
 
 > **Working directory** for almost every command: `/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook` (the monorepo root). I'll write that as `$REPO`.
