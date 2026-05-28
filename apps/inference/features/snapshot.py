@@ -1,14 +1,14 @@
 """FeatureSnapshot — uniform envelope produced by every L2 feature extractor.
 
 Per ARCHITECTURE.md §3 L2: every modality's L2 output is a FeatureSnapshot
-with a uniform envelope (timestamp, source, modality, confidence) and a
+with a uniform envelope (timestamp, source, modality, intent, confidence) and a
 modality-specific payload (JSONB-shaped dict).
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass
@@ -20,6 +20,7 @@ class FeatureSnapshot:
     modality: str                     # 'biometric' | 'audio' | 'mac' | 'eeg' | 'cam' | 'derived'
     source: str                       # e.g., 'watch.hr_30s', 'mac.app_activity'
     payload: dict[str, Any]           # modality-specific feature dict
+    intent: Literal["explicit", "continuous"] = "continuous"  # commitment #10; Week 1 sources are continuous
     confidence: float | None = None   # [0, 1] if computable
     duration_ms: int | None = None    # observation window length
     meta_context_hint: str | None = None  # e.g., 'waking' if known at L2
