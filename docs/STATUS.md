@@ -1,19 +1,41 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-27 — REBUILD IN PROGRESS.**
+**Last updated: 2026-05-28 — MVP Week 1 complete.**
+
+## 2026-05-28 — MVP Week 1 complete
+
+**Shipped this week (PRs #1–#8 on `main`):**
+- Migration 0009: per-axis-row `user_state_estimate` + `prediction_log` + `sensor_readings` consent columns. Applied via Neon MCP; backfill verified.
+- `bin/sync_hk_export.py` — incremental Apple Health → `sensor_readings`, idempotent.
+- `apps/inference/capture/mac_sensors.py` — active_app + idle_seconds loop, 30s tick.
+- `apps/inference/features/snapshot.py` — `FeatureSnapshot` L2 envelope.
+- `apps/inference/fusion/` — `BeliefState` + per-axis writer + `meta_context` + `sleep_stage` axes.
+- End-to-end smoke: `python -m fusion.smoke_test` writes per-axis rows from live Mac sensor + Apple Health data (`waking/browsing` confirmed in Neon).
+- Fixed pre-existing `python-multipart` gap so the FastAPI bridge can start.
+
+**Two L3 axes live:** `meta_context`, `sleep_stage`. Other axes (`arousal_inferred`, `state_declared`, `audio_social_context`, `cognitive_load`) defer to Weeks 2–3.
+
+**What runs tonight:**
+- `python -m recall.capture --text "..."` — dream-recall logging (writes `dream_recalls` + embedding).
+- `apps/api/` FastAPI bridge — surviving routes: `health`, `recall`, `dreams`, `observations`, `sessions`, `persona`, `state`. Chat + compose routes deleted pending Phase 6/8 rebuild.
+- `apps/wisp/composer.py` — LLM-composes from persona + explicit_context only; substrate (retrieval, traits, prosody, I-Models) returns in Phase 6.
+- BGE-M3 embeddings + Codex LLM client (`apps/inference/{embeddings,llm}`) — fully functional.
+- Trained sleep classifier model file (`apps/inference/classifier/models/production_binary_rem.json`) — preserved; not yet wired.
+- **NEW:** `python -m capture.mac_sensors` (loops, writes `mac_activity` to `sensor_readings` every 30s).
+- **NEW:** `bin/sync_hk_export.py <path/to/export.xml>` (idempotent Apple Health → `sensor_readings`).
+- **NEW:** `python -m fusion.smoke_test` (full Week-1 pipeline end-to-end).
+
+**Next:** Week 2 — re-pull TTS chain from `v0-pre-rebuild` tag; OpenWakeWord + wake-word → STT → chat → TTS roundtrip. Per `docs/superpowers/specs/2026-05-27-vertical-slice-waking-empath-design.md` §8.
+
+---
+
+**Prior — 2026-05-27 — REBUILD IN PROGRESS.**
 
 v0 implementation scrapped (commits `6aae6f5` + `8dd0a33` deleted iOS, chat handler, realtime classifier, cue decider, body-bridge, sleep observer, audio chain, and adjacent v0 modules). The rebuild proceeds per `docs/REBUILD_PLAN.md`, targeting the architecture in `docs/ARCHITECTURE.md`.
 
 **Phase 0 safety net in place:**
 - Code: tag `v0-pre-rebuild` at commit `22f6ffb` (on origin)
 - Data: Neon branch `pre-rebuild-snapshot` (`br-muddy-bonus-apu2y8kw`, all 22 tables intact)
-
-**What actually runs tonight (post-cleanup):**
-- `python -m recall.capture --text "..."` — dream-recall logging (writes `dream_recalls` + embedding)
-- `apps/api/` FastAPI bridge — surviving routes: `health`, `recall`, `dreams`, `observations`, `sessions`, `persona`, `state`. Chat + compose routes deleted pending Phase 6/8 rebuild.
-- `apps/wisp/composer.py` — LLM-composes from persona + explicit_context only; substrate (retrieval, traits, prosody, I-Models) returns in Phase 6
-- BGE-M3 embeddings + Codex LLM client (`apps/inference/{embeddings,llm}`) — fully functional
-- Trained sleep classifier model file (`apps/inference/classifier/models/production_binary_rem.json`) — preserved; not yet wired
 
 **Nothing else from v0 currently runs.** Sleep cues, autonomous interject, sleep observer, chat handler, native iOS/Watch apps, Pi daemon (broken — Pi chat needs to migrate imports) — all gone until their replacement layers land per REBUILD_PLAN.md.
 

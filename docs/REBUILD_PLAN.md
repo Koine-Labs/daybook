@@ -1,8 +1,33 @@
 # Daybook — Rebuild Plan
 
-**Status: draft (v0.1) for review. Not yet executed.**
+**Status: executing — MVP Week 1 complete (2026-05-28).**
 **Date drafted: 2026-05-27**
 **Owner: Aakash Agrawal**
+
+## Progress log
+
+### 2026-05-28 — MVP Week 1 landed (PRs #1–#8 on `main`)
+
+Week-1 vertical slice closed per `docs/superpowers/plans/2026-05-27-mvp-week-1-schema-watch-mac-sensors.md`. Phase 0 + Phase 1 done; Phases 2 + 3 partially scaffolded (the two axes needed to demo the slice).
+
+**Landed:**
+- Phase 0 safety moves (tags, Neon snapshot, rebuild branches) — completed pre-Week-1.
+- Phase 1 schema migration — landed as `0009_per_axis_row_user_state_estimate.sql` (numbering caught up to live migrations; renamed from "0005" in the original plan). Adds per-axis-row `user_state_estimate`, `prediction_log`, and `sensor_readings` consent columns. Backfill verified via Neon MCP.
+- Phase 2 L2 (partial) — `apps/inference/features/snapshot.py` (`FeatureSnapshot` envelope). Biometric / audio / text per-modality modules deferred to Week 2+.
+- Phase 3 L3 (partial) — `apps/inference/fusion/{belief_state.py,writer.py,axes/meta_context.py,axes/sleep_stage.py}` plus end-to-end smoke. Combiners for other axes (`arousal`, `valence`, …) and post-session observers deferred to Weeks 2–3.
+- L1 capture writers: `bin/sync_hk_export.py` (Apple Health incremental) + `apps/inference/capture/mac_sensors.py` (Mac active_app + idle). Both write to `sensor_readings` with the new consent columns.
+- End-to-end smoke (`python -m fusion.smoke_test`): live Mac sensor → fuse → write per-axis row → readback. Confirmed `waking/browsing` row landed in Neon production at 2026-05-28T16:52Z.
+
+**What slipped vs landed (vs the original sequence):**
+- The original Phase 2 estimate ("1 week, biometric first") shrank to just the `FeatureSnapshot` envelope this week. Biometric features (heartpy / neurokit2) defer until needed by a non-Mac axis.
+- Phase 3 sequenced as a full week's work; Week 1 only landed two axes because the spec scopes the MVP to "two L3 axes lit." Other axes (`arousal_inferred`, `state_declared`, `audio_social_context`, `cognitive_load`) defer to Weeks 2–3 alongside the sensors that feed them.
+- L4 (prediction registry, sleep classifier wrap), L5 (decision module, bandit), L6 (TTS, channels), L1 edge intent tagging, chat handler rewrite, decommission deletes (D2/D3/D8), and HK data wipe — all untouched. Expected — those are Weeks 2+.
+
+**Tag:** `mvp-week-1-end` will be created on `main` from the primary worktree after PR #8 merges.
+
+**Next:** Week 2 — re-pull TTS chain from `v0-pre-rebuild` tag; OpenWakeWord + wake-word → STT → chat → TTS roundtrip. Per `docs/superpowers/specs/2026-05-27-vertical-slice-waking-empath-design.md` §8.
+
+---
 
 ---
 
@@ -205,21 +230,21 @@ L1 capture clients live where they capture from (Mac mic listener, HK sync, futu
 
 ## Sequence (order matters; each unblocks the next)
 
-| # | Phase | Estimate | Unblocks |
-|---|---|---|---|
-| 0 | Safety moves (tag + Neon snapshot + rebuild branch + Pi-chat coordination protocol) | 30 min | Everything |
-| 1 | Migration 0005 (prediction_log, consent cols, axis fields) — verify schema first | 1 day | L3, L4 |
-| 2 | **L2 feature extraction** (`features/`) — biometric first, audio when capture exists | **1 week** | L3 (real inputs, not mocks) |
-| 3 | L3 fusion engine — per-axis storage + BeliefState + OFFLINE + historical writes | 1–2 weeks | L4, L5, decommissioning body-bridge |
-| 4 | L4 predictor registry + wrap sleep classifier as first stand-alone | 3–4 days | L5 sleep-cue policy |
-| 5 | L5 decision module v1 — sleep cue + intent dispatch + bandit migration | 1 week | L6 |
-| 6 | L6 output module — TTS + channel selection per meta-context + composer relocation | 3–4 days | end-to-end loop possible |
-| 7 | L1 edge classifier work — intent tagging at capture clients + `sensors/contract.py` | 1 week | clean L1 contract |
-| 8 | Chat handler rewrite over new layered backend | 2–3 weeks | parity with v0 chat |
-| 9 | **End-to-end smoke** — simulated sensor input → L1 → L2 → L3 → L4 → L5 → L6 → TTS or text reply | 2–3 days | exit criterion #4 |
-| 10 | Decommission deletes (D3–D8) after each layer's replacement is live + Pi-chat sign-off per module | rolling | clean repo |
-| 11 | Wipe HK data rows (D2) — after the pre-deletion metrics tombstone is committed | 1 hr | clean Neon state |
-| 12 | Delete iOS/watchOS (D1) | 5 min | repo cleanup |
+| # | Phase | Estimate | Status | Unblocks |
+|---|---|---|---|---|
+| 0 | Safety moves (tag + Neon snapshot + rebuild branch + Pi-chat coordination protocol) | 30 min | [DONE — 2026-05-27] | Everything |
+| 1 | Migration 0005 (prediction_log, consent cols, axis fields) — verify schema first | 1 day | [DONE — 2026-05-28] landed as `0009_per_axis_row_user_state_estimate.sql` | L3, L4 |
+| 2 | **L2 feature extraction** (`features/`) — biometric first, audio when capture exists | **1 week** | [PARTIAL — 2026-05-28] `FeatureSnapshot` envelope shipped; biometric / audio / text submodules deferred to Week 2+ | L3 (real inputs, not mocks) |
+| 3 | L3 fusion engine — per-axis storage + BeliefState + OFFLINE + historical writes | 1–2 weeks | [PARTIAL — 2026-05-28] `BeliefState` + per-axis writer + `meta_context` + `sleep_stage` axes live; other combiners + observers deferred | L4, L5, decommissioning body-bridge |
+| 4 | L4 predictor registry + wrap sleep classifier as first stand-alone | 3–4 days | [NOT STARTED] | L5 sleep-cue policy |
+| 5 | L5 decision module v1 — sleep cue + intent dispatch + bandit migration | 1 week | [NOT STARTED] | L6 |
+| 6 | L6 output module — TTS + channel selection per meta-context + composer relocation | 3–4 days | [NOT STARTED] — Week 2 target | end-to-end loop possible |
+| 7 | L1 edge classifier work — intent tagging at capture clients + `sensors/contract.py` | 1 week | [NOT STARTED] | clean L1 contract |
+| 8 | Chat handler rewrite over new layered backend | 2–3 weeks | [NOT STARTED] | parity with v0 chat |
+| 9 | **End-to-end smoke** — simulated sensor input → L1 → L2 → L3 → L4 → L5 → L6 → TTS or text reply | 2–3 days | [PARTIAL — 2026-05-28] Week-1 smoke L1 → L2 → L3 → DB readback green; L4–L6 legs pending | exit criterion #4 |
+| 10 | Decommission deletes (D3–D8) after each layer's replacement is live + Pi-chat sign-off per module | rolling | [NOT STARTED] | clean repo |
+| 11 | Wipe HK data rows (D2) — after the pre-deletion metrics tombstone is committed | 1 hr | [NOT STARTED] | clean Neon state |
+| 12 | Delete iOS/watchOS (D1) | 5 min | [DONE — 2026-05-27] (pre-Week-1 scrap commit `8dd0a33`) | repo cleanup |
 
 **Realistic total: 9–14 weeks solo, part-time.**
 
