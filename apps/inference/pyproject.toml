@@ -18,6 +18,10 @@ dependencies = [
     # Postgres + env loading (added 2026-05-17 for Daybook v0)
     "psycopg[binary,pool]>=3.2",
     "python-dotenv>=1.0",
+    # Voice loop — audio I/O (Week 2, 2026-05-28). TTS ships on macOS `say`
+    # (no dep); kokoro is optional. sounddevice/soundfile back playback + WAV.
+    "sounddevice>=0.4.6",
+    "soundfile>=0.12.1",
 ]
 
 [project.optional-dependencies]
