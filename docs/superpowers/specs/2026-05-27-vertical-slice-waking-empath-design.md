@@ -181,60 +181,66 @@ ALTER TABLE sensor_readings ADD COLUMN suppressed_for jsonb;
 
 ## 7. File structure (MVP target)
 
+> **Realigned 2026-05-28 (post-scrap reality).** The original tree below assumed an
+> `apps/chat/` package and `apps/inference/retrieval/substrate.py`. Neither survived the
+> rebuild scrap. The conversational turn engine is now **`apps/wisp/composer.py`**
+> (`compose_utterance()`), and the substrate seam lives inside it as
+> `gather_substrate()` (currently a stub). Week 2 therefore builds a thin
+> **`apps/voice/`** runtime that orchestrates wake-word → STT → `compose_utterance()`
+> → TTS, rather than a separate chat handler. ARCHITECTURE.md is updated as these land.
+
 ```
 apps/
 ├── recall/                          KEPT — validation wedge
-├── wisp/                            KEPT — composer.py + PERSONA.md
-├── chat/                            REBUILT LIGHTER
-│   ├── handler.py                   — turn handler reading BeliefState before compose
-│   ├── conversation.py              — lifecycle (start/append/end)
-│   └── cli.py                       — REPL surface
+├── wisp/                            KEPT — IS the turn engine
+│   ├── composer.py                  — compose_utterance(): reads BeliefState + substrate, calls LLM
+│   ├── gather_substrate()           — substrate seam (in composer.py); stub → real impl in Week 2
+│   └── PERSONA.md
+├── voice/                           NEW (Week 2) — waking-empath runtime loop
+│   ├── loop.py                      — wake-word → STT → compose_utterance() → TTS orchestrator
+│   ├── cli.py                       — run the loop (python -m voice.cli)
+│   └── smoke_test.py                — end-to-end loop smoke (mockable mic/TTS)
 ├── api/                             KEPT + minor additions
-│   └── routes/state_timeline.py     — NEW: GET /state/timeline?axis=&from=&to=
+│   └── routes/state.py              — /body, /body/series (canonical apple_health_* reads)
 ├── pi/                              OUT OF SCOPE (separate Pi chat owns migration)
 └── inference/
-    ├── db.py, parse_apple_health.py, embeddings/, llm/   KEPT
+    ├── db.py, consent.py, parse_apple_health.py (DEPRECATED), embeddings/, llm/   KEPT
+    ├── llm/                          KEPT + RE-PULLED STT
+    │   ├── chat.py                  — ChatClient.auto() (KEPT)
+    │   ├── stt.py                   — RE-PULLED: file/record transcription (uses recall.whisper_client)
+    │   └── stt_streaming.py         — RE-PULLED: transcribe_streaming() mic → text
     ├── classifier/                   KEPT (model is the asset)
-    │   └── inference.py              — NEW: thin wrapper loading production_binary_rem.json
-    ├── audio/                        RE-PULLED from v0-pre-rebuild tag
+    ├── audio/                        RE-PULLED from v0-pre-rebuild tag (TTS, L6)
     │   ├── kokoro_tts.py             — high-quality local TTS
-    │   ├── say_tts.py                — macOS `say` fallback
-    │   └── tts_router.py             — picks backend
-    ├── migrations/
-    │   └── 0009_per_axis_state_and_prediction_log.sql   NEW
-    ├── capture/                      NEW (L1)
-    │   ├── watch.py                  — Apple Health export → sensor_readings writer
-    │   ├── mac_sensors.py            — AppleScript active-app + keystrokes-per-min
-    │   ├── eeg.py                    — BioAmp serial reader (stretch)
-    │   ├── mic_wakeword.py           — OpenWakeWord listener
-    │   └── mic_continuous.py         — VAD + diarization + prosody + ambient
-    ├── features/                     NEW (L2)
-    │   ├── snapshot.py               — FeatureSnapshot envelope (uniform shape)
-    │   ├── biometric.py              — HR/HRV/motion → per-epoch features
-    │   ├── audio.py                  — prosody → features
-    │   └── mac.py                    — Mac sensor features
-    ├── fusion/                       NEW (L3)
-    │   ├── belief_state.py           — BeliefState dataclass, freshness policy
-    │   ├── writer.py                 — per-axis-row writer to user_state_estimate
-    │   └── axes/
-    │       ├── arousal.py
-    │       ├── meta_context.py
-    │       ├── sleep_stage.py
-    │       ├── state_declared.py
-    │       └── audio_social_context.py
-    ├── prediction/                   NEW (L4)
-    │   ├── base.py                   — Predictor interface: predict(axis, horizon, action)
-    │   └── per-axis stubs            — naive regression scaffolds, JEPA-shaped interface
-    ├── decision/                     NEW (L5) — REPLACES deleted interject + cue_decision
-    │   ├── policy.py                 — fixed-weight rules (interject?, witness vs companion?)
-    │   └── outcome_logger.py         — writes prediction_log rows + reconciler
-    └── retrieval/                    NEW (L4+L5 memory) — REPLACES deleted imodels.substrate
-        └── substrate.py              — gather_substrate() returns context for composer
+    │   ├── say_tts.py                — macOS `say` fallback (zero-dep, ships first)
+    │   ├── tts_router.py            — synthesize()/speak(), picks backend, witness/companion modes
+    │   ├── streaming.py             — speak_streaming() sentence-chunked playback
+    │   └── player.py                — sounddevice playback
+    ├── wake_word/                    RE-PULLED (detector + intent only; handlers deferred)
+    │   ├── detector.py              — VoiceWakeWordDetector (openWakeWord wrapper)
+    │   ├── command_intent.py        — classify_intent() (stop/dismiss vs message routing)
+    │   └── training/README.md       — "Hey Regis" custom-model training paths
+    ├── migrations/                   0009 + 0010 APPLIED
+    ├── capture/                      L1 — watch + mac_sensors KEPT (Week 1)
+    ├── features/                     L2 — snapshot.py (FeatureSnapshot, has `intent`) KEPT
+    ├── fusion/                       L3 — KEPT (Week 1)
+    │   ├── belief_state.py          — BeliefState + AxisEstimate (freshness gates)
+    │   ├── loader.py                — NEW (Week 2): load_belief_state(user_id) from DB rows
+    │   ├── writer.py                — per-axis-row writer
+    │   └── axes/{meta_context,sleep_stage}.py
+    ├── prediction/                   NEW (L4) — deferred (F8: lands when L4 starts)
+    └── decision/                     NEW (L5) — Week 4
 
 bin/
 ├── cloudflare-tunnel-{setup,run}.sh  KEPT
-└── sync_hk_export.py                 NEW — cron-able Apple Health pull
+└── sync_hk_export.py                 KEPT — canonical Apple Health pull (6 apple_health_* kinds)
 ```
+
+> `apps/inference/wake_word/handlers.py` is intentionally **not** re-pulled in Week 2:
+> it imports `gesture.recorder`, which the scrap removed. Command-side actions
+> (LISTEN/SEE/DISMISS → DB) return when the gesture layer is rebuilt. Week 2 only
+> needs `classify_intent()` to distinguish a "stop"/"dismiss" command from a real
+> message routed to the composer.
 
 ---
 
@@ -256,17 +262,21 @@ Exit criteria:
 
 ### Week 2: Voice loop restored, but state-aware
 
-**Goal:** Wake-word → STT → chat → TTS path works, with composer reading BeliefState before generating.
+**Goal:** Wake-word → STT → `compose_utterance()` → TTS path works, with the composer reading the freshness-gated BeliefState before generating. (Realigned 2026-05-28: turn engine is the composer, not a separate `apps/chat/handler.py`; orchestration lives in new `apps/voice/`.)
 
 Exit criteria:
-- [ ] `apps/inference/audio/` re-pulled from `v0-pre-rebuild` tag (`git checkout v0-pre-rebuild -- apps/inference/audio/`); smoke tests pass
-- [ ] OpenWakeWord "Regis" custom model trained (via their TTS-augmentation pipeline), listening on external mic
-- [ ] Wake-word fires → `llm/stt_streaming.transcribe_streaming()` → chat handler (rebuilt lighter in `apps/chat/handler.py`)
-- [ ] Chat handler reads current BeliefState before calling composer
-- [ ] Composer reads from `apps/inference/retrieval/substrate.py` (stub replaced with real impl returning context)
-- [ ] Regis's response spoken via TTS through bone-conduction
-- [ ] End-to-end smoke: utter "Regis, how am I?" at a moment of inferred focus → Regis's response is shaped by that state (verified by inspecting the LLM prompt and Regis's word choice)
-- [ ] STATUS.md + REBUILD_PLAN.md updated
+- [ ] `apps/inference/audio/` re-pulled from `v0-pre-rebuild` tag; `python -m audio.smoke_test` passes (macOS `say` backend at minimum)
+- [ ] `apps/inference/llm/stt.py` + `stt_streaming.py` re-pulled; import-clean against current `recall.whisper_client`
+- [ ] `apps/inference/wake_word/` re-pulled (detector + command_intent only; handlers deferred — needs `gesture/`); `python -m wake_word.smoke_test` passes
+- [ ] TTS/STT/wake-word deps added to `apps/inference/pyproject.toml`; install verified
+- [ ] `fusion/loader.py::load_belief_state(user_id) -> BeliefState` reads latest per-axis `user_state_estimate` rows, wraps each as `AxisEstimate` (freshness applied)
+- [ ] `compose_utterance()` reads state via `load_belief_state(...).snapshot()` (freshness-gated) instead of raw `_read_latest_state`
+- [ ] `wisp/composer.py::gather_substrate()` stub replaced with a real impl returning observations + traits + current state
+- [ ] OpenWakeWord "Regis" custom model trained (Colab/local per `wake_word/training/README.md`), dropped at `wake_word/models/hey_regis.onnx`; placeholder `hey_jarvis` works until then
+- [ ] `apps/voice/loop.py` orchestrates: wake-word fires → `transcribe_streaming()` → `classify_intent()` (stop/dismiss vs message) → `compose_utterance()` → `tts_router.speak()` (mode from `ComposedUtterance.mode`)
+- [ ] `python -m voice.smoke_test` passes with mockable mic/TTS (no hardware needed in CI)
+- [ ] End-to-end manual: utter "Regis, how am I?" at a moment of inferred focus → Regis's spoken response is shaped by that state (verified by inspecting the assembled LLM prompt + word choice)
+- [ ] ARCHITECTURE.md updated (voice loop + composer-as-engine), STATUS.md updated
 - [ ] Tag `mvp-week-2-end`
 
 ### Week 3: Continuous mic semantic pipeline + EEG stretch
