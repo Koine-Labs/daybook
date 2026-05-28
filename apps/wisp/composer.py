@@ -27,6 +27,7 @@ sys.path.insert(0, str(INFERENCE_DIR))
 from db import get_conn  # noqa: E402
 from llm import ChatClient  # noqa: E402
 from embeddings import embed, retrieve_similar  # noqa: E402
+from fusion.loader import load_belief_state  # noqa: E402
 
 
 # --- Substrate stubs ---
@@ -256,36 +257,26 @@ def _mode_for_kind(kind: str) -> str:
 
 
 def _read_latest_state(user_id: str) -> dict[str, Any] | None:
-    """Latest per-axis user_state_estimate rows, dict keyed by axis.
+    """Current per-axis state, FRESHNESS-GATED via the L3 BeliefState.
 
-    Post-migration 0009 (per-axis-row schema). Returns
-    {axis: {value, confidence, source, timestamp, meta_context}}
-    or None if no rows.
+    Stale axes (past their per-axis fresh_for_seconds) are dropped so Regis
+    never speaks from data that no longer reflects the user. Shape preserved
+    for _build_user_prompt: {axis: {value, confidence, source, timestamp, meta_context}}.
     """
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT DISTINCT ON (axis)
-                axis, value, confidence, source, timestamp, meta_context
-            FROM user_state_estimate
-            WHERE user_id = %s
-            ORDER BY axis, timestamp DESC
-            """,
-            (user_id,),
-        )
-        rows = cur.fetchall()
-    if not rows:
-        return None
-    return {
-        row[0]: {
-            "value": row[1],
-            "confidence": row[2],
-            "source": row[3],
-            "timestamp": row[4].isoformat() if row[4] else None,
-            "meta_context": row[5],
+    belief = load_belief_state(user_id)
+    now = datetime.now(timezone.utc)
+    out: dict[str, Any] = {}
+    for axis, est in belief.estimates.items():
+        if not est.is_fresh(now=now):
+            continue
+        out[axis] = {
+            "value": est.value,
+            "confidence": est.confidence,
+            "source": est.source,
+            "timestamp": est.timestamp.isoformat(),
+            "meta_context": est.meta_context,
         }
-        for row in rows
-    }
+    return out or None
 
 
 def _build_user_prompt(
