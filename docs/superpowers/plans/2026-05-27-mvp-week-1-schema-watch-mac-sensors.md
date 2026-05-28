@@ -718,12 +718,14 @@ EOF
 
 Run via Neon MCP (against `production` branch):
 ```sql
-SELECT kind, count(*), min(timestamp), max(timestamp)
+SELECT kind, count(*), min(recorded_at), max(recorded_at)
 FROM sensor_readings
 WHERE kind LIKE 'apple_health%' OR kind IN ('sleep_stage', 'hr', 'hrv')
 GROUP BY kind
 ORDER BY kind;
 ```
+
+**Schema reminder:** `sensor_readings` (per migration 0001) has columns `(id, user_id, source, kind, recorded_at, payload)` — the timestamp column is `recorded_at`, NOT `timestamp`, and `source` is a NOT NULL row-level column (not part of payload). Migration 0009 added `consent_scope` + `suppressed_for`. All sensor_readings INSERT and SELECT in this plan should use these column names.
 Record what's there. This tells us whether `parse_apple_health.py` used the `apple_health_*` naming convention or something else.
 
 - [ ] **Step 2: Read parse_apple_health.py to understand its naming + insertion logic**
@@ -975,10 +977,10 @@ Expected: `DONE. {'hr': 2, 'sleep': 1, ...}` and the cutoff is advanced in `~/.d
 
 Verify the insert via Neon MCP:
 ```sql
-SELECT kind, timestamp, payload FROM sensor_readings
+SELECT kind, recorded_at, payload FROM sensor_readings
 WHERE kind IN ('apple_health_hr','apple_health_sleep_stage')
-  AND timestamp >= '2026-05-26'
-ORDER BY timestamp DESC
+  AND recorded_at >= '2026-05-26'
+ORDER BY recorded_at DESC
 LIMIT 5;
 ```
 Expected: the 3 fixture rows appear.
@@ -997,7 +999,7 @@ Use Neon MCP:
 DELETE FROM sensor_readings
 WHERE kind IN ('apple_health_hr','apple_health_sleep_stage')
   AND payload->>'source' = 'Apple Watch'
-  AND timestamp BETWEEN '2026-05-26 21:00:00+00' AND '2026-05-27 11:00:00+00';
+  AND recorded_at BETWEEN '2026-05-26 21:00:00+00' AND '2026-05-27 11:00:00+00';
 ```
 (Adjust the time window to exactly cover the fixture rows.)
 
@@ -1250,10 +1252,10 @@ timeout 35 python -m capture.mac_sensors --interval 10 || true
 
 Verify two rows were written via Neon MCP:
 ```sql
-SELECT timestamp, payload->>'active_app' AS app
+SELECT recorded_at, payload->>'active_app' AS app
 FROM sensor_readings
 WHERE kind = 'mac_activity'
-ORDER BY timestamp DESC
+ORDER BY recorded_at DESC
 LIMIT 5;
 ```
 Expected: 3-4 recent rows.
@@ -1694,12 +1696,12 @@ def fuse_recent(
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT timestamp, payload
+            SELECT recorded_at, payload
             FROM sensor_readings
             WHERE user_id = %s
               AND kind = 'mac_activity'
-              AND timestamp >= %s
-            ORDER BY timestamp DESC
+              AND recorded_at >= %s
+            ORDER BY recorded_at DESC
             LIMIT 1
             """,
             (user_id, window_start),
@@ -1856,13 +1858,13 @@ def fuse_recent(
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            SELECT timestamp, payload
+            SELECT recorded_at, payload
             FROM sensor_readings
             WHERE user_id = %s
               AND kind = 'apple_health_sleep_stage'
-              AND timestamp <= %s
+              AND recorded_at <= %s
               AND (payload->>'end')::timestamptz >= %s
-            ORDER BY timestamp DESC
+            ORDER BY recorded_at DESC
             LIMIT 1
             """,
             (user_id, now, now),
