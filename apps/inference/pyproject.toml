@@ -29,9 +29,20 @@ dependencies = [
     # ships on built-in 'hey_jarvis' until the custom 'hey_regis.onnx' is trained.
     "openwakeword>=0.6.0",
     "onnxruntime>=1.17.0",
+    # Continuous mic semantic pipeline (Week 3). silero-vad (VAD), resemblyzer
+    # (speaker embedding), librosa (prosody/resample). torch + scikit-learn already present.
+    "silero-vad>=5.1",
+    "resemblyzer>=0.1.3",
+    "librosa>=0.10.0",
 ]
 
 [project.optional-dependencies]
+ambient = [
+    # YAMNet ambient classifier — heavy, isolated behind a lazy backend (Week 3 Task 6).
+    # `uv pip install ".[ambient]"` to enable; the loop writes no ambient packets until then.
+    "tensorflow>=2.15",
+    "tensorflow-hub>=0.16",
+]
 analysis = [
     "matplotlib>=3.7",
     "seaborn>=0.12",
