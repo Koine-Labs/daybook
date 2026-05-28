@@ -158,6 +158,25 @@ ALTER TABLE sensor_readings ADD COLUMN suppressed_for jsonb;
 -- e.g., {"reason": "other_voice_present", "window_start": "..."} — when pipeline paused but row still landed
 ```
 
+### 6d. Canonical HealthKit storage path (post-0009 writer convention)
+
+**Single canonical store.** All Apple Health data lands in `sensor_readings` under the `apple_health_*` kind namespace, written exclusively by `bin/sync_hk_export.py`:
+
+| Kind | HealthKit type | Payload |
+|------|----------------|---------|
+| `apple_health_hr` | `HKQuantityTypeIdentifierHeartRate` | `{value, unit, source}` |
+| `apple_health_hrv` | `HKQuantityTypeIdentifierHeartRateVariabilitySDNN` | `{value, unit, source}` |
+| `apple_health_spo2` | `HKQuantityTypeIdentifierOxygenSaturation` | `{value, unit, source}` |
+| `apple_health_respiratory_rate` | `HKQuantityTypeIdentifierRespiratoryRate` | `{value, unit, source}` |
+| `apple_health_temperature` | `HKQuantityTypeIdentifierBodyTemperature` | `{value, unit, source}` |
+| `apple_health_sleep_stage` | `HKCategoryTypeIdentifierSleepAnalysis` | `{stage, end, source, duration_s}` |
+
+**Deprecated path.** `apps/inference/parse_apple_health.py` (the v0 bulk importer that wrote legacy bare kinds `heart_rate`/`hrv`/etc. and populated `sleep_sessions` + `sleep_stage_classifications`) is disabled by a hard guard and kept for history only. Do not re-run it.
+
+**Frozen legacy.** `sleep_sessions` (76 rows) and `sleep_stage_classifications` (7338 rows) are the classifier's training corpus: read-only, never re-written, never re-imported, never re-pointed. They are NOT the live HealthKit store — the live store is `sensor_readings.apple_health_*`.
+
+**Consent.** Every HealthKit write carries `consent_scope = 'apple_health_v1'`; every Mac-activity write carries `consent_scope = 'mac_activity_v1'` (see `apps/inference/consent.py`, privacy policy #1). `suppressed_for` stays NULL until the Week-3 privacy gate lands.
+
 ---
 
 ## 7. File structure (MVP target)

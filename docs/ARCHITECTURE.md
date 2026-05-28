@@ -121,6 +121,8 @@ The two axes are orthogonal: the same modality can appear under different intent
 
 **Why.** Continuous full-fidelity capture is impossible on battery, privacy, and cost grounds. The biological model is correct: the brain doesn't process every photon; it extracts features at low levels and escalates to focused attention selectively. Following this pattern is the only viable architecture for always-on awareness on real hardware.
 
+**Canonical HealthKit storage (post-0009).** Apple Health is a third-party semantic stream and follows the same `sensor_readings` polymorphism. Its single canonical writer is `bin/sync_hk_export.py`, emitting the `apple_health_*` kind namespace (`apple_health_hr`, `apple_health_hrv`, `apple_health_spo2`, `apple_health_respiratory_rate`, `apple_health_temperature`, `apple_health_sleep_stage`). The v0 importer `parse_apple_health.py` is deprecated/disabled; `sleep_sessions` + `sleep_stage_classifications` are frozen classifier-training data, not the live store. Each write stamps `consent_scope` (`apple_health_v1` / `mac_activity_v1`) per `apps/inference/consent.py` — this is the capture-side audit trail the 0009 consent columns were added for.
+
 ### 12. Native clients talk to FastAPI, never brain modules directly
 
 **Rule.** iOS, watchOS, and any future client speaks HTTP to `apps/api/`. They never import `chat`, `recall`, `wisp`, etc. The bridge is the seam. Auth via `X-API-Key` with loopback bypass.

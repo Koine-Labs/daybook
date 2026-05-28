@@ -1,13 +1,22 @@
-"""Parse an Apple Health XML export into Daybook's Postgres schema.
+"""DEPRECATED — one-shot Apple Health XML importer (kept for history only).
 
-Usage:
+>>> DO NOT RUN. <<<
+Superseded by `bin/sync_hk_export.py`, the single canonical HealthKit writer,
+which emits the canonical `apple_health_*` kind namespace into
+`sensor_readings`. The `sleep_sessions` + `sleep_stage_classifications` tables
+this script once populated are now FROZEN classifier-training data: read-only,
+never re-written, never re-imported. A hard guard in main() exits non-zero so
+the file can't be re-run. The body below is preserved verbatim as a record of
+how the original v0 import worked.
+
+Usage (HISTORICAL — no longer functional):
     cd apps/inference
     ./.venv/bin/python parse_apple_health.py \\
         --xml "/path/to/apple_health_export/export.xml" \\
         --user-email aakash@example.com \\
         [--clear]
 
-Streams the XML (does not load the full 1+ GB file into memory).
+Streamed the XML (did not load the full 1+ GB file into memory).
 
 What gets imported into `sensor_readings`:
   - HKQuantityTypeIdentifierHeartRate                       -> kind = heart_rate
@@ -352,6 +361,15 @@ def parse(xml_path: Path, user_id: str, *, clear: bool = False) -> dict:
 
 
 def main() -> int:
+    print(
+        "parse_apple_health.py is DEPRECATED and disabled. Use "
+        "bin/sync_hk_export.py (canonical apple_health_* writer). "
+        "sleep_sessions + sleep_stage_classifications are frozen legacy "
+        "training data.",
+        file=sys.stderr,
+    )
+    return 1
+
     p = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
