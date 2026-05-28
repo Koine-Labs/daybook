@@ -1,4 +1,8 @@
-"""Smoke test for audio_context: synthesize → process → persist → cleanup."""
+"""Smoke test for audio_context extraction: synthesize → process → assert.
+
+Extraction only — persistence is exercised by audio_context/test_writer.py and
+the continuous loop. This module never writes to the DB.
+"""
 
 from __future__ import annotations
 
@@ -12,15 +16,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from audio_context.processor import (
-    AudioContextPacket,
-    persist_packet,
-    process_audio_chunk,
-)
-from db import get_conn
+from audio_context.processor import AudioContextPacket, process_audio_chunk
 
-DEFAULT_USER_ID = "61c18d4c-1c20-408a-bd5f-f5f88fd9922f"
-SMOKE_SOURCE = "audio_context_smoke"
 SAMPLE_RATE = 16000
 
 
@@ -72,15 +69,6 @@ def _synthesize_speech_like() -> tuple[np.ndarray, int]:
     return audio, sr
 
 
-def _cleanup(row_id: str) -> None:
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "DELETE FROM sensor_readings WHERE id = %s AND source = %s",
-            (row_id, SMOKE_SOURCE),
-        )
-        conn.commit()
-
-
 def run() -> int:
     real = _load_existing_wav()
     if real is not None:
@@ -122,23 +110,6 @@ def run() -> int:
         )
         print("[smoke] VAD correctly located synthetic voiced region.")
 
-    row_id = persist_packet(packet, user_id=DEFAULT_USER_ID, source=SMOKE_SOURCE)
-    print(f"[smoke] persisted row id: {row_id}")
-
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT kind, source, payload FROM sensor_readings WHERE id = %s",
-            (row_id,),
-        )
-        row = cur.fetchone()
-    assert row is not None, "row should exist after persist"
-    assert row[0] == "audio_segment"
-    assert row[1] == SMOKE_SOURCE
-    assert row[2]["vad_active"] == packet.vad_active
-    print(f"[smoke] verified row: kind={row[0]} source={row[1]}")
-
-    _cleanup(row_id)
-    print(f"[smoke] cleaned up row {row_id}")
     print()
     print("[smoke] OK")
     return 0

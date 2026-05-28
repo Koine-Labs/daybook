@@ -1,8 +1,11 @@
-"""Orchestrates VAD + diarization + prosody into a single semantic packet."""
+"""Pure VAD + diarization + prosody bundling into a single semantic packet.
+
+Persistence lives in audio_context/writer.py (consent-stamped, privacy-gated).
+This module never touches the DB — extraction only.
+"""
 
 from __future__ import annotations
 
-import json
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -15,7 +18,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from audio_context.diarization import diarize
 from audio_context.prosody import ProsodyFeatures, extract_prosody
 from audio_context.vad import detect_voice_activity
-from db import get_conn
 
 
 @dataclass
@@ -106,30 +108,3 @@ def process_audio_chunk(
         prosody=prosody,
         payload=payload,
     )
-
-
-def persist_packet(
-    packet: AudioContextPacket,
-    *,
-    user_id: str,
-    source: str = "audio_context_v1",
-) -> str:
-    """Write packet to sensor_readings as kind='audio_segment'. Returns row id."""
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO sensor_readings
-                (user_id, recorded_at, kind, source, payload)
-            VALUES (%s, %s, 'audio_segment', %s, %s::jsonb)
-            RETURNING id
-            """,
-            (
-                user_id,
-                packet.started_at,
-                source,
-                json.dumps(packet.payload),
-            ),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        return str(row[0])

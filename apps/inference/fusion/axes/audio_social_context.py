@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 INF_DIR = Path(__file__).resolve().parent.parent.parent
@@ -14,22 +14,32 @@ from db import get_conn  # noqa: E402
 from ..belief_state import AxisEstimate
 
 AXIS = "audio_social_context"
-SOURCE = "L3.fusion.audio_social_context"
+SOURCE = "L3.fusion.audio_social_context.v1"
 FRESH_SECONDS = 300
 
 
-def compute_audio_social_context(user_id: str) -> AxisEstimate | None:
-    """Latest audio_social_context packet → alone/with_other estimate, or None."""
+def fuse_recent(
+    *,
+    user_id: str,
+    now: datetime | None = None,
+    window_seconds: int = FRESH_SECONDS,
+) -> AxisEstimate | None:
+    """Latest audio_social_context packet in window → alone/with_other, or None."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    window_start = now - timedelta(seconds=window_seconds)
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT payload, recorded_at
             FROM sensor_readings
-            WHERE user_id = %s AND kind = 'audio_social_context'
+            WHERE user_id = %s
+              AND kind = 'audio_social_context'
+              AND recorded_at >= %s
             ORDER BY recorded_at DESC
             LIMIT 1
             """,
-            (user_id,),
+            (user_id, window_start),
         )
         row = cur.fetchone()
     if not row:
