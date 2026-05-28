@@ -18,6 +18,17 @@ dependencies = [
     # Postgres + env loading (added 2026-05-17 for Daybook v0)
     "psycopg[binary,pool]>=3.2",
     "python-dotenv>=1.0",
+    # Voice loop — audio I/O (Week 2, 2026-05-28). TTS ships on macOS `say`
+    # (no dep); kokoro is optional. sounddevice/soundfile back playback + WAV.
+    "sounddevice>=0.4.6",
+    "soundfile>=0.12.1",
+    # Streaming STT for the wake-word path (Week 2). stt_streaming defaults to
+    # faster-whisper small.en/int8; stt.py uses recall.whisper_client (openai-whisper).
+    "faster-whisper>=1.0.0",
+    # Wake-word detection (Week 2). openWakeWord runs the ONNX wake model;
+    # ships on built-in 'hey_jarvis' until the custom 'hey_regis.onnx' is trained.
+    "openwakeword>=0.6.0",
+    "onnxruntime>=1.17.0",
 ]
 
 [project.optional-dependencies]

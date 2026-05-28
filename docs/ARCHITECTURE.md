@@ -634,11 +634,13 @@ The transition is per-action-class, not all-at-once: action categories where the
 
 ### Layer 6 — Output
 
-*Status: TODO.*
+*Status: partial (Week 2, 2026-05-28) — TTS + voice loop live.*
 
 **Job (preview).** Take the decision from L5 and emit it through the appropriate channel. Per commitment #3 (wisp-as-interface), audio is primary; UI/haptic/visual indicators are supplementary. Output channel selection is intent-dependent (commitment #10) and meta-context-biased (commitment #14 — no companion-mode TTS during deep sleep).
 
-Components today: TTS via Kokoro (bone-conduction headphones), iOS chat UI rendering. Future: haptic, visual indicators.
+Components today: TTS via `apps/inference/audio/tts_router.py` (`speak()`, witness/companion modes; macOS `say` default, Kokoro optional), played over bone-conduction headphones. Future: haptic, visual indicators.
+
+**Voice loop (Week 2).** The conversational turn engine is `apps/wisp/composer.py::compose_utterance()` (NOT a separate chat handler — the rebuild scrap removed `apps/chat/`). It reads the **freshness-gated `BeliefState`** (`apps/inference/fusion/loader.py::load_belief_state`) before composing, so stale axes never shape Regis's reply (commitment #14). The cross-layer runtime `apps/voice/loop.py` ties it together: `VoiceWakeWordDetector` (L1) → `transcribe_streaming()` (L1/L2) → `classify_intent()` routes command-vs-message (commitment #10) → `compose_utterance()` (L5) → `tts_router.speak()` in the mode L5 chose (L6). Mode selection (witness vs companion) is the #5/#14 corollary surfaced at output.
 
 ---
 

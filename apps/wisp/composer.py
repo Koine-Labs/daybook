@@ -27,6 +27,7 @@ sys.path.insert(0, str(INFERENCE_DIR))
 from db import get_conn  # noqa: E402
 from llm import ChatClient  # noqa: E402
 from embeddings import embed, retrieve_similar  # noqa: E402
+from fusion.loader import load_belief_state  # noqa: E402
 
 
 # --- Substrate stubs ---
@@ -53,8 +54,49 @@ class SubstrateContext:
         return {"_stub": True, "_reason": "substrate rebuild pending Phase 6"}
 
 
+def _read_recent_observations(user_id: str, limit: int = 5) -> list[dict[str, Any]]:
+    """Most recent regis_observations for this user."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT observation, observed_at
+            FROM regis_observations
+            WHERE user_id = %s
+            ORDER BY observed_at DESC
+            LIMIT %s
+            """,
+            (user_id, limit),
+        )
+        rows = cur.fetchall()
+    return [{"content": r[0], "observed_at": r[1].isoformat() if r[1] else None} for r in rows]
+
+
+def _read_current_traits(user_id: str) -> dict[str, float]:
+    """Latest value per Regis trait from regis_trait_history."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT DISTINCT ON (trait_name) trait_name, value
+            FROM regis_trait_history
+            WHERE user_id = %s
+            ORDER BY trait_name, changed_at DESC
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return {r[0]: float(r[1]) for r in rows}
+
+
 def gather_substrate(*, user_id: str, query_embedding: Any = None) -> SubstrateContext:  # noqa: ARG001
-    return SubstrateContext()
+    """Assemble the context Regis composes from: observations, traits, current state.
+
+    I-Model fields stay at empty defaults until self-expansion (#6) lands.
+    """
+    return SubstrateContext(
+        relevant_observations=_read_recent_observations(user_id, 5),
+        regis_traits=_read_current_traits(user_id),
+        current_user_state=_read_latest_state(user_id),
+    )
 
 
 def embed_regis_moment(user_id: str, moment_id: str, text: str) -> None:  # noqa: ARG001
@@ -164,11 +206,12 @@ def compose_utterance(
     #    active_i_models / relevant_observations. Same well chat drinks from.
     substrate = gather_substrate(user_id=user_id, query_embedding=qvec)
 
-    # current_state preserves the legacy 'no freshness gate' read path so
-    # nightly autonomous moments (e.g., rem_whisper) still surface the
-    # session's latest estimate even if it's > 1h old. The substrate's
-    # fresh-only current_user_state is also rendered when present.
-    current_state = _read_latest_state(user_id)
+    # Witness moments (nightly autonomous, e.g. rem_whisper) read state UNGATED
+    # so an hours-old session sleep_stage still surfaces; the waking companion
+    # loop reads fresh-only so Regis never speaks from stale data. Commitment #14
+    # (sleep vs waking) expressed at the state read. The substrate's own
+    # fresh-only current_user_state is still rendered when present.
+    current_state = _read_latest_state(user_id, fresh_only=(mode != "witness"))
 
     # 3. Retrieved I-Model context — reuses qvec so we don't re-embed.
     retrieved: list[dict[str, Any]] = []
@@ -255,37 +298,32 @@ def _mode_for_kind(kind: str) -> str:
     return "companion"
 
 
-def _read_latest_state(user_id: str) -> dict[str, Any] | None:
-    """Latest per-axis user_state_estimate rows, dict keyed by axis.
+def _read_latest_state(user_id: str, *, fresh_only: bool = True) -> dict[str, Any] | None:
+    """Current per-axis state from the L3 BeliefState.
 
-    Post-migration 0009 (per-axis-row schema). Returns
-    {axis: {value, confidence, source, timestamp, meta_context}}
-    or None if no rows.
+    `fresh_only=True` (default, the waking voice loop) drops axes past their
+    per-axis fresh_for_seconds so Regis never speaks from data that no longer
+    reflects the user. `fresh_only=False` (witness/sleep moments) surfaces the
+    latest estimate regardless of age — a nightly rem_whisper still needs the
+    session's sleep_stage even when it's hours old. This per-mode gating is the
+    commitment #14 bias (waking vs sleep) expressed at the state read.
+
+    Shape for _build_user_prompt: {axis: {value, confidence, source, timestamp, meta_context}}.
     """
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT DISTINCT ON (axis)
-                axis, value, confidence, source, timestamp, meta_context
-            FROM user_state_estimate
-            WHERE user_id = %s
-            ORDER BY axis, timestamp DESC
-            """,
-            (user_id,),
-        )
-        rows = cur.fetchall()
-    if not rows:
-        return None
-    return {
-        row[0]: {
-            "value": row[1],
-            "confidence": row[2],
-            "source": row[3],
-            "timestamp": row[4].isoformat() if row[4] else None,
-            "meta_context": row[5],
+    belief = load_belief_state(user_id)
+    now = datetime.now(timezone.utc)
+    out: dict[str, Any] = {}
+    for axis, est in belief.estimates.items():
+        if fresh_only and not est.is_fresh(now=now):
+            continue
+        out[axis] = {
+            "value": est.value,
+            "confidence": est.confidence,
+            "source": est.source,
+            "timestamp": est.timestamp.isoformat(),
+            "meta_context": est.meta_context,
         }
-        for row in rows
-    }
+    return out or None
 
 
 def _build_user_prompt(
@@ -364,11 +402,15 @@ def _build_user_prompt(
             )
 
     observations = substrate.relevant_observations
-    notable_obs = [o for o in observations if "observation" in o]
-    if notable_obs:
+    if observations:
         parts.extend(["", "# Things you've previously noticed about this person"])
-        for o in notable_obs:
-            parts.append(f"  (sim {o['similarity']}) {o['observation']}")
+        for o in observations:
+            # Support both retrieval format (observation + similarity) and
+            # direct DB read format (content + observed_at).
+            if "observation" in o:
+                parts.append(f"  (sim {o['similarity']}) {o['observation']}")
+            elif "content" in o:
+                parts.append(f"  {o['content']}")
 
     if retrieved:
         retrieved_block = json.dumps(retrieved, indent=2)
