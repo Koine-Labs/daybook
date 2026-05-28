@@ -12,6 +12,27 @@ import wisp.composer as composer
 from fusion.belief_state import AxisEstimate, BeliefState
 
 
+def test_read_latest_state_fresh_only_false_keeps_stale(monkeypatch):
+    """Witness/sleep moments read ungated so an hours-old sleep_stage survives."""
+    now = datetime.now(timezone.utc)
+    belief = BeliefState(user_id="u1")
+    belief.update(AxisEstimate(
+        axis="sleep_stage",
+        value={"label": "rem"},
+        timestamp=now - timedelta(hours=6),
+        confidence=0.7,
+        source="classifier.binary_rem",
+        fresh_for_seconds=300,
+    ))
+    monkeypatch.setattr(composer, "load_belief_state", lambda user_id: belief)
+
+    gated = composer._read_latest_state("u1")          # default fresh_only=True
+    assert gated is None
+    ungated = composer._read_latest_state("u1", fresh_only=False)
+    assert ungated is not None
+    assert ungated["sleep_stage"]["value"] == {"label": "rem"}
+
+
 def test_read_latest_state_drops_stale_axes(monkeypatch):
     now = datetime.now(timezone.utc)
     belief = BeliefState(user_id="u1")

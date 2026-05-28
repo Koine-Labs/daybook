@@ -206,11 +206,12 @@ def compose_utterance(
     #    active_i_models / relevant_observations. Same well chat drinks from.
     substrate = gather_substrate(user_id=user_id, query_embedding=qvec)
 
-    # current_state preserves the legacy 'no freshness gate' read path so
-    # nightly autonomous moments (e.g., rem_whisper) still surface the
-    # session's latest estimate even if it's > 1h old. The substrate's
-    # fresh-only current_user_state is also rendered when present.
-    current_state = _read_latest_state(user_id)
+    # Witness moments (nightly autonomous, e.g. rem_whisper) read state UNGATED
+    # so an hours-old session sleep_stage still surfaces; the waking companion
+    # loop reads fresh-only so Regis never speaks from stale data. Commitment #14
+    # (sleep vs waking) expressed at the state read. The substrate's own
+    # fresh-only current_user_state is still rendered when present.
+    current_state = _read_latest_state(user_id, fresh_only=(mode != "witness"))
 
     # 3. Retrieved I-Model context — reuses qvec so we don't re-embed.
     retrieved: list[dict[str, Any]] = []
@@ -297,18 +298,23 @@ def _mode_for_kind(kind: str) -> str:
     return "companion"
 
 
-def _read_latest_state(user_id: str) -> dict[str, Any] | None:
-    """Current per-axis state, FRESHNESS-GATED via the L3 BeliefState.
+def _read_latest_state(user_id: str, *, fresh_only: bool = True) -> dict[str, Any] | None:
+    """Current per-axis state from the L3 BeliefState.
 
-    Stale axes (past their per-axis fresh_for_seconds) are dropped so Regis
-    never speaks from data that no longer reflects the user. Shape preserved
-    for _build_user_prompt: {axis: {value, confidence, source, timestamp, meta_context}}.
+    `fresh_only=True` (default, the waking voice loop) drops axes past their
+    per-axis fresh_for_seconds so Regis never speaks from data that no longer
+    reflects the user. `fresh_only=False` (witness/sleep moments) surfaces the
+    latest estimate regardless of age — a nightly rem_whisper still needs the
+    session's sleep_stage even when it's hours old. This per-mode gating is the
+    commitment #14 bias (waking vs sleep) expressed at the state read.
+
+    Shape for _build_user_prompt: {axis: {value, confidence, source, timestamp, meta_context}}.
     """
     belief = load_belief_state(user_id)
     now = datetime.now(timezone.utc)
     out: dict[str, Any] = {}
     for axis, est in belief.estimates.items():
-        if not est.is_fresh(now=now):
+        if fresh_only and not est.is_fresh(now=now):
             continue
         out[axis] = {
             "value": est.value,

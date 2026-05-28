@@ -18,6 +18,7 @@
 - `wake_word/command_intent.classify_intent` false-positives on short questions containing command keywords (e.g. "right" in "how am I right now?" → ACKNOWLEDGE). Harmless today (only DISMISS/SCRATCH_THAT short-circuit a turn); tighten in Week 3.
 - Per-axis `fresh_for_seconds` likely needs tuning — Apple-Health-derived axes (hours old) gate out of the waking read by design; revisit when `meta_context` writes every 30s.
 - "Hey Regis" custom wake model still to train (manual, `wake_word/training/README.md`).
+- Freshness semantics: `belief_state.py` `is_fresh()` is Hide-only (drop stale) while `ARCHITECTURE.md §3 L3` describes a decay-default; reconcile one to the other (pre-existing Week-1 discrepancy, flagged by theory-aligner 2026-05-28).
 
 **Next:** Week 3 — continuous mic semantic pipeline (VAD + diarization + prosody + ambient) + EEG stretch. Per spec §8.
 
