@@ -1,6 +1,18 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-29 — Waking-arc cluster shipped to `main` (NetworkTransport + mic-on-bus + waking warrant + BCI lane); theory-aligner ALIGNED; the assembled arc now perceives → decides → speaks. Next: a live-on-hardware smoke (`python -m runtime.waking_arc`).**
+**Last updated: 2026-05-29 — Live biometric producer shipped to `main` (Watch HR/HRV on the bus, REM gated to SLEEP, #14). Builds on the waking-arc cluster (NetworkTransport + mic-on-bus + waking warrant + BCI lane). Next: the real-data smoke (`python -m runtime.biometric_replay`, needs DB) and the live distributed proof (Pi→laptop over NetworkTransport).**
+
+## 2026-05-29 (later) — Live biometric producer SHIPPED — Watch HR/HRV on the bus, REM gated to SLEEP (#14)
+
+The first real build after the waking-arc cluster (candidate **B** from the `daybook-next-major-piece` analysis): a **live biometric producer** wires watch HR/HRV/resp/SpO2 onto the L1–L6 bus — discharging the **#14** day-and-night biometric-accrual obligation logged below as the open gap. Built design → TDD → 3-lens adversarial review → fix via a dynamic workflow; controller-verified DB-free from clean caches and fast-forward-merged (`c12bc3c` spec, `16fbb73` producer, `c32a830` REM gate).
+- `16fbb73` **L1 producer** — `sensors/watch_adapter.py`: `WatchBusSink` (transport-agnostic, mirrors `AudioBusSink` — holds only a `MessageBus`, so the same code becomes the watch-satellite producer over `NetworkTransport`) + a pure `window_readings` (DENSE positionally-aligned `hr_mean_history`, NaN on gaps, NaN/missing dropped — `hr_lag1/3/5_mean` bit-identical to `compute_session_features` on real gappy Apple-Watch HR) + deterministic `synthesize_biometric_window` for CI. `runtime/biometric_replay.py` (off-CI, lazy DB import) streams real imported `sensor_readings` through the producer under SLEEP, reusing `classifier.data` loaders. Semantic-first (#11): only derived readings ride the bus.
+- `c32a830` **L4 REM SLEEP-gate (#14)** — `prediction/feature_participant.py` REM nowcaster now fires only when `meta_context == SLEEP`; waking HR no longer produces a meaningless `rem` belief. Biometrics still flow L1→L2 under both Waking and Sleep.
+- **Adversarial review earned its keep:** all 3 lenses independently caught a real fidelity bug — the first windower built a *sparse* `hr_mean_history` (skip-on-gap) vs the trainer's *dense* one, silently desyncing the REM lag features on real gappy HR; mutation testing proved the path was untested. Fixed + 2 gap/NaN regression tests added before merge.
+- **Verified:** full CI suite (`core sensors features fusion prediction decision output bci`) green from clean caches with no `DATABASE_URL` — **242 passed**; both new modules import-clean.
+
+**Still unproven on real data:** the synthetic + unit path is green, but `python -m runtime.biometric_replay` (the real-data smoke over Aakash's imported Apple-Health sleep sessions) needs `DATABASE_URL` and has not been run yet.
+
+**Next (cluster B→E→A/D→C):** the live distributed proof (**E** — a real packet Pi→laptop over `NetworkTransport`), then continuous semantic vision (**A**, the last absent sense) + affect axes (**D**); the #13 Thompson bandit (**C**) stays last until decision-logging + outcome labels accrue (it would otherwise sit permanently in fixed-weight fallback).
 
 ## 2026-05-29 (late) — Waking-arc cluster SHIPPED — theory-aligner ALIGNED, lights on
 
