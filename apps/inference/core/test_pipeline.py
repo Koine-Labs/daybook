@@ -12,7 +12,10 @@ the test injects an in-memory axis combiner producing one fresh AxisEstimate.
 This still runs the real FusionParticipant, real L4 StubPredictor, real L5
 DecisionContext/forward machinery, and real L6 channel-selection + StubRenderer.
 Only the leaf axis-data source is in-memory — the same technique each layer's
-own smoke test uses. No network/LLM is touched (StubRenderer, no ComposerRenderer).
+own smoke test uses. No network/LLM is touched: the production assembly now
+defaults L6 to the generative ComposerRenderer (#8), so these tests INJECT
+StubRenderer to keep the arc deterministic and offline. The one renderer-default
+test monkeypatches wisp.composer.compose_utterance instead of calling it.
 
 Run from apps/inference with the venv:
   python -m pytest core/test_pipeline.py -v && python -m core.pipeline
@@ -38,6 +41,7 @@ from core.protocol.payloads import (ActionDecision, FeatureSnapshot,  # noqa: E4
                                      OutputDirective, Prediction, SignalPacket)
 from fusion.belief_state import AxisEstimate  # noqa: E402
 from fusion.participant import AxisCombiner  # noqa: E402
+from output.renderer import StubRenderer  # noqa: E402
 from sensors import participant as l1  # noqa: E402
 from sensors.contract import IntentTaggedReading  # noqa: E402
 from decision.policy import DecisionContext, gate_trace_dict  # noqa: E402
@@ -117,6 +121,7 @@ def run_pipeline_arc() -> MessageEnvelope:
         bus,
         fusion_registry=_fresh_axis_registry(),
         decision_policy=_InterjectPolicy(),
+        renderer=StubRenderer(),  # production default is ComposerRenderer (LLM); inject to stay offline
     )
     seen = _collectors(bus)
 
@@ -136,7 +141,11 @@ def run_pipeline_arc() -> MessageEnvelope:
 def run_silent_hold_arc() -> tuple[str, ActionDecision]:
     """Drive the honest DEFAULT arc: real policies HOLD -> L6 emits nothing."""
     bus = MessageBus()
-    assemble_pipeline(bus, fusion_registry=_fresh_axis_registry())
+    assemble_pipeline(
+        bus,
+        fusion_registry=_fresh_axis_registry(),
+        renderer=StubRenderer(),  # default is now ComposerRenderer; the hold path renders nothing anyway, but keep offline
+    )
     seen = _collectors(bus)
 
     env = l1.emit(bus, _sample_reading(), meta_context=MetaContext.WAKING)
@@ -172,6 +181,7 @@ def test_each_boundary_payload_is_the_expected_type():
         bus,
         fusion_registry=_fresh_axis_registry(),
         decision_policy=_InterjectPolicy(),
+        renderer=StubRenderer(),  # production default is ComposerRenderer (LLM); inject to stay offline
     )
     seen = _collectors(bus)
     l1.emit(bus, _sample_reading(), meta_context=MetaContext.WAKING)
@@ -188,6 +198,59 @@ def test_default_arc_is_a_documented_silent_hold():
     assert action.action == "hold"
     assert action.gate_trace["all_passed"] is False  # real safety gates blocked
     assert isinstance(trace, str)
+
+
+def test_production_default_renderer_is_composer_and_maps_decision(monkeypatch):
+    """Production assembly (no renderer injected) defaults L6 to ComposerRenderer (#8).
+
+    Drives the interject arc through the DEFAULT renderer — proving the generative
+    Regis voice is now wired-AND-default, not just available. The LLM is never
+    touched: we monkeypatch wisp.composer.compose_utterance (which ComposerRenderer
+    imports lazily) to a recorder returning a known ComposedUtterance-like stub, then
+    assert the emitted OutputDirective.text is that stub text and that compose_utterance
+    was called with moment_kind/explicit_context derived from the L5 decision.
+    """
+    import wisp.composer as composer  # safe: module import is side-effect-free (no LLM call)
+
+    calls: list[dict[str, object]] = []
+
+    def _fake_compose(*, user_id, moment_kind, explicit_context="", **kwargs):
+        calls.append({
+            "user_id": user_id,
+            "moment_kind": moment_kind,
+            "explicit_context": explicit_context,
+        })
+        return composer.ComposedUtterance(
+            text="the wisp flickers, amused",
+            mode="companion",
+            moment_kind=moment_kind,
+            model="test-model",
+            backend="test-backend",
+        )
+
+    monkeypatch.setattr(composer, "compose_utterance", _fake_compose)
+
+    bus = MessageBus()
+    # NOTE: no renderer= kwarg -> exercises the production default (ComposerRenderer).
+    assemble_pipeline(
+        bus,
+        fusion_registry=_fresh_axis_registry(),
+        decision_policy=_InterjectPolicy(),
+    )
+    seen = _collectors(bus)
+    l1.emit(bus, _sample_reading(), meta_context=MetaContext.WAKING)
+
+    assert len(seen[TOPIC_OUTPUT]) == 1, "production default renderer never emitted a directive"
+    directive: OutputDirective = seen[TOPIC_OUTPUT][0].payload
+    assert directive.text == "the wisp flickers, amused"  # came from the (mocked) composer, not the stub
+
+    assert len(calls) == 1, "compose_utterance should be called exactly once per interject"
+    # ComposerRenderer maps decision.content_kind -> moment_kind, decision.rationale -> explicit_context.
+    # The L5 policy here emits content_kind='conversation_tease' + a fixed rationale.
+    assert calls[0]["moment_kind"] == "conversation_tease"
+    assert calls[0]["explicit_context"] == (
+        "test fixture: gate cleared to exercise the L6 emit path"
+    )
 
 
 if __name__ == "__main__":

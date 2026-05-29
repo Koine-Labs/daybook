@@ -27,7 +27,7 @@ import prediction.participant as l4
 import decision.participant as l5
 import output.participant as l6
 from decision.policy import Policy
-from output.renderer import Renderer
+from output.renderer import ComposerRenderer, Renderer
 
 
 def _register_decision_with_policy(bus: MessageBus, policy: Policy) -> None:
@@ -56,8 +56,12 @@ def assemble_pipeline(
 ) -> None:
     """Register every layer participant (L2-L6) on one bus; L1 emits separately.
 
-    With all keyword args omitted this wires the pure production participants.
-    The injection seams let a caller drive the real layer code deterministically.
+    With all keyword args omitted this wires the pure production participants:
+    L6 defaults to the generative ComposerRenderer (the real Regis voice, #8),
+    which lazily imports wisp.composer.compose_utterance only when it renders —
+    so this import never pulls the LLM into the graph at assembly time. The
+    renderer stays injectable; tests pass StubRenderer (or monkeypatch
+    compose_utterance) so no test path ever touches the network.
     """
     l2.register(bus)
 
@@ -75,7 +79,7 @@ def assemble_pipeline(
     else:
         l5.register(bus)
 
-    l6.register(bus, renderer=renderer)
+    l6.register(bus, renderer=renderer if renderer is not None else ComposerRenderer())
 
 
 if __name__ == "__main__":
