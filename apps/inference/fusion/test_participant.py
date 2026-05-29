@@ -111,9 +111,9 @@ def test_feature_in_belief_out_same_trace():
     assert "meta_context" in d["payload"]["estimates"]
 
 
-def test_default_registry_references_three_live_axes():
+def test_default_registry_references_four_live_axes():
     assert set(P.AXIS_REGISTRY) == {
-        "meta_context", "sleep_stage", "audio_social_context"
+        "meta_context", "sleep_stage", "audio_social_context", "cognitive_load"
     }
 
 
@@ -169,3 +169,5 @@ def test_live_audio_packet_fuses_social_belief_no_db():
     # The DB-backed axes degrade to OFFLINE for an audio packet (expected).
     assert belief.get("meta_context", now=now) is None
     assert belief.get("sleep_stage", now=now) is None
+    # cognitive_load (live-only, EEG-kind only) is OFFLINE for a non-EEG packet.
+    assert belief.get("cognitive_load", now=now) is None

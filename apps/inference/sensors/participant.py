@@ -25,6 +25,7 @@ _MODALITY_CONSENT: dict[str, str] = {
     Modality.VOICE.value: CONSENT_SCOPES["voice"],
     Modality.AUDIO.value: CONSENT_SCOPES["voice"],
     Modality.BIOMETRIC.value: CONSENT_SCOPES["hk"],
+    Modality.BCI.value: CONSENT_SCOPES["eeg"],
 }
 
 

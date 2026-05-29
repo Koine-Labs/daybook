@@ -18,6 +18,7 @@ from core.protocol.enums import Intent, PayloadType
 from core.protocol.envelope import MessageEnvelope
 from core.protocol.payloads import SignalPacket
 from features.audio_social import extract as _extract_audio_social
+from features.bci import extract as _extract_bci
 from features.biometric import extract as _extract_biometric
 from features.snapshot import FeatureSnapshot
 
@@ -74,7 +75,7 @@ EXTRACTORS: dict[str, Extractor] = {
     "text": _stub_passthrough_extractor,
     "gesture": _stub_passthrough_extractor,
     "vision": _stub_passthrough_extractor,
-    "bci": _stub_passthrough_extractor,
+    "bci": _extract_bci,
 }
 
 

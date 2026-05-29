@@ -25,7 +25,7 @@ from core.protocol.enums import PayloadType  # noqa: E402
 from core.protocol.envelope import MessageEnvelope  # noqa: E402
 from core.protocol.payloads import FeatureSnapshot  # noqa: E402
 
-from .axes import audio_social_context, meta_context, sleep_stage  # noqa: E402
+from .axes import audio_social_context, cognitive_load, meta_context, sleep_stage  # noqa: E402
 from .belief_state import AxisEstimate, BeliefState  # noqa: E402
 
 # An axis combiner takes the inbound packet + a determinism `now` and returns
@@ -84,13 +84,29 @@ def _audio_combiner(packet: FeatureSnapshot, now: datetime) -> "AxisEstimate | N
         return _offline_estimate("audio_social_context", now=now, reason=f"axis error: {exc!r}")
 
 
-# Registry of the three live axes. Selection is content-agnostic: every
+def _cognitive_load_combiner(packet: FeatureSnapshot, now: datetime) -> "AxisEstimate | None":
+    """Live-only cognitive_load: fuse the inbound BCI packet; None -> OFFLINE upstream.
+
+    No DB fallback (there is no eeg_bandpower sensor table yet — see the axis
+    docstring). For a non-EEG packet, fuse_from_feature returns None and the
+    participant records cognitive_load as OFFLINE, exactly how meta_context /
+    sleep_stage degrade for an audio packet. Any error degrades to OFFLINE, never
+    crashes the bus.
+    """
+    try:
+        return cognitive_load.fuse_from_feature(packet, now=now)
+    except Exception as exc:  # noqa: BLE001 — skeleton must never crash the bus.
+        return _offline_estimate("cognitive_load", now=now, reason=f"axis error: {exc!r}")
+
+
+# Registry of the four live axes. Selection is content-agnostic: every
 # registered axis is asked on each FeaturePacket; each returns its estimate or
 # None (which the participant records as OFFLINE).
 AXIS_REGISTRY: dict[str, AxisCombiner] = {
     "meta_context": _wrap_fuse_recent("meta_context", meta_context.fuse_recent),
     "sleep_stage": _wrap_fuse_recent("sleep_stage", sleep_stage.fuse_recent),
     "audio_social_context": _audio_combiner,
+    "cognitive_load": _cognitive_load_combiner,
 }
 
 

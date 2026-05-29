@@ -41,7 +41,7 @@ jobs:
         working-directory: apps/inference
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python -m pytest core sensors features fusion prediction decision output -q
+        run: python -m pytest core sensors features fusion prediction decision output bci -q
 
   typecheck:
     name: TypeScript typecheck

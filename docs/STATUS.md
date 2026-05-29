@@ -1,6 +1,17 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-29 — Nervous-system milestone merged to `main`; direction reframed to the waking distributed multimodal MVP (sleep deferred but still collecting data); `NetworkTransport` is the next build.**
+**Last updated: 2026-05-29 — BCI software lane built on synthetic EEG (4th live L3 axis, `cognitive_load`); nervous-system milestone merged to `main`; direction reframed to the waking distributed multimodal MVP (sleep deferred but still collecting data); `NetworkTransport` is the next build.**
+
+## 2026-05-29 — BCI software lane (synthetic EEG, pre-EXG-Pill) — branch `feat/bci-lane`
+
+**Built ahead of the EXG Pill** (the ~10-day pre-build noted below): the full L1→L2→L3 BCI lane on synthetic EEG, semantic-first (#11) — raw EEG is computed-then-discarded at the edge; only the `eeg_bandpower` semantic packet rides the bus.
+- L1 `sensors/eeg_adapter.py` — `EEGBusSink` (transport-agnostic producer; publishes band-power packets, never raw) + `synthesize_eeg_window`.
+- `bci/bandpower.py` — canonical Welch-PSD band-power math (5 clinical bands), the shared source for the firmware stub and the synthetic harness.
+- L2 `features/bci.py` — `eeg_bandpower` SignalPacket → derived features (theta/beta ratio, alpha power, engagement index); registered for `Modality.BCI` (replaces the passthrough stub).
+- L3 `fusion/axes/cognitive_load.py` — **4th live axis** (`meta_context`, `sleep_stage`, `audio_social_context`, **`cognitive_load`**). Honest v1 heuristic scaffold (`scaffold:True`, confidence 0.4, `_ENGAGE_LO/_HI` documented-not-fitted) feeding the #16 flywheel — NOT a trained model. Live-only (no DB fuse_recent path yet). Does not itself gate on meta-context; #14's "no EEG-load during deep sleep" is deferred to a downstream L5/L6 layer.
+- Off-CI firmware reference `bci/firmware/eeg_edge_stub.py` — runs today with no hardware/DB over `InProcessTransport`; documents the one-line `NetworkTransport` swap for the Pi and the calibration-on-arrival step (fit `_ENGAGE_LO/_HI`).
+- Consent: closed the prior silent fail-open — BCI now stamps `eeg_continuous_v1` (was `unscoped_v0`).
+- **Verified:** CI-mirror suite (`core sensors features fusion prediction decision output bci`) green with `DATABASE_URL` absent — **224 passed**; 44 BCI-lane tests; firmware stub off-CI (collects zero); known-answer band-power + differential drowsy<focused arc + no-raw-on-bus invariant. Uncommitted WIP on `feat/bci-lane`.
 
 ## 2026-05-29 — Merged to `main` + direction reframe (waking-distributed MVP)
 

@@ -101,7 +101,10 @@ def test_consent_scope_selected_per_source_and_modality():
     assert consent_scope_for(_reading(source="mac.app_activity")) == "mac_activity_v1"
     assert consent_scope_for(_reading(modality=Modality.BIOMETRIC.value, source="watch.hr_30s")) == "apple_health_v1"
     assert consent_scope_for(_reading(modality=Modality.VOICE.value, source="mac.mic")) == "mac_activity_v1"
-    assert consent_scope_for(_reading(modality=Modality.BCI.value, source="exg.eeg")) == DEFAULT_CONSENT_SCOPE
+    # BCI rides under its own opt-in scope now (no longer the unscoped fallback).
+    assert consent_scope_for(_reading(modality=Modality.BCI.value, source="exg.eeg")) == "eeg_continuous_v1"
+    # A still-unmapped modality (vision) keeps exercising the DEFAULT fallback.
+    assert consent_scope_for(_reading(modality=Modality.VISION.value, source="cam.front")) == DEFAULT_CONSENT_SCOPE
 
 
 def test_mac_adapter_wraps_capture_once(monkeypatch):
