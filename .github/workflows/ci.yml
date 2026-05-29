@@ -33,8 +33,14 @@ jobs:
       # DATABASE_URL present (no .env.local exists in CI) — guards the DB-free-at-
       # import property fixed for PR #38. A regression here means something pulled
       # db into an import path or required a live DB to run a unit test.
+      # PYTHONDONTWRITEBYTECODE: never trust a .pyc cache. The privacy invariant
+      # (Policy #1 pause-on-other-voice) is load-bearing, and a stale bytecode
+      # cache can make a green suite mask a real regression — so CI runs from
+      # source only.
       - name: Run core + layer suite without DATABASE_URL
         working-directory: apps/inference
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
         run: python -m pytest core sensors features fusion prediction decision output -q
 
   typecheck:

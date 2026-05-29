@@ -67,15 +67,30 @@ def _wrap_fuse_recent(
     return combiner
 
 
+def _audio_combiner(packet: FeatureSnapshot, now: datetime) -> "AxisEstimate | None":
+    """Live-first audio_social_context: fuse the inbound packet, else DB-fallback.
+
+    When an audio_social_context FeatureSnapshot rides the bus, fuse it live with
+    zero DB access; for any other inbound packet, fuse_from_feature returns None
+    and the existing DB fuse_recent runs exactly as before. Same crash-safety
+    contract as _wrap_fuse_recent: any error degrades to OFFLINE, never crashes.
+    """
+    try:
+        live = audio_social_context.fuse_from_feature(packet, now=now)
+        if live is not None:
+            return live
+        return audio_social_context.fuse_recent(user_id=packet.user_id, now=now)
+    except Exception as exc:  # noqa: BLE001 — skeleton must never crash the bus.
+        return _offline_estimate("audio_social_context", now=now, reason=f"axis error: {exc!r}")
+
+
 # Registry of the three live axes. Selection is content-agnostic: every
 # registered axis is asked on each FeaturePacket; each returns its estimate or
 # None (which the participant records as OFFLINE).
 AXIS_REGISTRY: dict[str, AxisCombiner] = {
     "meta_context": _wrap_fuse_recent("meta_context", meta_context.fuse_recent),
     "sleep_stage": _wrap_fuse_recent("sleep_stage", sleep_stage.fuse_recent),
-    "audio_social_context": _wrap_fuse_recent(
-        "audio_social_context", audio_social_context.fuse_recent
-    ),
+    "audio_social_context": _audio_combiner,
 }
 
 

@@ -123,3 +123,49 @@ def test_belief_state_persists_across_packets():
     b1 = part.fuse(_packet(now), now=now)
     b2 = part.fuse(_packet(now), now=now)
     assert b1 is b2  # same per-user BeliefState reused, not rebuilt.
+
+
+def _audio_feature_env(now: datetime) -> MessageEnvelope:
+    snap = FeatureSnapshot(
+        user_id=USER,
+        timestamp=now,
+        modality="audio",
+        source="mic_listener_v1",
+        payload={"kind": "audio_social_context",
+                 "social_category": "with_other", "speaker": "both"},
+        intent="continuous",
+        confidence=0.8,
+    )
+    return MessageEnvelope(
+        id=str(uuid.uuid4()),
+        type=PayloadType.FEATURE,
+        source_role=NodeRole.WISP_EDGE,
+        occurred_at=now,
+        meta_context=MetaContext.WAKING,
+        consent_scope="mic_continuous_v1",
+        trace_id=str(uuid.uuid4()),
+        payload=snap,
+        i_model_id=None,
+    )
+
+
+def test_live_audio_packet_fuses_social_belief_no_db():
+    """Full L3 arc with the DEFAULT registry and NO DB: fuse_from_feature wins,
+    fuse_recent (DB) is never reached, so no get_conn / no monkeypatch needed."""
+    now = datetime.now(timezone.utc)
+    bus = MessageBus()
+    captured: list[MessageEnvelope] = []
+    bus.subscribe(TOPIC_BELIEF, captured.append)
+
+    P.register(bus)  # real AXIS_REGISTRY incl. _audio_combiner
+
+    bus.publish(TOPIC_FEATURE, _audio_feature_env(now))
+
+    assert len(captured) == 1
+    belief = captured[0].payload
+    assert isinstance(belief, BeliefState)
+    est = belief.get("audio_social_context", now=now)
+    assert est is not None and est.value == {"category": "with_other"}
+    # The DB-backed axes degrade to OFFLINE for an audio packet (expected).
+    assert belief.get("meta_context", now=now) is None
+    assert belief.get("sleep_stage", now=now) is None

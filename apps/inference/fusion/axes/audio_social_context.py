@@ -18,6 +18,29 @@ SOURCE = "L3.fusion.audio_social_context.v1"
 FRESH_SECONDS = 300
 
 
+def fuse_from_feature(packet, *, now: datetime | None = None) -> AxisEstimate | None:
+    """Build a live estimate from an L2 audio FeatureSnapshot, else None.
+
+    Only fires for our own kind (audio_social_context); other kinds/modalities
+    return None so the participant falls back to the DB fuse_recent path. No DB.
+    """
+    feats = getattr(packet, "payload", {}) or {}
+    if feats.get("kind") != "audio_social_context":
+        return None
+    category = feats.get("social_category")
+    if category is None:
+        category = "with_other" if feats.get("speaker") in ("other", "both") else "alone"
+    return AxisEstimate(
+        axis=AXIS,
+        value={"category": category},
+        timestamp=getattr(packet, "timestamp", None) or now or datetime.now(timezone.utc),
+        confidence=0.8,
+        source=SOURCE + ".live",
+        meta_context=None,
+        fresh_for_seconds=FRESH_SECONDS,
+    )
+
+
 def fuse_recent(
     *,
     user_id: str,

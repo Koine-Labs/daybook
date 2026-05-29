@@ -124,8 +124,15 @@ def listen_continuous(
     sample_rate: int = 16000,
     block_seconds: float = 0.08,
     window_seconds: float = 3.0,
+    bus: Any | None = None,
 ) -> None:
-    """ONE always-on mic loop: wake-word + continuous privacy-gated semantics."""
+    """ONE always-on mic loop: wake-word + continuous privacy-gated semantics.
+
+    When `bus` is supplied, the privacy-gated semantics ride the nervous-system
+    bus instead of the DB (pure-bus mode): the same SignalPacket is reconstructable
+    downstream by a persistence sink later, and a no-DB node (future Pi) keeps its
+    strongest waking sense. Default (`bus=None`) is byte-for-byte today's DB path.
+    """
     import os
 
     import numpy as np
@@ -150,14 +157,23 @@ def listen_continuous(
             ids.add("unknown" if emb is None else speaker_id.identify(emb, centroid=centroid))
         return sorted(ids)
 
+    if bus is not None:
+        from sensors.audio_adapter import AudioBusSink
+        sink = AudioBusSink(bus, user_id=user_id)
+        write_social, write_prosody, write_ambient = (
+            sink.write_social, sink.write_prosody, sink.write_ambient)
+    else:
+        write_social, write_prosody, write_ambient = (
+            _social_writer, _prosody_writer, _ambient_writer)
+
     proc = ContinuousProcessor(
         user_id=user_id,
         identify_speakers=identify_speakers,
         prosody_of=lambda a, sr: extract_prosody(a, sr).to_dict(),
         ambient_of=lambda a, sr: classify_ambient(a, sr),
-        write_social=_social_writer,
-        write_prosody=_prosody_writer,
-        write_ambient=_ambient_writer,
+        write_social=write_social,
+        write_prosody=write_prosody,
+        write_ambient=write_ambient,
     )
 
     ww = wake_word or os.environ.get("DAYBOOK_WAKE_WORD", "hey_jarvis")
