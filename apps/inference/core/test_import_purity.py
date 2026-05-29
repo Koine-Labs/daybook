@@ -20,9 +20,11 @@ CORE_MODULES = [
     "core.protocol.enums",
     "core.protocol.payloads",
     "core.protocol.codec",
+    "core.protocol.decode",
     "core.protocol.envelope",
     "core.bus.transport",
     "core.bus.bus",
+    "core.bus.network",
     "core.nodes",
     "core.layer",
 ]
