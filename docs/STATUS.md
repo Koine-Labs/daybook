@@ -11,6 +11,8 @@ Candidate **A** from the `daybook-next-major-piece` analysis, and the founder's 
 
 **State of the senses:** mic (live), biometric (DB-replay producer), BCI (synthetic, Pill now in hand), **vision (synthetic semantics) — all four feed the bus.** Belief map now spans 5 live L3 axes.
 
+**Milestone gate — theory-aligner ALIGNED** (B+A cluster; no blockers, no new integrity gaps). Both lanes plug into the existing registries (`features.participant.EXTRACTORS`, `fusion.participant.AXIS_REGISTRY`, `sensors.participant` consent) with zero parallel infrastructure — cohesive, not drifting. Every load-bearing commitment is **tested, not just asserted**: #11 enforced in code (vision `_semantic_only` bytes-reject proven by a planted-JPEG test; raw waveform never on the bus) with the cloud describer having no continuous caller; #14 (REM SLEEP-gate + `visual_context` WAKING) regression-tested; the biometric windower's lag-fidelity verified bit-for-bit against `classifier.features.compute_session_features` on a gappy stream.
+
 **Still deferred (the "using" layer, by choice):** every real-world run remains unproven — `runtime.biometric_replay` (DB), `runtime.waking_arc` (mic), a real camera + the YOLO model (`[vision]` extra), a 2-process Pi→laptop NetworkTransport relay, and EEG calibration on the EXG Pill. These are the next phase once the code system is where the founder wants it.
 
 ## 2026-05-29 (later) — Live biometric producer SHIPPED — Watch HR/HRV on the bus, REM gated to SLEEP (#14)
