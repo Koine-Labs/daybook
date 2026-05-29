@@ -1,6 +1,22 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-28 — L6 fill: Regis speaks end-to-end (generative renderer default + TTS sink).**
+**Last updated: 2026-05-29 — Nervous-system milestone merged to `main`; direction reframed to the waking distributed multimodal MVP (sleep deferred but still collecting data); `NetworkTransport` is the next build.**
+
+## 2026-05-29 — Merged to `main` + direction reframe (waking-distributed MVP)
+
+**Merged:** the full nervous-system milestone (skeleton + L4 REM predictor + L6 speaking) fast-forwarded onto `main` (`bfb0b26 → 2591458`, pushed). `main` now *is* the L1–L6 bus; no more long-lived branch drift. Pre-merge theory-aligner gate: **ALIGNED-WITH-GAPS, no blockers** — all 16 commitments held; nothing hard-codes a sleep-only assumption (sleep is cleanly behind the meta-context switch, #14).
+
+**Direction reframe (ratified — see CLAUDE.md + POSITIONING.md 2026-05-29 third amendment):** near-term MVP is the **waking, distributed, multimodal contextual-awareness prototype** — MacBook M5 Pro = inference node running the fusion pipeline; Raspberry Pi + ESP32 = sensor satellites (EEG/BCI in build + webcam + mic); signals flow satellites → laptop → fusion → Regis → I-Models. **Sleep/dream-recall is now the long-term wedge** (deferred to a later prototype variation, not abandoned) and **stays a continuous biometric data source during the MVP** (capture across both meta-contexts so the substrate + the dream-recall baseline accrue day and night).
+
+**Honest state vs that vision (verified this session by parallel readers):** the six-layer spine is real and modality-agnostic, but it runs in **one Mac process on one trickle of Mac-activity data**. The senses that define the vision are orphaned or absent — the continuous-mic pipeline (`audio_context/` + `apps/voice/`) **works but is not on the bus** (writes to DB); vision is a **batch still-image describer** only (`llm/vision.py`), no continuous semantic extraction; BCI is an **enum-only placeholder**; no live producer puts Watch HR on the bus; **cross-device distribution does not exist** (only `InProcessTransport`). The gap to the walking-down-the-street demo is **connection, not invention**.
+
+**Non-blocking gaps logged (merge gate):** the assembled waking arc always HOLDs — `decision/policies/default.py` warrant gate is hardcoded `passed=False`; the real REM predictor (`prediction/feature_participant.py`) and the TTS sink (`output/speaker.py`) are deliberately *off* the default `assemble_pipeline` arc (a runner must attach them). The "Regis speaks end-to-end" proof injects an interject policy via the `decision_policy=` seam.
+
+**Note:** the "v3 always-on vision ~50-55%" table far below is **pre-rebuild and stale** — post-scrap reality is the six-layer bus with one live sensor trickle and no distribution. Don't trust those percentages.
+
+**Next (the keystone):** **`NetworkTransport`** — a SignalPacket relay so a Pi/ESP32 process can publish onto the laptop's bus (the `Transport` seam + JSON codec already exist; needs the inverse `from_dict` deserialization). Then, during the ~10-day EXG-Pill wait, in parallel: wire the continuous-mic pipeline in as a live bus producer, and pre-build the BCI software lane (firmware stub + band-power L2 extractor + `cognitive_load`/arousal L3 axis) on synthetic EEG.
+
+---
 
 ## 2026-05-28 — L6 fill: Regis speaks (branch `feat/fill-l6-composer`, off the L4 fill)
 

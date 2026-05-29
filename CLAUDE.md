@@ -8,6 +8,8 @@ This file orients Claude Code sessions working in this repo. Read this first, th
 
 **Daybook is an always-on AI empath companion that knows you through your body.** Continuous biometric / neural sensing (Apple Watch today, BCI via BioAmp EXG Pill in days, custom wearable later) + a persistent character (**Regis**, a will-o-wisp TBATE-inspired) that evolves with the user over years.
 
+> **2026-05-29 — direction reframe (near-term MVP).** The immediate build target is the **waking, distributed, multimodal contextual-awareness prototype**, not the sleep/dream-recall wedge. Concretely: the **MacBook M5 Pro is the inference node** running the custom fusion pipeline; a **Raspberry Pi + ESP32 are sensor satellites** carrying the **EEG/BCI (BioAmp EXG Pill, in build), a webcam, and a mic**. Raw multimodal signals flow satellites → laptop → fusion → Regis → I-Models, assembling a live "what is happening" map Regis reasons over (north star: walking down the street, fully sensed). **Sleep/dream-recall remains the long-term validation wedge — deferred to a later prototype variation, not abandoned — and sleep stays a continuous biometric data source *during* the MVP** (capture across both Waking and Sleep meta-contexts per commitment #14, so the substrate accumulates paired day+night data). See `docs/POSITIONING.md` (2026-05-29 third amendment) and `docs/STATUS.md`.
+
 Three concentric product layers, all sharing the same underlying architecture:
 
 1. **Consumer empath** — the bonded AI companion. v1 wedge: dream-curious people on existing wearables.
@@ -18,9 +20,9 @@ Especially attentive at night, where it monitors sleep and gently intervenes in 
 
 Owner: **Aakash Agrawal** (founder, Koine Labs). Solo developer, bootstrapped, vibe-coding via AI tooling. Prefers Python and TypeScript; explicitly does NOT separate "v1 prototype" from "v3 vision" — they are one continuous build.
 
-**v1 validation wedge (NOT the destination):** ≥50% improvement in weekly dream recall vs 14-day pre-baseline, N=1 (Aakash), 60-90 days. This is the *demoable, fundable* milestone that proves the empath substrate works and the character compounds. The broader thesis (always-on empath + clinical extension + wearable moat) is what the v1 win opens the door to.
+**Long-term validation wedge (deferred, not abandoned):** ≥50% improvement in weekly dream recall vs 14-day pre-baseline, N=1 (Aakash), 60-90 days — the *demoable, fundable* sleep proof point. Per the **2026-05-29 reframe** this is no longer the *immediate* target: the near-term MVP is the waking distributed empath (above), with the sleep specialization layered on later. Sleep biometrics are still collected throughout the MVP, so this wedge's baseline accrues in parallel.
 
-For full strategic anchor see `docs/POSITIONING.md` (especially the 2026-05-17 second amendment). For current state see `docs/STATUS.md`.
+For full strategic anchor see `docs/POSITIONING.md` (especially the 2026-05-17 second amendment and the 2026-05-29 third amendment). For current state see `docs/STATUS.md`.
 
 ---
 

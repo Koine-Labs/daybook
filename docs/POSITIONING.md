@@ -29,6 +29,8 @@ This document is the strategic anchor for the v1 product. It exists so that when
 
 **The original POSITIONING.md framing below remains valid for the v1 wedge.** Read it as describing the *first product surface* of the broader empath companion thesis above.
 
+**2026-05-29 third amendment — sequencing reframe: waking-distributed MVP first, sleep as long-term wedge + always-on data source.** The near-term build target is now the **waking, day-to-day, distributed, multimodal contextual-awareness prototype**, not the bedside sleep loop. Concrete shape: MacBook M5 Pro = inference node running the custom fusion pipeline; Raspberry Pi + ESP32 = sensor satellites carrying the EEG/BCI (BioAmp EXG Pill, in build), a webcam, and a mic. Raw multimodal signals flow satellites → laptop → fusion → Regis → I-Models, assembling a live "what is happening" belief map (north star: walking down the street, BCI + camera + mic + voice all fused). This **reorders the validation path** in §8: the always-on waking empath is the first surface proven; the sleep/dream-recall specialization (the prior "v1 wedge", §3) becomes the **long-term wedge**, deferred to a later prototype variation. Two things are explicitly preserved: (1) sleep is **not abandoned** — it stays the clinical on-ramp and a planned proof point; (2) sleep remains a **continuous biometric data source during the MVP** — biometrics are captured across both Waking and Sleep meta-contexts (commitment #14), so the dream-recall baseline and the empath substrate both accrue day and night. The architectural commitments are unchanged; only the *order in which surfaces are proven* moves.
+
 ---
 
 ## 1. What Koine Labs is
