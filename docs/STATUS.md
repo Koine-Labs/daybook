@@ -1,6 +1,14 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-28 — Nervous-system skeleton complete (Core + all 6 layer skeletons + real L1→L6 arc).**
+**Last updated: 2026-05-28 — First L4 fill: trained REM classifier wrapped as a real feature-based predictor.**
+
+## 2026-05-28 — L4 fill #1: real REM predictor (branch `feat/fill-l4-rem-predictor`, off the skeleton)
+
+First skeleton stub replaced with real code, against the frozen contracts:
+- **L2** `features/biometric.py` — produces the exact 24 `production_binary_rem` `feature_cols` by reusing `classifier/features.py` (no reimplemented math, no heartpy; HR-lag features honest-NaN without history). Registered for `Modality.BIOMETRIC` in the L2 extractor registry.
+- **L4** `prediction/predictors/sleep_classifier.py` — wraps the frozen XGBoost REM model (recovered v0 `realtime.py` inference: model+sidecar load, exact feature ordering, threshold 0.23) as a **feature-based predictor** that consumes L2 biometric `FeatureSnapshot`s on `TOPIC_FEATURE` (commitment #16 stand-alone per-axis predictor). Emits a `rem` `Prediction` (nowcast, `horizon_seconds=0`, distribution `{rem, non_rem}`, real `predict_proba`, honest provenance). `prediction/feature_participant.py` wires it to the bus; registered at `("rem","sleep")`.
+- **Verified:** exact-reproduction regression guard proves the wrapper == production `model.predict_proba` (atol 1e-4) — caught nothing because feature ordering is correct; LOSO-parquet sanity is honestly framed as a *different* (out-of-fold) model. Real L2→L4 biometric→REM arc runs through the bus (known-answer). **103 core+layer+fill tests green; pre-existing suite (11) unchanged.** Both reviews passed. `pyarrow` declared explicit.
+- **Honest scope:** a nowcast, not a forecast (the model classifies the current epoch). Live inference still needs real biometric `SignalPacket`s on the bus — no live producer wires Apple-Watch HR in yet.
 
 ## 2026-05-28 — Nervous-system Core (protocol + bus + node roles)
 
