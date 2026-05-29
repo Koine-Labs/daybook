@@ -27,7 +27,6 @@ import type {
   IModelID,
   IModelNoveltyLogID,
   InterjectDecisionID,
-  IModelID,
   IntentID,
   MoodReportID,
   RegisMomentID,
