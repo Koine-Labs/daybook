@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any
 
 from core.bus.bus import MessageBus
-from core.protocol.enums import Intent, Modality
+from core.protocol.enums import Intent, MetaContext, Modality
 from sensors.contract import DEFAULT_USER_ID, IntentTaggedReading
 from sensors.participant import emit
 
@@ -39,21 +39,29 @@ def _reading(kind: str, payload: dict[str, Any], *, user_id: str, now: datetime)
 
 class AudioBusSink:
     """The three writer callables ContinuousProcessor expects, but each emits a
-    SignalPacket onto a MessageBus instead of writing the DB."""
+    SignalPacket onto a MessageBus instead of writing the DB.
 
-    def __init__(self, bus: MessageBus, *, user_id: str = DEFAULT_USER_ID) -> None:
+    `meta_context` is the top-level context (#14) the emitted signals ride under;
+    it defaults to UNKNOWN so existing callers/tests are unchanged. The waking
+    runner passes WAKING so L5's meta-context gate passes and L6 selects voice.
+    """
+
+    def __init__(self, bus: MessageBus, *, user_id: str = DEFAULT_USER_ID,
+                 meta_context: MetaContext = MetaContext.UNKNOWN) -> None:
         self.bus = bus
         self.user_id = user_id
+        self.meta_context = meta_context
 
     def write_social(self, *, user_id: str, recorded_at: datetime, speaker: str,
                      num_speakers: int, vad_active: bool) -> None:
         emit(self.bus, _reading(KIND_SOCIAL, {
             "speaker": speaker, "num_speakers": num_speakers, "vad_active": vad_active,
-        }, user_id=user_id, now=recorded_at))
+        }, user_id=user_id, now=recorded_at), meta_context=self.meta_context)
 
     def write_prosody(self, *, user_id: str, recorded_at: datetime, prosody: dict[str, Any]) -> None:
-        emit(self.bus, _reading(KIND_PROSODY, dict(prosody), user_id=user_id, now=recorded_at))
+        emit(self.bus, _reading(KIND_PROSODY, dict(prosody), user_id=user_id, now=recorded_at),
+             meta_context=self.meta_context)
 
     def write_ambient(self, *, user_id: str, recorded_at: datetime, top_classes: list) -> None:
         emit(self.bus, _reading(KIND_AMBIENT, {"top_classes": list(top_classes)},
-                                user_id=user_id, now=recorded_at))
+                                user_id=user_id, now=recorded_at), meta_context=self.meta_context)

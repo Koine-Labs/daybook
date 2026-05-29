@@ -99,12 +99,59 @@ def test_sleep_cue_mode_is_witness():
 
 
 def test_waking_routes_to_default_policy_and_holds():
+    # A WAKING sleep_stage Prediction is a non-social axis → the default policy's
+    # salience gate fails, so the assembled default still HOLDs on this input.
     out = decide(_inbound(MetaContext.WAKING))
     decision: ActionDecision = out.payload
     assert decision.action == "hold"
     assert decision.mode == "companion"
     assert decision.gate_trace["policy"] == "default"
     assert decision.gate_trace["gates"]  # at least one gate recorded
+
+
+def _social_inbound(category: str) -> MessageEnvelope:
+    """A WAKING audio_social_context Prediction envelope (carry-forward category)."""
+    pred = Prediction(
+        user_id=USER,
+        axis="audio_social_context",
+        made_at=datetime.now(timezone.utc),
+        horizon_seconds=300,
+        distribution={"kind": "persistence", "informative": False,
+                      "carried_value": {"category": category}},
+        model_id="prediction.stub.persistence.v0",
+        confidence=None,
+        provenance="placeholder",
+        i_model_id=IMODEL,
+    )
+    return MessageEnvelope(
+        id=str(uuid.uuid4()),
+        type=PayloadType.PREDICTION,
+        source_role=NodeRole.DESKTOP_COMPUTE,
+        occurred_at=datetime.now(timezone.utc),
+        meta_context=MetaContext.WAKING,
+        consent_scope="mic_continuous_v1",
+        trace_id=TRACE,
+        payload=pred,
+        i_model_id=IMODEL,
+    )
+
+
+def test_waking_social_transition_reaches_interject_at_participant_boundary():
+    """Two social Predictions lifted through the participant's _context_from reach
+    interject via the REAL default policy (a fresh instance for isolation)."""
+    from decision.participant import _context_from
+    from decision.policies.default import DefaultPolicy
+
+    policy = DefaultPolicy()
+    baseline = policy.decide(_context_from(_social_inbound("alone")))
+    assert baseline.action == "hold"  # first observation establishes baseline
+
+    decision = policy.decide(_context_from(_social_inbound("with_other")))
+    assert decision.action == "interject"
+    assert decision.mode == "companion"
+    assert decision.content_kind == "conversation_tease"
+    assert decision.gate_trace["policy"] == "default"
+    assert decision.gate_trace["all_passed"] is True
 
 
 def test_intent_dispatch_maps_meta_context():

@@ -125,6 +125,7 @@ def listen_continuous(
     block_seconds: float = 0.08,
     window_seconds: float = 3.0,
     bus: Any | None = None,
+    meta_context: Any | None = None,
 ) -> None:
     """ONE always-on mic loop: wake-word + continuous privacy-gated semantics.
 
@@ -132,6 +133,11 @@ def listen_continuous(
     bus instead of the DB (pure-bus mode): the same SignalPacket is reconstructable
     downstream by a persistence sink later, and a no-DB node (future Pi) keeps its
     strongest waking sense. Default (`bus=None`) is byte-for-byte today's DB path.
+
+    `meta_context` (a MetaContext, bus-mode only) is the top-level context (#14)
+    the emitted signals ride under; default None lets AudioBusSink choose UNKNOWN.
+    The waking runner passes MetaContext.WAKING so L5/L6 treat the signals as
+    waking (companion posture, voice channel).
     """
     import os
 
@@ -158,8 +164,12 @@ def listen_continuous(
         return sorted(ids)
 
     if bus is not None:
+        from core.protocol.enums import MetaContext
         from sensors.audio_adapter import AudioBusSink
-        sink = AudioBusSink(bus, user_id=user_id)
+        sink = AudioBusSink(
+            bus, user_id=user_id,
+            meta_context=meta_context if meta_context is not None else MetaContext.UNKNOWN,
+        )
         write_social, write_prosody, write_ambient = (
             sink.write_social, sink.write_prosody, sink.write_ambient)
     else:
