@@ -1,6 +1,6 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-28 — Nervous-system Core (protocol + bus + node roles) shipped.**
+**Last updated: 2026-05-28 — Nervous-system skeleton complete (Core + all 6 layer skeletons + real L1→L6 arc).**
 
 ## 2026-05-28 — Nervous-system Core (protocol + bus + node roles)
 
@@ -12,7 +12,13 @@
 - `packages/shared/src/protocol.ts` — TS mirror; fixed a pre-existing duplicate-import `tsc` break in `types.ts`; the protocol's communication-`Intent` is surfaced as `CommunicationIntent` to avoid colliding with the intents-table `Intent` entity. Pruned `pnpm-lock.yaml` of scrapped workspace projects.
 - **Verified:** `core/` 25 tests green; reflex arc fires; existing suite unchanged (34 tests); `tsc -p packages/shared` exit 0. Built via a dependency-waved parallel workflow (9 implementers + 2 reviewers); spec + quality reviews both passed, 3 minor nits fixed in-tree.
 
-**Next:** the six layer skeletons build against this frozen protocol — fanned out as one parallel workflow (sensors / features / fusion / prediction / decision / output), wrapping existing code (voice loop → L1+L6, composer → L6 renderer, 3 fusion axes → L3 registry) or dropping protocol-speaking stubs. Per `docs/superpowers/specs/2026-05-28-daybook-nervous-system-skeleton-design.md`.
+**Layer skeletons (same day, same branch — all six now exist as bus participants on the frozen protocol):**
+- `core/layer.py` — shared `forward_envelope` (inherits trace/meta/consent). `core/pipeline.py::assemble_pipeline` wires all six; **`python -m core.pipeline` runs a real L1→L6 arc** through actual layer code.
+- L1 `sensors/` (IntentTaggedReading → SignalPacket; mac adapter wraps `capture/mac_sensors.py`) · L2 `features/participant.py` (per-modality extractor registry + OFFLINE) · L3 `fusion/participant.py` (3 live axes, DB-reads wrapped crash-safe) · L4 `prediction/` (registry + `predict(axis,horizon,action)` + `PREDICTION_OFFLINE` + placeholder stub) · L5 `decision/` (intent dispatch + 5 sleep-cue gates, **HOLD default**) · L6 `output/` (meta-context channel selection — no voice in deep sleep — + injectable renderer).
+- Built by a parallel fan-out workflow (1 contract + 6 layer agents + 1 integration + 2 reviewers); both reviews passed; fixes applied (`role_for` placement on L5/L6, isinstance guards, import/style nits). **90 core+layer tests green; pre-existing suite (34) unchanged.**
+- **Honest skeleton property:** the default assembled arc legitimately halts at L3→L4 when no fresh DB row exists (real axes read Neon); the integration test injects one deterministic fresh estimate to exercise the full real-code path.
+
+**Next — fills (each a contained job against the now-frozen contracts):** real L4 predictors (wrap the trained REM classifier → JEPA destination), real L5 policies + bandit, remaining L3 axes (`arousal_inferred`, `valence`, `state_declared`, `cognitive_load`) + observers, real L2 extractors (heartpy/librosa), composer into the L6 renderer, and `NetworkTransport` for the actual cross-node split. Per `docs/superpowers/specs/2026-05-28-daybook-nervous-system-skeleton-design.md`.
 
 ---
 
