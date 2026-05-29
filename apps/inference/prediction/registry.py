@@ -10,6 +10,7 @@ None, which the interface turns into PREDICTION_OFFLINE.
 from __future__ import annotations
 
 from .interface import Predictor
+from .predictors.sleep_classifier import DEFAULT_PREDICTOR as _REM_PREDICTOR
 from .predictors.stub import StubPredictor
 
 WILDCARD = "*"
@@ -18,10 +19,13 @@ WILDCARD = "*"
 # v1: only the axes L3 actually produces today get a (stub) predictor.
 _DEFAULT_STUB = StubPredictor()
 
+# "rem" is the first REAL predictor: the trained binary-REM XGBoost nowcast.
+# It's a sleep-context predictor (REM is a sleep stage), so it's keyed to "sleep".
 _REGISTRY: dict[tuple[str, str], Predictor] = {
     ("meta_context", WILDCARD): _DEFAULT_STUB,
     ("sleep_stage", "sleep"): _DEFAULT_STUB,
     ("audio_social_context", WILDCARD): _DEFAULT_STUB,
+    ("rem", "sleep"): _REM_PREDICTOR,
 }
 
 
