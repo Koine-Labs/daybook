@@ -1,6 +1,28 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-29 — BCI software lane built on synthetic EEG (4th live L3 axis, `cognitive_load`); nervous-system milestone merged to `main`; direction reframed to the waking distributed multimodal MVP (sleep deferred but still collecting data); `NetworkTransport` is the next build.**
+**Last updated: 2026-05-29 — Waking-arc cluster shipped to `main` (NetworkTransport + mic-on-bus + waking warrant + BCI lane); theory-aligner ALIGNED; the assembled arc now perceives → decides → speaks. Next: a live-on-hardware smoke (`python -m runtime.waking_arc`).**
+
+## 2026-05-29 (late) — Waking-arc cluster SHIPPED — theory-aligner ALIGNED, lights on
+
+Four feature commits merged to `main` after the direction reframe, each built design → TDD → 3-lens adversarial review → fix via a dynamic workflow, then controller-verified DB-free from clean caches and fast-forward-merged individually:
+- `ef7a284` **NetworkTransport** — WebSocket relay + inverse codec (`core/protocol/decode.py`); the L1–L6 bus now spans two processes (Pi/ESP32 ↔ laptop). Transport-agnostic: producers hold only a `MessageBus`.
+- `c2ae41b` **Mic onto the bus** — the continuous-mic pipeline drives a live `audio_social_context` belief through the spine, privacy-gated (Policy #1 preserved); no longer DB-orphaned.
+- `71d6c29` **Waking warrant policy** — `decision/policies/default.py` un-stubbed (meta-context + salient social-transition + rate-limit gates); the DEFAULT `assemble_pipeline` arc now reaches interject + speak. `runtime/waking_arc.py` runner. Pre-bandit scaffold for #13.
+- `d5565eb` **BCI lane** — band-power + L2 extractor + `cognitive_load` (4th live L3 axis), semantic-first (raw EEG discarded at the edge), on synthetic EEG; EXG-Pill plug-and-play. Off-CI firmware stub.
+
+**This closes the gaps the merge entry below lists as open** — the mic is now on the bus, BCI is no longer an enum-only placeholder, cross-device distribution exists, and the assembled arc no longer always-HOLDs. The walking-down-the-street arc (satellite → NetworkTransport → fusion → decision → speak) is now real production code, not staged through test injection.
+
+**Theory-aligner milestone gate: ALIGNED, no blockers.** Verified the cluster composes end-to-end (the `carried_value` contract threaded L3→L4→L5, exactly one producer/one consumer), the warrant is a clean pre-bandit #13 scaffold (not a calcified hand-rule), raw is discarded on BOTH the audio and EEG lanes (#11), `cognitive_load` wears its honest-scaffold label (#15/#16), and NetworkTransport genuinely composes (not dormant). 224 core+layer tests green.
+
+**Non-blocking gaps logged:**
+- **#14** — `cognitive_load` does not itself gate on meta-context; "no EEG-load inference during deep sleep" is deferred to L5/L6 channel selection (per #14's own table). Convention-not-code today; verify L5/L6 actually suppresses it once the sleep meta-context goes live.
+- **#1** — `i_model_id` is threaded at L2 but L3 axes still build `AxisEstimate` with it null (pre-existing skeleton gap; fills when clustering lands).
+- Consent fail-open closed for BCI (`eeg_continuous_v1`) but still open for vision/gesture (→ `unscoped_v0`); track for when those modalities land.
+- **The runner is unproven ON HARDWARE.** Everything above is "lights-on in test" (LLM mocked, recorder speaker, in-process relay). It has NOT run on a real Mac/mic, and no 2-process Pi→laptop NetworkTransport relay has been demonstrated outside unit tests.
+
+**Next (the last connection-not-invention step): a live-on-hardware smoke** — run `python -m runtime.waking_arc` on the Mac with a real mic (`[voice]` extra) so Regis perceives a real social transition and speaks aloud, and ideally relay one `eeg_bandpower` packet Pi→laptop over NetworkTransport. That converts "proven in test" into "proven on the rig." Then: continuous semantic vision (the remaining absent sense) and the prosody/ambient L3 axes.
+
+---
 
 ## 2026-05-29 — BCI software lane (synthetic EEG, pre-EXG-Pill) — branch `feat/bci-lane`
 
