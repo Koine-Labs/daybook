@@ -8,10 +8,13 @@ FeatureSnapshot. So it subscribes TOPIC_FEATURE directly, scores the current
 epoch, and publishes one "rem" Prediction on TOPIC_PREDICTION.
 
 It only fires on biometric snapshots that actually carry the model's feature
-vector; everything else (other modalities, offline sentinels, snapshots without
-the features) is skipped — degrade, never crash the bus. Every outbound envelope
-inherits trace_id / meta_context / consent_scope / i_model_id via core/layer.py
-so one stimulus stays followable L1->L6 (#14/#11/#1).
+vector AND only under the SLEEP meta-context: the REM model is a sleep nowcast,
+so waking HR would yield a meaningless REM belief. This is commitment #14 — L4
+selects different models per meta-context — so anything else (other modalities,
+offline sentinels, feature-less snapshots, non-SLEEP meta-contexts) is skipped:
+degrade, never crash the bus. Every outbound envelope inherits trace_id /
+meta_context / consent_scope / i_model_id via core/layer.py so one stimulus stays
+followable L1->L6 (#14/#11/#1).
 """
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ from typing import Any
 from core.bus.bus import TOPIC_FEATURE, TOPIC_PREDICTION, MessageBus
 from core.layer import forward_envelope
 from core.nodes import role_for
-from core.protocol.enums import Modality, PayloadType
+from core.protocol.enums import MetaContext, Modality, PayloadType
 from core.protocol.envelope import MessageEnvelope
 from features.snapshot import FeatureSnapshot
 
@@ -66,6 +69,9 @@ def handle_feature(bus: MessageBus, inbound: MessageEnvelope) -> MessageEnvelope
         return None
     feats = _feature_dict(payload)
     if feats is None:
+        return None
+    # REM is a sleep nowcast; waking HR yields a meaningless belief (#14).
+    if inbound.meta_context != MetaContext.SLEEP:
         return None
 
     now = datetime.now(timezone.utc)
