@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from .belief_state import AxisEstimate, BeliefState
-from .writer import write_axis_estimate
 
-__all__ = ["AxisEstimate", "BeliefState", "write_axis_estimate"]
+# `writer` (DB-backed) is intentionally NOT re-exported here: importing the pure
+# BeliefState dataclasses must not pull db/psycopg into the import graph — the
+# L1–L6 protocol core imports these. Import the writer explicitly where needed:
+#     from fusion.writer import write_axis_estimate
+__all__ = ["AxisEstimate", "BeliefState"]

@@ -27,11 +27,10 @@ from psycopg_pool import ConnectionPool
 ENV_PATH = Path(__file__).parent / ".env.local"
 load_dotenv(ENV_PATH)
 
+# Resolved at import (may be None). The requirement is enforced lazily at pool
+# creation — importing this module must never require runtime config, so the
+# L1–L6 protocol/bus core stays import-safe and DB-free under test.
 DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError(
-        f"DATABASE_URL not found. Expected in {ENV_PATH} (gitignored) or env var."
-    )
 
 # Process-wide connection pool. Lazy-initialized on first use.
 _pool: ConnectionPool | None = None
@@ -40,6 +39,10 @@ _pool: ConnectionPool | None = None
 def _get_pool() -> ConnectionPool:
     global _pool
     if _pool is None:
+        if not DATABASE_URL:
+            raise RuntimeError(
+                f"DATABASE_URL not found. Expected in {ENV_PATH} (gitignored) or env var."
+            )
         _pool = ConnectionPool(
             conninfo=DATABASE_URL,
             min_size=1,
