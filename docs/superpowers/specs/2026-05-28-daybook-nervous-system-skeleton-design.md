@@ -16,7 +16,7 @@ This is a **skeleton-first** build: scaffold every layer's contract and get the 
 - **Portability:** full distributed *contract shape* now — real cross-node protocol, envelope, node roles, bus.
 - **Bar:** clean-prototype — typed and well-structured, light on versioning/observability/exhaustive contract-tests; optimize for runnable breadth. Harden later.
 - **Bus realization:** in-process async pub/sub today (whole pipeline = one process on the Mac), behind a `Transport` seam so a broker/HTTP relay slots underneath later with zero layer-code change.
-- **Wire format:** Pydantic models as source of truth → JSON on the wire; mirrored to TS in `packages/shared`.
+- **Wire format:** dataclasses (matching existing `FeatureSnapshot`/`AxisEstimate` style — `__post_init__` validation + `to_dict()`) as source of truth → JSON on the wire; mirrored to TS in `packages/shared`. (Pydantic stays at the HTTP boundary only.)
 
 ## 3. The four building blocks
 
@@ -65,7 +65,7 @@ New code is additive; existing working modules are *wrapped*, not rewritten.
 ```
 apps/inference/
   core/                      # NEW — the nervous system itself
-    protocol/                # MessageEnvelope + 6 payloads (Pydantic); NodeRole, MetaContext enums
+    protocol/                # MessageEnvelope + 6 payloads (dataclasses); NodeRole, MetaContext enums
     bus/                     # InProcessBus + Transport seam + topic registry
     nodes.py                 # placement config (layer/handler → NodeRole)
   sensors/   (L1)            # NEW contract — IntentTaggedReading → SignalPacket; adapters wrap mac mic, HK sync, mock
