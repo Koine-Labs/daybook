@@ -1,6 +1,14 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-28 — First L4 fill: trained REM classifier wrapped as a real feature-based predictor.**
+**Last updated: 2026-05-28 — L6 fill: Regis speaks end-to-end (generative renderer default + TTS sink).**
+
+## 2026-05-28 — L6 fill: Regis speaks (branch `feat/fill-l6-composer`, off the L4 fill)
+
+- `assemble_pipeline` now defaults the L6 renderer to the generative **`ComposerRenderer`** (real Regis voice via `apps/wisp/composer.py`, lazy LLM import — closes the aligner's gap #4 / commitment #8); still injectable, tests inject `StubRenderer` / monkeypatch `compose_utterance`.
+- `output/speaker.py` — TTS output **sink**: subscribes `TOPIC_OUTPUT`, speaks voice directives via an injectable `speak` (default lazily wraps `audio.streaming.speak_streaming`); never speaks silence/hold; TTS/device errors are contained (logged, don't crash the arc).
+- **Full waking arc proven** (`output/test_speak_arc.py`): stimulus → real production pipeline (`ComposerRenderer`, LLM mocked) → `OutputDirective` → TTS sink (recorder) — Regis's text is produced **and** spoken, trace preserved; the HOLD path speaks nothing. No network/audio/DB in tests.
+- **Verified:** 109 core+layer+fill tests green; pre-existing (11) unchanged; importing `output.speaker` pulls in zero audio modules. Both reviews passed; 1 minor robustness nit (guard the speak call) fixed in-tree.
+- **Production wiring:** to actually hear Regis a runner calls `assemble_pipeline(bus)` + `register_speaker(bus)` — the sink is an independently-attachable output organ, kept out of the test-exercised default.
 
 ## 2026-05-28 — L4 fill #1: real REM predictor (branch `feat/fill-l4-rem-predictor`, off the skeleton)
 
