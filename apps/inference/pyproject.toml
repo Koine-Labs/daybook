@@ -44,6 +44,14 @@ ambient = [
     "tensorflow>=2.15",
     "tensorflow-hub>=0.16",
 ]
+vision = [
+    # Continuous semantic vision lane — YOLO scene/object detection + optional OCR.
+    # Heavy, off-CI, isolated behind a lazy import in vision.perception (#11). CI runs
+    # on synthetic semantics only; install on the camera/compute node:
+    #     uv pip install -e ".[vision]"
+    "ultralytics>=8.2",
+    "pillow>=10.0",
+]
 analysis = [
     "matplotlib>=3.7",
     "seaborn>=0.12",
