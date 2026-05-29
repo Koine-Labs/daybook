@@ -25,7 +25,15 @@ from core.protocol.enums import PayloadType  # noqa: E402
 from core.protocol.envelope import MessageEnvelope  # noqa: E402
 from core.protocol.payloads import FeatureSnapshot  # noqa: E402
 
-from .axes import audio_social_context, cognitive_load, meta_context, sleep_stage, visual_context  # noqa: E402
+from .axes import (  # noqa: E402
+    affect_prosody,
+    arousal_inferred,
+    audio_social_context,
+    cognitive_load,
+    meta_context,
+    sleep_stage,
+    visual_context,
+)
 from .belief_state import AxisEstimate, BeliefState  # noqa: E402
 
 # An axis combiner takes the inbound packet + a determinism `now` and returns
@@ -114,6 +122,36 @@ def _visual_combiner(packet: FeatureSnapshot, now: datetime) -> "AxisEstimate | 
         return _offline_estimate("visual_context", now=now, reason=f"axis error: {exc!r}")
 
 
+def _arousal_inferred_combiner(packet: FeatureSnapshot, now: datetime) -> "AxisEstimate | None":
+    """Live-only arousal_inferred: fuse the inbound biometric packet; None -> OFFLINE upstream.
+
+    No DB fallback (there is no biometric-window-as-axis sensor table yet — see the
+    axis docstring). For a non-biometric packet, fuse_from_feature returns None and
+    the participant records arousal_inferred as OFFLINE, exactly how cognitive_load
+    degrades for a non-EEG packet. Any error degrades to OFFLINE, never crashes the
+    bus.
+    """
+    try:
+        return arousal_inferred.fuse_from_feature(packet, now=now)
+    except Exception as exc:  # noqa: BLE001 — skeleton must never crash the bus.
+        return _offline_estimate("arousal_inferred", now=now, reason=f"axis error: {exc!r}")
+
+
+def _affect_prosody_combiner(packet: FeatureSnapshot, now: datetime) -> "AxisEstimate | None":
+    """Live-only affect_prosody: fuse the inbound prosody packet; None -> OFFLINE upstream.
+
+    No DB fallback (there is no audio_prosody sensor table yet — see the axis
+    docstring). For a non-prosody packet, fuse_from_feature returns None and the
+    participant records affect_prosody as OFFLINE, exactly how cognitive_load
+    degrades for a non-EEG packet. Any error degrades to OFFLINE, never crashes the
+    bus.
+    """
+    try:
+        return affect_prosody.fuse_from_feature(packet, now=now)
+    except Exception as exc:  # noqa: BLE001 — skeleton must never crash the bus.
+        return _offline_estimate("affect_prosody", now=now, reason=f"axis error: {exc!r}")
+
+
 # Registry of the live axes. Selection is content-agnostic: every registered axis
 # is asked on each FeaturePacket; each returns its estimate or None (which the
 # participant records as OFFLINE).
@@ -123,6 +161,8 @@ AXIS_REGISTRY: dict[str, AxisCombiner] = {
     "audio_social_context": _audio_combiner,
     "cognitive_load": _cognitive_load_combiner,
     "visual_context": _visual_combiner,
+    arousal_inferred.AXIS: _arousal_inferred_combiner,
+    affect_prosody.AXIS: _affect_prosody_combiner,
 }
 
 

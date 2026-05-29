@@ -111,9 +111,10 @@ def test_feature_in_belief_out_same_trace():
     assert "meta_context" in d["payload"]["estimates"]
 
 
-def test_default_registry_references_five_live_axes():
+def test_default_registry_references_seven_live_axes():
     assert set(P.AXIS_REGISTRY) == {
-        "meta_context", "sleep_stage", "audio_social_context", "cognitive_load", "visual_context"
+        "meta_context", "sleep_stage", "audio_social_context", "cognitive_load",
+        "visual_context", "arousal_inferred", "affect_prosody",
     }
 
 
@@ -171,3 +172,65 @@ def test_live_audio_packet_fuses_social_belief_no_db():
     assert belief.get("sleep_stage", now=now) is None
     # cognitive_load (live-only, EEG-kind only) is OFFLINE for a non-EEG packet.
     assert belief.get("cognitive_load", now=now) is None
+
+
+def _biometric_feature_env(now: datetime) -> MessageEnvelope:
+    snap = FeatureSnapshot(
+        user_id=USER,
+        timestamp=now,
+        modality="biometric",
+        source="watch.hr_30s",
+        payload={"kind": "biometric_window",
+                 "features": {"hr_mean": 100, "hrv_mean": 25}},
+        intent="continuous",
+        confidence=0.8,
+    )
+    return MessageEnvelope(
+        id=str(uuid.uuid4()),
+        type=PayloadType.FEATURE,
+        source_role=NodeRole.WISP_EDGE,
+        occurred_at=now,
+        meta_context=MetaContext.SLEEP,
+        consent_scope="apple_health_v1",
+        trace_id=str(uuid.uuid4()),
+        payload=snap,
+        i_model_id=None,
+    )
+
+
+def test_live_biometric_packet_fuses_arousal_belief_no_db():
+    """Full L3 arc with the DEFAULT registry and NO DB: a biometric_window packet
+    fires arousal_inferred via fuse_from_feature; the belief envelope inherits the
+    inbound SLEEP frame + apple_health_v1 consent, while the arousal estimate itself
+    honestly tags meta_context=None (#14 deferral). All other axes go OFFLINE."""
+    now = datetime.now(timezone.utc)
+    bus = MessageBus()
+    captured: list[MessageEnvelope] = []
+    bus.subscribe(TOPIC_BELIEF, captured.append)
+
+    P.register(bus)  # real AXIS_REGISTRY incl. _arousal_inferred_combiner
+
+    inbound = _biometric_feature_env(now)
+    bus.publish(TOPIC_FEATURE, inbound)
+
+    assert len(captured) == 1
+    out = captured[0]
+    # Belief-envelope propagation: trace / frame / consent / role inherited.
+    assert out.trace_id == inbound.trace_id
+    assert out.meta_context == MetaContext.SLEEP
+    assert out.consent_scope == "apple_health_v1"
+    assert out.source_role == P.role_for("L3.fusion")
+
+    belief = out.payload
+    assert isinstance(belief, BeliefState)
+    est = belief.get("arousal_inferred", now=now)
+    assert est is not None
+    assert "arousal" in est.value and "band" in est.value and "hr_mean" in est.value
+    # The axis cannot tell SLEEP from WAKING from the packet alone (#14): None tag.
+    assert est.meta_context is None
+
+    # The same biometric packet leaves every other live axis OFFLINE.
+    assert belief.get("affect_prosody", now=now) is None
+    assert belief.get("visual_context", now=now) is None
+    assert belief.get("cognitive_load", now=now) is None
+    assert belief.get("audio_social_context", now=now) is None

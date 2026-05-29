@@ -18,7 +18,7 @@ BEGIN;
 CREATE TABLE user_state_estimate_v2 (
   id            UUID         PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id       UUID         NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  axis          TEXT         NOT NULL,                -- 'arousal_inferred', 'meta_context', 'sleep_stage', 'state_declared', 'audio_social_context', 'cognitive_load'
+  axis          TEXT         NOT NULL,                -- 'arousal_inferred', 'meta_context', 'sleep_stage', 'state_declared', 'audio_social_context', 'cognitive_load', 'affect_prosody'
   timestamp     TIMESTAMPTZ  NOT NULL,
   value         JSONB        NOT NULL,                -- {"category": "focused"} or {"scalar": 0.55} or {"label": "REM", "prob": 0.71}
   confidence    DOUBLE PRECISION CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
