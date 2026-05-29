@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  python-core:
+    name: Python core + layers (DB-free)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Audio system libs — cheap insurance so the full pyproject install + any
+      # audio-touching import is robust (sounddevice/soundfile bindings).
+      - name: Install system audio libs
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libsndfile1
+
+      - name: Install uv
+        run: pip install uv
+
+      # Install from pyproject.toml (the authoritative dependency source — there
+      # is intentionally no requirements.txt). This pulls psycopg + python-dotenv
+      # so the db module is importable.
+      - name: Install inference package
+        working-directory: apps/inference
+        run: uv pip install --system -e ".[dev]"
+
+      # The nervous-system core + six layer skeletons must import AND run with NO
+      # DATABASE_URL present (no .env.local exists in CI) — guards the DB-free-at-
+      # import property fixed for PR #38. A regression here means something pulled
+      # db into an import path or required a live DB to run a unit test.
+      - name: Run core + layer suite without DATABASE_URL
+        working-directory: apps/inference
+        run: python -m pytest core sensors features fusion prediction decision output -q
+
+  typecheck:
+    name: TypeScript typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
