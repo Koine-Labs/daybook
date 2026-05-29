@@ -1,6 +1,17 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-29 — Live biometric producer shipped to `main` (Watch HR/HRV on the bus, REM gated to SLEEP, #14). Builds on the waking-arc cluster (NetworkTransport + mic-on-bus + waking warrant + BCI lane). Next: the real-data smoke (`python -m runtime.biometric_replay`, needs DB) and the live distributed proof (Pi→laptop over NetworkTransport).**
+**Last updated: 2026-05-29 — Continuous semantic vision shipped to `main` — vision is now the 4th live sense and `visual_context` the 5th live L3 axis (#11 semantic-first; raw pixels never ride the bus). All four MVP senses (mic + biometric + BCI + vision) feed the bus; the EXG Pill is in hand. Next is the hardware/"using" layer (real-data smoke, live mic, Pi→laptop relay, EEG calibration) — deferred by founder's choice while the code system is built out.**
+
+## 2026-05-29 (later still) — Continuous semantic vision SHIPPED — the last absent sense on the bus (#11)
+
+Candidate **A** from the `daybook-next-major-piece` analysis, and the founder's "build the code system before the using" pick: a continuous, semantic-first vision lane onto the L1–L6 bus. Built design → TDD → 3-lens adversarial review (0 blocking findings) via a dynamic workflow; controller-verified DB-free from clean caches and fast-forward-merged (`438029e` spec, `947d165` L1 producer, `1889880` L2/L3 fusion). Mirrors the BCI lane file-for-file.
+- `947d165` **L1 producer** — `sensors/vision_adapter.py` `VisionBusSink` (transport-agnostic) emits semantic `visual_scene` packets `{setting, people_present, salient_objects, text_present, model}`; `vision/perception.py` runs the edge detector (lazy ultralytics, `[vision]` extra) and **discards raw pixels — #11 enforced in code** (`_semantic_only` rejects any bytes under a scene key) and proven by adversarial tests, incl. a controller-added mutation-killer (bytes smuggled under a *legitimate* key → ValueError, nothing published). `synthesize_vision_frame` feeds CI (no model). Off-CI `perception_edge_stub` documents the NetworkTransport camera-satellite swap + the documented-not-wired `llm/vision.py` escalation seam. **Closes the vision consent fail-open** (VISION → `camera_continuous_v1`, was `unscoped_v0`).
+- `1889880` **L2/L3 fusion** — `features/vision_scene.py` (registered for `Modality.VISION`, replacing the passthrough stub) → `fusion/axes/visual_context.py`, the **5th live L3 axis** (`meta_context`, `sleep_stage`, `audio_social_context`, `cognitive_load`, **`visual_context`**): setting + people + objects + alone/with_people category. WAKING sub-context (#14), honest v1 scaffold, live-only.
+- **Verified:** full CI suite (`core sensors features fusion prediction decision output bci vision`) green from clean caches with no `DATABASE_URL` — **272 passed**; whole vision lane import-clean; the heavy YOLO model confirmed lazy (no `ultralytics` in `sys.modules` on import).
+
+**State of the senses:** mic (live), biometric (DB-replay producer), BCI (synthetic, Pill now in hand), **vision (synthetic semantics) — all four feed the bus.** Belief map now spans 5 live L3 axes.
+
+**Still deferred (the "using" layer, by choice):** every real-world run remains unproven — `runtime.biometric_replay` (DB), `runtime.waking_arc` (mic), a real camera + the YOLO model (`[vision]` extra), a 2-process Pi→laptop NetworkTransport relay, and EEG calibration on the EXG Pill. These are the next phase once the code system is where the founder wants it.
 
 ## 2026-05-29 (later) — Live biometric producer SHIPPED — Watch HR/HRV on the bus, REM gated to SLEEP (#14)
 
