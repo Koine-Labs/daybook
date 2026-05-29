@@ -79,6 +79,10 @@ _RECORDED_PREDS = (
     / "binary_rem_preds.parquet"
 )
 _KEY = ["session_id", "epoch_start_at"]
+# The feature cache + recorded LOSO preds are gitignored (large, HK-derived). The
+# realistic-input correlation test skips when they're absent (e.g. CI); the
+# deterministic constant-HR arcs below are self-contained and always run.
+_PARQUET_AVAILABLE = _FEATURES_CACHE.exists() and _RECORDED_PREDS.exists()
 
 # A fixed clock so the reconstructed window is deterministic.
 _T0 = datetime(2026, 5, 28, 3, 0, 0, tzinfo=timezone.utc)
@@ -175,20 +179,6 @@ def _window_from_cached_row(row: pd.Series) -> dict[str, Any]:
     }
 
 
-def _representative_cached_row() -> pd.Series:
-    """A REM-positive, HR-dense cached row with finite lags (a real input shape)."""
-    feats = pd.read_parquet(_FEATURES_CACHE)
-    recorded = pd.read_parquet(_RECORDED_PREDS)
-    merged = feats.merge(recorded, on=_KEY, how="inner")
-    sub = merged[merged["hr_n"] >= 30].dropna(
-        subset=["hr_lag1_mean", "hr_lag3_mean", "hr_lag5_mean"]
-    )
-    rem = sub[sub["y_true"] == 1]
-    chosen = (rem if len(rem) else sub).sort_values("hr_n", ascending=False)
-    assert len(chosen), "no HR-dense cached row with finite lags found"
-    return chosen.iloc[0]
-
-
 # --------------------------------------------------------------------------- #
 # The bus harness: register L2 + L4, publish a SignalPacket, capture L4 out.   #
 # --------------------------------------------------------------------------- #
@@ -222,10 +212,11 @@ def test_biometric_signal_to_rem_prediction_full_arc():
 
     The two required assertions: (1) a single "rem" Prediction arrives with the
     SAME trace_id, and (2) distribution["rem"] matches the frozen model's score
-    on the actual L2-derived input within float tolerance.
+    on the actual L2-derived input within float tolerance. Uses the deterministic
+    constant-HR window so the arc is exercised end-to-end with no data files.
     """
     trace_id = str(uuid.uuid4())
-    sig = _signal_packet(_window_from_cached_row(_representative_cached_row()))
+    sig = _signal_packet(_constant_hr_window())
     expected = _expected_proba(sig)
 
     inbound = _signal_envelope(sig, trace_id=trace_id)
@@ -297,6 +288,7 @@ def test_full_arc_known_answer_on_deterministic_window():
     assert isinstance(is_rem, (bool, np.bool_))
 
 
+@pytest.mark.skipif(not _PARQUET_AVAILABLE, reason="feature cache absent (gitignored; local-only)")
 def test_full_arc_tracks_recorded_loso_predictions():
     """Sanity anchor: the wired path tracks the recorded preds across real rows.
 

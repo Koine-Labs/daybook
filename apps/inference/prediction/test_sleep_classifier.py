@@ -1,18 +1,16 @@
 """Regression guard for the wrapped binary-REM predictor + participant test.
 
-The headline guard reproduces the validated model EXACTLY: cached feature rows
-run through SleepClassifierPredictor.score_features must equal the production
+The headline guard reproduces the validated model EXACTLY: synthetic 24-feature
+rows run through SleepClassifierPredictor.score_features must equal the production
 model's own predict_proba to float tolerance. That proves the wrap (model load,
 the exact feature_cols ordering, NaN-native missing handling) faithfully recovers
-v0's inference rather than silently drifting.
+v0's inference rather than silently drifting. It needs only the committed model,
+so it runs anywhere — including CI.
 
-It ALSO sanity-checks against the recorded binary_rem_preds.parquet. Those
-recorded probabilities are LOSO out-of-fold predictions (each session scored by a
-model trained on the OTHER sessions; see classifier/train.py), NOT the production
-model trained on all data — so they are intentionally NOT bit-exact. The guard
-asserts strong agreement (Pearson corr + threshold-decision agreement) so a
-mis-ordered feature vector or wrong model would still be caught, without falsely
-demanding equality between two different models.
+A separate sanity check compares against the recorded binary_rem_preds.parquet
+(LOSO out-of-fold predictions — a DIFFERENT model than production, so not bit-
+exact). That cache is gitignored (large, HK-derived), so the check SKIPS when
+absent (CI) and runs locally where the cache exists.
 
 Run: python -m prediction.test_sleep_classifier   (or pytest this file)
 """
@@ -24,7 +22,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -46,47 +43,50 @@ USER = "61c18d4c-1c20-408a-bd5f-f5f88fd9922f"
 _INFER_DIR = Path(__file__).resolve().parent.parent
 _FEATURES_CACHE = _INFER_DIR / "classifier" / "runs" / "_features_cache.parquet"
 _RECORDED_PREDS = (
-    _INFER_DIR
-    / "classifier"
-    / "runs"
-    / "20260517_v2_pure_bio"
-    / "binary_rem_preds.parquet"
+    _INFER_DIR / "classifier" / "runs" / "20260517_v2_pure_bio" / "binary_rem_preds.parquet"
 )
-
-_KEY = ["session_id", "epoch_start_at"]
-_SAMPLE_N = 3000  # enough to bound corr tightly; fast to score
-_SEED = 0  # representative random sample (head() biases to a single session)
+# Gitignored caches — tests needing them skip when absent (e.g. CI).
+_PARQUET_AVAILABLE = _FEATURES_CACHE.exists() and _RECORDED_PREDS.exists()
 
 
-def _load_aligned_sample() -> pd.DataFrame:
-    feats = pd.read_parquet(_FEATURES_CACHE)
-    recorded = pd.read_parquet(_RECORDED_PREDS)
-    merged = feats.merge(recorded, on=_KEY, how="inner")
-    assert len(merged) == len(recorded), "feature cache and preds must align 1:1 on keys"
-    return (
-        merged.sample(n=min(_SAMPLE_N, len(merged)), random_state=_SEED)
-        .reset_index(drop=True)
-    )
+def _synthetic_feature_rows() -> list[dict[str, float]]:
+    """Deterministic 24-feature rows (all feature_cols present). Values are
+    plausible but arbitrary — the exact-wrap guard only needs wrapper(row) to equal
+    the model's own predict_proba(row), for which any inputs suffice. Includes a
+    cold-start row with NaN HR-lags to exercise NaN-native handling."""
+    base = {
+        "hr_mean": 58.0, "hr_std": 4.2, "hr_min": 51.0, "hr_max": 70.0, "hr_range": 19.0,
+        "hr_median": 57.0, "hr_slope": -0.3, "hr_n": 60.0, "hr_pct_above_baseline": 0.2,
+        "hrv_mean": 45.0, "hrv_std": 12.0, "hrv_min": 20.0, "hrv_max": 80.0, "hrv_n": 2.0,
+        "resp_mean": 14.0, "resp_std": 1.1, "resp_n": 2.0,
+        "spo2_mean": 96.5, "spo2_std": 0.8, "spo2_min": 95.0, "spo2_n": 2.0,
+        "hr_lag1_mean": 59.0, "hr_lag3_mean": 60.0, "hr_lag5_mean": 61.0,
+    }
+    elevated = {**base, "hr_mean": 68.0, "hr_median": 67.0, "hrv_mean": 30.0,
+                "hr_pct_above_baseline": 0.85}
+    cold_start = {**base, "hr_lag1_mean": float("nan"),
+                  "hr_lag3_mean": float("nan"), "hr_lag5_mean": float("nan")}
+    return [base, elevated, cold_start]
 
 
 def test_wrapper_reproduces_production_model_exactly():
-    """score_features over cached rows == production model.predict_proba (atol=1e-4)."""
-    import xgboost as xgb  # local import keeps the BLOCKED check honest
+    """score_features == production model.predict_proba (atol=1e-4), synthetic rows."""
+    import xgboost as xgb
 
-    sample = _load_aligned_sample()
     pred = SleepClassifierPredictor()
     cols = pred.feature_cols
     assert len(cols) == 24, "frozen model has exactly 24 feature columns"
 
+    rows = _synthetic_feature_rows()
+    matrix = np.array([[row[c] for c in cols] for row in rows], dtype=np.float64)
+
     # Ground truth: the production model scored directly as a batch.
     model = xgb.XGBClassifier()
     model.load_model(str(pred._model_dir / "production_binary_rem.json"))
-    direct = model.predict_proba(sample[cols].to_numpy(dtype=np.float64))[:, 1]
+    direct = model.predict_proba(matrix)[:, 1]
 
-    # Wrapper path: row-by-row dicts through score_features (the live call shape).
-    wrapped = np.array(
-        [pred.score_features({c: row[c] for c in cols}) for _, row in sample.iterrows()]
-    )
+    # Wrapper path: row dicts through score_features (the live call shape).
+    wrapped = np.array([pred.score_features(row) for row in rows])
 
     assert np.allclose(wrapped, direct, atol=1e-4, rtol=0.0), (
         f"wrapper drifted from production model: max abs diff "
@@ -94,39 +94,44 @@ def test_wrapper_reproduces_production_model_exactly():
     )
 
 
+@pytest.mark.skipif(not _PARQUET_AVAILABLE, reason="feature cache absent (gitignored; local-only)")
 def test_wrapper_agrees_with_recorded_loso_preds():
     """Sanity: wrapped probs strongly track recorded LOSO probs (not bit-exact)."""
-    sample = _load_aligned_sample()
+    import pandas as pd
+
+    feats = pd.read_parquet(_FEATURES_CACHE)
+    recorded = pd.read_parquet(_RECORDED_PREDS)
+    merged = (
+        feats.merge(recorded, on=["session_id", "epoch_start_at"], how="inner")
+        .sample(n=min(3000, len(recorded)), random_state=0)
+        .reset_index(drop=True)
+    )
+
     pred = SleepClassifierPredictor()
     cols = pred.feature_cols
-
     wrapped = np.array(
-        [pred.score_features({c: row[c] for c in cols}) for _, row in sample.iterrows()]
+        [pred.score_features({c: row[c] for c in cols}) for _, row in merged.iterrows()]
     )
-    recorded = sample["y_proba"].to_numpy(dtype=np.float64)
+    recorded_p = merged["y_proba"].to_numpy(dtype=np.float64)
 
     # Bounds reflect production-vs-LOSO reality (full set: corr 0.90, agree 0.74),
     # not equality between two different models. A mis-ordered feature vector or
     # wrong model collapses the correlation well below these floors.
-    corr = float(np.corrcoef(wrapped, recorded)[0, 1])
+    corr = float(np.corrcoef(wrapped, recorded_p)[0, 1])
     assert corr >= 0.85, f"production vs LOSO probs should track closely; corr={corr:.3f}"
 
-    # Threshold-decision agreement against the recorded y_pred binary labels.
     thr = pred.threshold
     assert thr == pytest.approx(0.23)
     wrapped_bin = (wrapped >= thr).astype(int)
-    recorded_bin = sample["y_pred"].to_numpy(dtype=int)
+    recorded_bin = merged["y_pred"].to_numpy(dtype=int)
     agree = float((wrapped_bin == recorded_bin).mean())
     assert agree >= 0.68, f"REM-call agreement with recorded preds too low: {agree:.3f}"
 
 
 def test_predict_rem_emits_well_formed_prediction():
     """A single epoch -> a "rem" Prediction with the locked-down shape."""
-    sample = _load_aligned_sample()
     pred = SleepClassifierPredictor()
-    cols = pred.feature_cols
-    row = sample.iloc[0]
-    feats = {c: row[c] for c in cols}
+    feats = _synthetic_feature_rows()[0]
     proba = pred.score_features(feats)
 
     out = pred.predict_rem(user_id=USER, features=feats, i_model_id="im-rem-1")
@@ -199,10 +204,7 @@ def _drive(inbound: MessageEnvelope) -> list[MessageEnvelope]:
 
 
 def test_participant_biometric_yields_rem_prediction_same_trace():
-    sample = _load_aligned_sample()
-    cols = SleepClassifierPredictor().feature_cols
-    feats = {c: float(sample.iloc[0][c]) if pd.notna(sample.iloc[0][c]) else None for c in cols}
-
+    feats = _synthetic_feature_rows()[0]
     inbound = _biometric_feature_envelope(feats)
     out = _drive(inbound)
 
