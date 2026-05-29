@@ -111,9 +111,9 @@ def test_feature_in_belief_out_same_trace():
     assert "meta_context" in d["payload"]["estimates"]
 
 
-def test_default_registry_references_four_live_axes():
+def test_default_registry_references_five_live_axes():
     assert set(P.AXIS_REGISTRY) == {
-        "meta_context", "sleep_stage", "audio_social_context", "cognitive_load"
+        "meta_context", "sleep_stage", "audio_social_context", "cognitive_load", "visual_context"
     }
 
 

@@ -21,6 +21,7 @@ from features.audio_social import extract as _extract_audio_social
 from features.bci import extract as _extract_bci
 from features.biometric import extract as _extract_biometric
 from features.snapshot import FeatureSnapshot
+from features.vision_scene import extract as _extract_vision_scene
 
 _COMPONENT = "L2.features"
 
@@ -74,7 +75,7 @@ EXTRACTORS: dict[str, Extractor] = {
     "voice": _stub_passthrough_extractor,
     "text": _stub_passthrough_extractor,
     "gesture": _stub_passthrough_extractor,
-    "vision": _stub_passthrough_extractor,
+    "vision": _extract_vision_scene,
     "bci": _extract_bci,
 }
 
