@@ -16,20 +16,18 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Audio system libs — cheap insurance so the full pyproject install + any
-      # audio-touching import is robust (sounddevice/soundfile bindings).
-      - name: Install system audio libs
-        run: sudo apt-get update && sudo apt-get install -y libportaudio2 libsndfile1
-
       - name: Install uv
         run: pip install uv
 
-      # Install from pyproject.toml (the authoritative dependency source — there
-      # is intentionally no requirements.txt). This pulls psycopg + python-dotenv
-      # so the db module is importable.
-      - name: Install inference package
+      # Install DEPENDENCIES from pyproject.toml (the authoritative dependency
+      # source — there is intentionally no requirements.txt). We install deps, not
+      # the project: apps/inference is a flat module layout run via PYTHONPATH, not
+      # a built package. The lean base pulls psycopg + python-dotenv (db is
+      # importable) but NOT the heavy [voice] stack (torch/audio) the L1–L6
+      # layers don't use — so this stays fast.
+      - name: Install inference deps
         working-directory: apps/inference
-        run: uv pip install --system -e ".[dev]"
+        run: uv pip install --system -r pyproject.toml --extra dev
 
       # The nervous-system core + six layer skeletons must import AND run with NO
       # DATABASE_URL present (no .env.local exists in CI) — guards the DB-free-at-

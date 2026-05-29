@@ -260,7 +260,11 @@ $REPO/bin/cloudflare-tunnel-setup.sh    # rewrites Daybook-Local.plist with the 
 ```bash
 cd $REPO/apps/inference
 uv venv && source .venv/bin/activate
-uv pip install -e .
+# apps/inference is a flat module layout run via PYTHONPATH (cwd), NOT a built
+# package — install its DEPENDENCIES, not the project itself:
+uv pip install -r pyproject.toml --extra dev      # lean base: db + ML inference
+uv pip install -r pyproject.toml --extra voice     # + voice loop / continuous mic (heavy: torch)
+# (the L1–L6 nervous-system core/layers need only the lean base.)
 ```
 
 ### Cloudflare Tunnel (one-time)
