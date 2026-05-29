@@ -1,6 +1,20 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-28 — MVP Week 3 (continuous-mic semantic pipeline) implemented.**
+**Last updated: 2026-05-28 — Nervous-system Core (protocol + bus + node roles) shipped.**
+
+## 2026-05-28 — Nervous-system Core (protocol + bus + node roles)
+
+**Shipped (branch `feat/nervous-system-skeleton`):**
+- `apps/inference/core/protocol/` — `MessageEnvelope` + 6 payloads (`SignalPacket`, `FeaturePacket`=`FeatureSnapshot`, `BeliefState`, `Prediction`, `ActionDecision`, `OutputDirective`) as dataclasses; enums (NodeRole / MetaContext / Modality / Intent / PayloadType); JSON wire-codec. Commitments baked into the contract: #1 `i_model_id`, #3 voice channel, #10 modality+intent, #11 `consent_scope`, #14 `meta_context`, #16 prediction `action=` seam.
+- `apps/inference/core/bus/` — `MessageBus` over a `Transport` seam (`InProcessTransport` today; `NetworkTransport` later, unchanged layers). Six per-boundary topics.
+- `apps/inference/core/nodes.py` — node-role placement map (Wisp / phone / desktop / cloud); today all local.
+- `apps/inference/core/smoke_test.py` — **one command runs a single `trace_id` end-to-end L1→L6** through the bus (stub handlers): `python -m core.smoke_test`.
+- `packages/shared/src/protocol.ts` — TS mirror; fixed a pre-existing duplicate-import `tsc` break in `types.ts`; the protocol's communication-`Intent` is surfaced as `CommunicationIntent` to avoid colliding with the intents-table `Intent` entity. Pruned `pnpm-lock.yaml` of scrapped workspace projects.
+- **Verified:** `core/` 25 tests green; reflex arc fires; existing suite unchanged (34 tests); `tsc -p packages/shared` exit 0. Built via a dependency-waved parallel workflow (9 implementers + 2 reviewers); spec + quality reviews both passed, 3 minor nits fixed in-tree.
+
+**Next:** the six layer skeletons build against this frozen protocol — fanned out as one parallel workflow (sensors / features / fusion / prediction / decision / output), wrapping existing code (voice loop → L1+L6, composer → L6 renderer, 3 fusion axes → L3 registry) or dropping protocol-speaking stubs. Per `docs/superpowers/specs/2026-05-28-daybook-nervous-system-skeleton-design.md`.
+
+---
 
 ## 2026-05-28 — MVP Week 3: continuous-mic semantic pipeline
 
