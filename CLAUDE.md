@@ -6,9 +6,9 @@ This file orients Claude Code sessions working in this repo. Read this first, th
 
 ## What this project is
 
-**Daybook is an always-on AI empath companion that knows you through your body.** Continuous biometric / neural sensing (Apple Watch today, BCI via BioAmp EXG Pill in days, custom wearable later) + a persistent character (**Regis**, a will-o-wisp TBATE-inspired) that evolves with the user over years.
+**Daybook is an always-on AI empath companion that knows you through your body.** Continuous biometric / neural sensing (Apple Watch today, BCI via BioAmp EXG Pill — in hand as of 2026-05-29, custom wearable later) + a persistent character (**Regis**, a will-o-wisp TBATE-inspired) that evolves with the user over years.
 
-> **2026-05-29 — direction reframe (near-term MVP).** The immediate build target is the **waking, distributed, multimodal contextual-awareness prototype**, not the sleep/dream-recall wedge. Concretely: the **MacBook M5 Pro is the inference node** running the custom fusion pipeline; a **Raspberry Pi + ESP32 are sensor satellites** carrying the **EEG/BCI (BioAmp EXG Pill, in build), a webcam, and a mic**. Raw multimodal signals flow satellites → laptop → fusion → Regis → I-Models, assembling a live "what is happening" map Regis reasons over (north star: walking down the street, fully sensed). **Sleep/dream-recall remains the long-term validation wedge — deferred to a later prototype variation, not abandoned — and sleep stays a continuous biometric data source *during* the MVP** (capture across both Waking and Sleep meta-contexts per commitment #14, so the substrate accumulates paired day+night data). See `docs/POSITIONING.md` (2026-05-29 third amendment) and `docs/STATUS.md`.
+> **2026-05-29 — direction reframe (near-term MVP).** The immediate build target is the **waking, distributed, multimodal contextual-awareness prototype**, not the sleep/dream-recall wedge. Concretely: the **MacBook M5 Pro is the inference node** running the custom fusion pipeline; a **Raspberry Pi + ESP32 are sensor satellites** carrying the **EEG/BCI (BioAmp EXG Pill, in hand), a webcam, and a mic**. Raw multimodal signals flow satellites → laptop → fusion → Regis → I-Models, assembling a live "what is happening" map Regis reasons over (north star: walking down the street, fully sensed). **Sleep/dream-recall remains the long-term validation wedge — deferred to a later prototype variation, not abandoned — and sleep stays a continuous biometric data source *during* the MVP** (capture across both Waking and Sleep meta-contexts per commitment #14, so the substrate accumulates paired day+night data). See `docs/POSITIONING.md` (2026-05-29 third amendment) and `docs/STATUS.md`.
 
 Three concentric product layers, all sharing the same underlying architecture:
 
@@ -291,9 +291,9 @@ These are decisions made over the development arc that future code must honor. S
 - iPhone 17 pro 
 - TECKNET bone-conduction headphones
 - External Wireless Mics
+- **BioAmp EXG Pill (arrived 2026-05-29)** — single-channel biopotential amplifier for EEG/EMG/ECG. The BCI software lane was pre-built on synthetic EEG (commitment #9), so wiring the real Pill is now a *calibration-on-hardware* step (fit `_ENGAGE_LO/_HI`, validate band-power against real signal), not a build.
 
 **Ordered:**
-- BioAmp EXG Pill (~10 days) — single-channel biopotential amplifier for EEG/EMG/ECG
 - ESP32-CAM-MB programmer adapter board (~2 days)
 
 **Embedding compute today:** Mac (MPS or CPU). When the Pi is running 24/7, embedding calls will route to the desktop's 4080 (not set up yet).
