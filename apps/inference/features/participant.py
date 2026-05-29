@@ -17,6 +17,7 @@ from core.nodes import role_for
 from core.protocol.enums import Intent, PayloadType
 from core.protocol.envelope import MessageEnvelope
 from core.protocol.payloads import SignalPacket
+from features.biometric import extract as _extract_biometric
 from features.snapshot import FeatureSnapshot
 
 _COMPONENT = "L2.features"
@@ -66,7 +67,7 @@ def _offline_extractor(sig: SignalPacket) -> FeatureSnapshot:
 # Per-modality extractor registry. Keys are Modality values; the skeleton points
 # every live modality at the passthrough stub so the pipeline runs end-to-end.
 EXTRACTORS: dict[str, Extractor] = {
-    "biometric": _stub_passthrough_extractor,
+    "biometric": _extract_biometric,
     "audio": _stub_passthrough_extractor,
     "voice": _stub_passthrough_extractor,
     "text": _stub_passthrough_extractor,

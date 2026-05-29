@@ -12,7 +12,11 @@ from features.participant import OFFLINE_FEATURE, register
 from features.snapshot import FeatureSnapshot
 
 
-def _signal_env(modality: str = "biometric", *, kind: str = "hr_30s",
+# Default modality is 'text' (still backed by the passthrough stub). Biometric
+# now routes to the real feature extractor (features/biometric.py), whose
+# behavior is exercised in test_biometric.py; this file tests the participant's
+# generic passthrough + envelope-inheritance contract.
+def _signal_env(modality: str = "text", *, kind: str = "hr_30s",
                 payload: dict | None = None) -> MessageEnvelope:
     sig = SignalPacket(
         user_id="61c18d4c-1c20-408a-bd5f-f5f88fd9922f",
@@ -56,7 +60,7 @@ def test_signal_in_feature_out_same_trace():
     assert out.i_model_id == inbound.i_model_id
     assert out.source_role == NodeRole.WISP_EDGE  # L2.features placement
     assert isinstance(out.payload, FeatureSnapshot)
-    assert out.payload.modality == "biometric"
+    assert out.payload.modality == "text"
     assert out.payload.payload["features"]["hr_mean"] == 68.2
     assert out.payload.intent == "continuous"
     out.to_dict()  # serializes without raising
