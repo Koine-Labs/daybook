@@ -2,24 +2,10 @@
 
 **What command do I type to use X?** Answers here.
 
-> **REBUILD IN PROGRESS (started 2026-05-27).** Most scenarios below depended on v0 modules that have been scrapped (`apps/chat/`, `apps/inference/realtime.py`, `apps/inference/cue_decision.py`, `apps/daybook.py`, the `audio/` TTS chain, etc.). They are progressively out of date and will be rewritten as rebuild phases land per `docs/REBUILD_PLAN.md`.
->
-> **What actually runs tonight:**
->
-> ```bash
-> # Dream-recall capture (works):
-> cd $REPO/apps && source inference/.venv/bin/activate
-> python -m recall.capture --text "I dreamed about..."
-> python -m recall.capture   # interactive mic recording
->
-> # FastAPI bridge (limited — chat + compose routes deleted, others work):
-> cd $REPO/apps && source inference/.venv/bin/activate
-> cd api && uvicorn app:app --host 0.0.0.0 --port 8000 --reload
->
-> # LLM + embeddings smoke tests (unaffected):
-> [venv] python -m llm.smoke_test
-> [venv] python -m embeddings.smoke_test
-> ```
+> **Post-rebuild note (2026-05-30).** The L1-L6 architecture has landed. Older
+> v0 commands that reference `apps/chat`, `apps/inference/realtime.py`,
+> `apps/inference/cue_decision.py`, `apps/daybook.py`, iOS/watch apps, or the old
+> Pi daemon are historical unless explicitly marked current.
 
 This doc is scenario-driven. Skim the **scenarios** section first, then look up specific services + one-shots below as needed.
 
@@ -31,27 +17,71 @@ This doc is scenario-driven. Skim the **scenarios** section first, then look up 
 
 ## Scenarios — pick what you want to do
 
-### 1. "I want to chat with Regis from the Mac, fastest" (no phone)
+### 1. "I want to verify the current L1-L6 brain"
 
-One terminal:
+```bash
+cd $REPO/apps/inference
+.venv/bin/python -m pytest -q
+```
+
+Recent local result: `307 passed`.
+
+### 2. "I want to verify shared TypeScript protocol types"
+
+```bash
+cd $REPO
+pnpm typecheck
+```
+
+### 3. "I want to run the production L1-L6 pipeline smoke"
+
+```bash
+cd $REPO/apps/inference
+.venv/bin/python -m core.pipeline
+```
+
+This exercises real layer wiring with safe/default participants.
+
+### 4. "I want the real waking mic arc"
+
+Hardware-dependent, off CI, and requires the voice extra / audio permissions:
+
+```bash
+cd $REPO/apps/inference
+.venv/bin/python -m runtime.waking_arc
+```
+
+This wires `assemble_pipeline(bus)` + `register_speaker(bus)` + the live
+continuous-mic producer. It is the next Mac-side "using it" smoke.
+
+### 5. "I want to replay real biometric sleep data onto the bus"
+
+Requires `DATABASE_URL` and imported sleep sessions:
+
+```bash
+cd $REPO/apps/inference
+.venv/bin/python -m runtime.biometric_replay
+```
+
+This streams stored watch-style biometrics through L1 -> L2 -> L4 REM nowcast.
+
+### 6. "I want to log a dream"
+
+Text:
+
 ```bash
 cd $REPO/apps
 source inference/.venv/bin/activate
-python -m chat.cli
+python -m recall.capture --text "I dreamed about an old library and my grandfather."
 ```
-Then type. `/quit` to exit. `/new` for a fresh conversation. `/help` for commands.
 
-### 2. "I want voice chat with Regis from the Mac"
+Or voice:
 
-Same as above but:
 ```bash
-[venv] python -m chat.voice_cli
+python -m recall.capture
 ```
-ENTER starts/stops a mic recording, Regis replies aloud via Kokoro TTS. `--no-speak` for text-only output.
 
-### 3. "I want to talk to Regis from my iPhone (from anywhere on the internet)"
-
-**Two terminals**, both long-running:
+### 7. "I want to bring up the FastAPI bridge"
 
 Terminal A — FastAPI bridge:
 ```bash
@@ -66,53 +96,18 @@ cd $REPO
 bin/cloudflare-tunnel-run.sh
 ```
 
-Then on the iPhone: open **Daybook** → tap "say something to regis" → real reply. Works on cellular too — not tied to home Wi-Fi.
+Current routes are limited to the surviving API bridge routes: health, recall,
+observations, sessions, persona, and state. The old chat/compose app routes are
+not the source of truth after the rebuild.
 
 **Skip Terminal B forever:** `sudo cloudflared service install` once. The tunnel then auto-starts at boot in the background. From then on only Terminal A is needed.
 
-### 4. "I want the full always-on daemon — wake-word listener + scheduled morning/pre-sleep briefs + TTS playback"
+### 8. "I want to run the Pi daemon"
 
-One terminal:
-```bash
-[venv] python -m daybook
-```
-Long-running. Press **Ctrl-C** to stop.
-
-Variants:
-```bash
-[venv] python -m daybook --mic-only        # just the wake-phrase listener (say "Regis ...")
-[venv] python -m daybook --scheduler-only  # just the daily briefs
-[venv] python -m daybook --no-speak        # print replies instead of playing TTS
-```
-
-### 5. "I want to log a dream this morning"
-
-Text:
-```bash
-[venv] python -m recall.capture --text "I dreamed about an old library and my grandfather."
-```
-
-Or voice (interactive mic, ENTER to start/stop recording):
-```bash
-[venv] python -m recall.capture
-```
-
-Add `--no-ack` to skip Regis's spoken "Held." acknowledgement.
-
-### 6. "I want to check everything is healthy"
-
-```bash
-# 1. Local FastAPI up?
-curl -s http://localhost:8000/health
-# → {"status":"ok",...}
-
-# 2. Public tunnel up?
-curl -s https://daybook.koinelabs.com/
-# → {"name":"Daybook API",...}
-
-# 3. Chat path end-to-end?
-[venv] python -m chat.smoke_test
-```
+Do not use the old Pi daemon as a current integration target. `apps/pi/daemon.py`
+still imports deleted v0 modules (`cue_decision`, `realtime`) and fails its
+smoke test. The next implementation should rebuild `apps/pi` as a satellite that
+publishes Daybook `SignalPacket`s over `NetworkTransport`.
 
 ---
 
@@ -120,7 +115,9 @@ curl -s https://daybook.koinelabs.com/
 
 ### A. FastAPI HTTP bridge
 
-**Does:** Exposes the Python brain (chat, recall, observations, sessions, persona, compose, health) over HTTP. The iOS + Watch apps talk to this.
+**Does:** Exposes the surviving Python bridge routes over HTTP: health, recall,
+observations, sessions, persona, and state. Future clients will talk to this
+bridge; the deleted v0 iOS/watch clients are not current.
 
 **Start:**
 ```bash
@@ -158,11 +155,13 @@ sudo cloudflared service install   # one-time
 
 **Verify:** `curl https://daybook.koinelabs.com/` → 200.
 
-**Auth:** every request through the tunnel needs the `X-API-Key` header (the iOS app sends it automatically from `Daybook-Local.plist`). Loopback Mac dev bypasses the key.
+**Auth:** every request through the tunnel needs the `X-API-Key` header. Loopback
+Mac dev bypasses the key.
 
-### C. Daybook always-on daemon
+### C. Historical: Daybook always-on daemon
 
-**Does:** Mic listener (wakes on "Regis"), scheduled morning/pre-sleep briefs, REM dreaming, outcome labeling, nightly I-Model clustering. The Mac equivalent of "Regis is here all day."
+This v0 daemon path is deleted/stale after the rebuild. The current waking
+runtime is `python -m runtime.waking_arc` from `apps/inference`.
 
 **Start:**
 ```bash
@@ -171,11 +170,12 @@ sudo cloudflared service install   # one-time
 
 **Stop:** Ctrl-C.
 
-**Tune cadence:** set env vars before starting — e.g. `DAYBOOK_MORNING_HOUR=8 DAYBOOK_MORNING_MIN=0 python -m daybook` for an 8:00 morning brief. Full list in the docstring at the top of `apps/daybook.py`.
+Do not use this command until a new daemon is built against the L1-L6 pipeline.
 
-### D. iOS / Watch app debugging (Xcode)
+### D. Historical: iOS / Watch app debugging
 
-**Does:** Build + install + attach debugger to the SwiftUI app on a simulator or device.
+The v0 iOS/watch apps were deleted during the architecture rebuild. This section
+is preserved only as provenance for the future client rebuild.
 
 **Start:** Open `$REPO/apps/ios/Daybook.xcodeproj` in Xcode. Pick destination (your iPhone or a simulator). Press ▶ (Cmd+R).
 

@@ -1,6 +1,38 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-29 — Affect axes shipped to `main` — `arousal_inferred` (biometric HR/HRV) + `affect_prosody` (prosodic-arousal proxy) are the 6th & 7th live L3 axes, the empath's first read on *how you feel*. All four MVP senses (mic + biometric + BCI + vision) feed the bus; 7 live L3 axes; the EXG Pill is in hand. Next is the hardware/"using" layer (real-data smoke, live mic, Pi→laptop relay, EEG calibration) — deferred by founder's choice while the code system is built out.**
+**Last updated: 2026-05-30 — Repo audit / docs sync.** The code spine is real:
+the Python L1-L6 inference suite is green locally (**307 passed**), `pnpm
+typecheck` is green for `@daybook/shared`, and the Koine website production build
+is green. The current gap is no longer architecture-in-code; it is embodiment:
+`apps/pi/daemon.py` is still a v0 daemon and fails immediately because it imports
+deleted `cue_decision` / `realtime` modules. Next: rebuild the Pi/satellite path
+against `NetworkTransport`, prove one real EXG/mic/camera packet reaches the Mac
+bus, then start cold-start calibration + explicit self-report + outcome logging.
+
+## 2026-05-30 — Repo audit: where we stand
+
+**Built and verified:**
+- Six-layer nervous-system spine: L1 signal, L2 feature, L3 belief, L4 prediction,
+  L5 decision, L6 output.
+- `NetworkTransport` exists for Pi/ESP32 satellite -> laptop hub messaging.
+- Four MVP senses have code paths into the bus: mic/audio, biometric, BCI, vision.
+- Seven live L3 axes: `meta_context`, `sleep_stage`, `audio_social_context`,
+  `cognitive_load`, `visual_context`, `arousal_inferred`, `affect_prosody`.
+- Real REM nowcaster wrapper exists and is gated to SLEEP context.
+- Waking decision/output arc can interject and speak in tests; default posture is
+  conservative HOLD unless a warrant clears.
+- Website is clean on `main` and `npm run build` succeeds.
+
+**Not yet proven in lived hardware use:**
+- Pi/ESP32 -> Mac two-process relay with a real sensor packet.
+- `runtime.waking_arc` with a real mic and TTS device.
+- EXG Pill calibration for EOG/EMG/EEG/ECG-derived features.
+- Real camera + YOLO/vision edge path.
+- Cold-start onboarding / per-user baselines / `state_declared` self-report.
+- I-Model growth and outcome-driven learning from real repeated interactions.
+
+**Known stale surface:** `apps/pi/daemon.py` and older Pi docs still describe the
+pre-rebuild v0 import path. Treat them as historical until rewritten.
 
 ## 2026-05-29 (even later) — Affect axes SHIPPED — the empath's first read on *how you feel* (6th & 7th live L3 axes)
 
@@ -243,7 +275,10 @@ All three are first-class. Without gestures specifically, an always-on companion
 
 ---
 
-## What's actually live tonight
+## Historical: what was live pre-rebuild
+
+> This section is preserved from the pre-rebuild status log. For current commands,
+> use `docs/RUNBOOK.md` and the 2026-05-30 audit section at the top of this file.
 
 ```bash
 cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook/apps"

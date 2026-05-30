@@ -3,6 +3,13 @@
 This file orients Claude Code sessions working in this repo. Read this first, then read `docs/STATUS.md` for current state.
 
 > **REBUILD IN PROGRESS (started 2026-05-27).** The v0 implementation has been substantially scrapped (commits `6aae6f5` + `8dd0a33`) to make room for the architecture-aligned rebuild described in `docs/ARCHITECTURE.md` and sequenced in `docs/REBUILD_PLAN.md`. Sections below — especially the repo layout and quick-start commands — describe pre-scrap structure and are progressively out of date. **For what actually runs tonight, read `docs/STATUS.md` first.** Phase 0 safety net: tag `v0-pre-rebuild` at `22f6ffb`, Neon branch `pre-rebuild-snapshot`.
+>
+> **2026-05-30 audit:** the L1-L6 code spine has now landed and is locally green
+> (`apps/inference` pytest: 307 passed; `pnpm typecheck`: green). The stale part
+> is no longer the core architecture but the old product/runtime surfaces:
+> `apps/pi/daemon.py` still imports deleted v0 modules, and the deleted
+> `apps/chat`, `apps/ios`, `apps/inference/realtime.py`, and
+> `apps/inference/cue_decision.py` paths must not be treated as current.
 
 ## What this project is
 

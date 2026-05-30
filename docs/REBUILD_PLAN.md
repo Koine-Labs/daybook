@@ -1,10 +1,28 @@
 # Daybook — Rebuild Plan
 
-**Status: executing — MVP Week 1 complete (2026-05-28).**
+**Status: largely executed through the L1-L6 code spine (audit 2026-05-30).**
 **Date drafted: 2026-05-27**
 **Owner: Aakash Agrawal**
 
 ## Progress log
+
+### 2026-05-30 — Audit update
+
+The original Week-1-only status below is stale. Since this plan was drafted, the
+repo has shipped the six-layer protocol/bus, layer participants, real REM
+nowcaster wrapper, L6 Regis output path, `NetworkTransport`, mic-to-bus,
+synthetic BCI lane, biometric producer, semantic vision lane, and affect axes.
+
+Current verified state:
+- `apps/inference`: local pytest suite green (`307 passed`).
+- `packages/shared`: `pnpm typecheck` green.
+- Daybook's main gap is now hardware/runtime embodiment, not the L1-L6 code
+  architecture.
+- `apps/pi/daemon.py` remains stale v0 code and must be rebuilt against
+  `NetworkTransport` and the current sensor producers.
+
+Treat the rest of this file as the historical rebuild plan/provenance. For the
+live operational state, read `docs/STATUS.md`.
 
 ### 2026-05-28 — MVP Week 1 landed (PRs #1–#8 on `main`)
 

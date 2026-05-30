@@ -1,18 +1,65 @@
 # AI ↔ Pi Daemon Contract
 
-The interface between the AI brain (`apps/inference/`) and the bedside Pi daemon (`apps/pi/`, owned by the hardware chat). This doc is the stable target both sides build against.
+The interface between the AI brain (`apps/inference/`) and the Raspberry Pi /
+ESP32 sensor satellite.
 
-**Last updated: 2026-05-17.** When this changes, update both this doc AND the version constant in `apps/inference/realtime.py`.
+**Last updated: 2026-05-30.** The May 2026 architecture rebuild deleted the old
+`apps/inference/realtime.py` and `apps/inference/cue_decision.py` path. Any Pi
+code importing those modules is legacy and must be replaced.
 
-## What the Pi can import today (as of 2026-05-17)
+## Current Target Contract
 
-Beyond `realtime` and `cue_decision`, the following AI-brain modules are now built and importable from the Pi daemon:
+The Pi should be a **sensor satellite**, not a second copy of the old brain.
 
-- **`from llm import ChatClient`** — unified LLM access. `ChatClient.auto()` routes to Codex (via Aakash's ChatGPT login at `~/.daybook/auth.json`) or Gateway (stub for now). `chat(system, user) -> str`. Default model `gpt-5.2`.
-- **`from embeddings import embed, embed_batch, embed_and_store, retrieve_similar`** — BGE-M3 local embeddings (1024-dim) + pgvector retrieval. First call loads model (~30s); subsequent ~200ms each.
-- **`from wisp.composer import compose_utterance`** — generative Regis. Pass `moment_kind` ('rem_whisper' / 'wake_greeting' / 'morning_recall_prompt' / etc) → returns `ComposedUtterance` with text + mode + retrieved context. Optionally persists to `regis_moments`. This is the v1+ replacement for scripted variant lookup.
+Runtime shape:
 
-The Pi daemon's cue emitter should call `compose_utterance` to generate the actual utterance text at fire time, then send the text to TTS (when TTS is wired) for audio playback. For v0 pre-TTS testing, the stdout emitter prints the composed text.
+- **MacBook** runs the hub: `HubLink` + `NetworkTransport` + `MessageBus` +
+  `assemble_pipeline(bus)` + optional `register_speaker(bus)`.
+- **Pi** runs the satellite: `SatelliteLink` + `NetworkTransport` + local sensor
+  readers that emit Daybook `SignalPacket`s.
+- **ESP32 / Arduino / EXG / mic / camera** feed the Pi, which converts raw device
+  output into semantic Daybook packets.
+
+The Pi's job is to publish **semantic packets**, not persist DB rows directly and
+not make final decisions. The Mac-side L1-L6 pipeline owns fusion, prediction,
+decision, Regis rendering, persistence, and learning.
+
+## Packet Types To Emit First
+
+Start with one packet path and prove it end-to-end:
+
+| Device | Pi interpretation | Daybook modality / kind |
+|---|---|---|
+| BioAmp EXG Pill via Arduino/ESP32 | blink / clench / bandpower summary | `gesture` event or `bci` / `eeg_bandpower` |
+| USB mic | privacy-gated social/prosody context | `audio` / `audio_social_context`, `audio_prosody` |
+| ESP32-CAM or USB camera | semantic scene summary | `vision` / `visual_scene` |
+
+Long-term rule: raw audio, raw pixels, and raw EXG samples should be discarded at
+the edge after feature extraction. Daybook receives low-bandwidth meaning:
+bandpower, blink/clench, social category, prosody, scene setting, object/person
+counts, and signal quality.
+
+## Current Code Seams
+
+- `core.bus.network.HubLink`, `SatelliteLink`, `NetworkTransport`
+- `core.bus.bus.MessageBus`
+- `sensors.participant.emit`
+- `sensors.eeg_adapter.EEGBusSink`
+- `sensors.audio_adapter.AudioBusSink`
+- `sensors.vision_adapter.VisionBusSink`
+- `sensors.watch_adapter.WatchBusSink`
+
+`apps/pi/daemon.py` is currently **not** the current integration point. It is a
+v0 daemon and fails because it imports deleted modules. The next Pi task is to
+replace it with a small satellite runner that creates a network transport and
+publishes the packet types above.
+
+---
+
+## Historical v0 Contract Below
+
+The remaining sections are kept for provenance only. They describe the pre-rebuild
+bedside sleep daemon and should not be used as the target for new Pi work.
 
 ---
 
