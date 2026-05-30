@@ -41,8 +41,13 @@ def build_signal_envelope(
     reading: IntentTaggedReading,
     *,
     meta_context: MetaContext = MetaContext.UNKNOWN,
+    consent_scope: str | None = None,
 ) -> MessageEnvelope:
-    """Wrap a reading's SignalPacket in a fresh L1 envelope (no inbound to inherit)."""
+    """Wrap a reading's SignalPacket in a fresh L1 envelope (no inbound to inherit).
+
+    `consent_scope`, when given, overrides the per-modality scope (#11) — explicit
+    self-report surfaces ride a distinct opt-in scope, not the modality default.
+    """
     packet: SignalPacket = reading.to_signal_packet()
     return MessageEnvelope(
         id=str(uuid.uuid4()),
@@ -50,7 +55,7 @@ def build_signal_envelope(
         source_role=L1_ROLE,
         occurred_at=datetime.now(timezone.utc),
         meta_context=meta_context,
-        consent_scope=consent_scope_for(reading),
+        consent_scope=consent_scope if consent_scope is not None else consent_scope_for(reading),
         trace_id=str(uuid.uuid4()),
         payload=packet,
         i_model_id=reading.i_model_id,
@@ -62,8 +67,9 @@ def emit(
     reading: IntentTaggedReading,
     *,
     meta_context: MetaContext = MetaContext.UNKNOWN,
+    consent_scope: str | None = None,
 ) -> MessageEnvelope:
     """Publish a reading as a SignalPacket envelope on TOPIC_SIGNAL; return it."""
-    env = build_signal_envelope(reading, meta_context=meta_context)
+    env = build_signal_envelope(reading, meta_context=meta_context, consent_scope=consent_scope)
     bus.publish(TOPIC_SIGNAL, env)
     return env

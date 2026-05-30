@@ -34,6 +34,8 @@ BROWSING_APPS = {"Safari", "Chrome", "Google Chrome", "Firefox", "Arc", "Edge", 
 IDLE_THRESHOLD_S = 300
 ACTIVE_IDLE_MAX_S = 60
 
+SOURCE = "L3.fusion.meta_context.v1_heuristic"
+
 
 def classify_meta_context(*, active_app: str, idle_seconds: float) -> dict[str, Any]:
     """Apply v1 heuristic. Returns {category, reason}."""
@@ -97,7 +99,7 @@ def fuse_recent(
         value=cls,
         timestamp=ts,
         confidence=0.65,  # v1 heuristic — moderate confidence
-        source="L3.fusion.meta_context.v1_heuristic",
+        source=SOURCE,
         meta_context=cls["category"],
         fresh_for_seconds=120,
     )

@@ -655,3 +655,47 @@ export interface InterjectDecision {
   userOutcome: InterjectUserOutcome | null;
   createdAt: ISODateTime;
 }
+
+// =============================================================================
+// LABEL LEDGER — provenance-scoped calibration labels (commitment #17)
+// =============================================================================
+
+/**
+ * The eight #17 label-provenance tiers. Mirrors the Python `LabelSource` enum
+ * (apps/inference/labels/provenance.py). An epistemic ladder, not an order here.
+ */
+export type LabelSource =
+  | "ground_truth"
+  | "self_report"
+  | "observed_outcome"
+  | "heuristic"
+  | "literature_prior"
+  | "demographic_prior"
+  | "llm_literature_bootstrap"
+  | "clinician";
+
+/**
+ * One provenance-bearing calibration label keyed to an axis. Mirrors migration
+ * 0011's `label_observations` table (the DB source of truth).
+ */
+export interface LabelObservation {
+  id: UUID;
+  userId: UserID;
+  /** Target axis the label speaks to, e.g. 'arousal_inferred', 'fatigue'. */
+  axis: string;
+  /** Scalar / category / distribution claimed for the axis. */
+  value: Record<string, unknown> | number | string;
+  /** [0,1] strength of THIS label. */
+  confidence: number;
+  source: LabelSource;
+  /** Source-specific lineage (citation, model, declaration_text, classifier, ...). */
+  provenance: Record<string, unknown>;
+  consentScope: string;
+  iModelId?: IModelID | null;
+  /** Commitment #14 (waking/sleep) when known. */
+  metaContext?: string | null;
+  /** When the labeled moment occurred. */
+  observedAt: ISODateTime;
+  /** When the row was written. */
+  createdAt: ISODateTime;
+}

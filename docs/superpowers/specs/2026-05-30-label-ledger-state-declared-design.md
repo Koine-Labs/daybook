@@ -119,7 +119,7 @@ Each live axis (`meta_context`, `sleep_stage`, `audio_social_context`, `cognitiv
 
 ## 7. Testing (TDD, DB-free + LLM-free CI)
 
-Write tests first per component. Full CI-mirror suite (`core sensors features fusion prediction decision output bci vision labels state`) must stay green with **no `DATABASE_URL`** (baseline before this build: **542 passed, 5 skipped**).
+Write tests first per component. Full CI-mirror suite (`core sensors features fusion prediction decision output bci vision labels state`) must stay green with **no `DATABASE_URL`** (verified baseline before this build, the 9 layer dirs: **289 passed, 2 skipped**; the wider `apps/inference` suite is ~307).
 
 - `labels/`: enum-completeness vs #17; `LabelRecord` round-trip; `record_label`/`read_labels` with `get_conn` monkeypatched (DB-free) + a DB-gated real smoke.
 - migration `0011`: DB-gated smoke (table exists, insert→readback→delete).

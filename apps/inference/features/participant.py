@@ -20,6 +20,7 @@ from core.protocol.payloads import SignalPacket
 from features.audio_social import extract as _extract_audio_social
 from features.bci import extract as _extract_bci
 from features.biometric import extract as _extract_biometric
+from features.declaration import extract as _extract_declaration
 from features.snapshot import FeatureSnapshot
 from features.vision_scene import extract as _extract_vision_scene
 
@@ -73,7 +74,7 @@ EXTRACTORS: dict[str, Extractor] = {
     "biometric": _extract_biometric,
     "audio": _extract_audio_social,
     "voice": _stub_passthrough_extractor,
-    "text": _stub_passthrough_extractor,
+    "text": _extract_declaration,
     "gesture": _stub_passthrough_extractor,
     "vision": _extract_vision_scene,
     "bci": _extract_bci,

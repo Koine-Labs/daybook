@@ -32,6 +32,7 @@ from .axes import (  # noqa: E402
     cognitive_load,
     meta_context,
     sleep_stage,
+    state_declared,
     visual_context,
 )
 from .belief_state import AxisEstimate, BeliefState  # noqa: E402
@@ -152,6 +153,20 @@ def _affect_prosody_combiner(packet: FeatureSnapshot, now: datetime) -> "AxisEst
         return _offline_estimate("affect_prosody", now=now, reason=f"axis error: {exc!r}")
 
 
+def _state_declared_combiner(packet: FeatureSnapshot, now: datetime) -> "AxisEstimate | None":
+    """Live-only state_declared: fuse the inbound declaration packet; None -> OFFLINE upstream.
+
+    No DB fallback (declarations ride the bus, there is no sensor table). For a
+    non-declaration packet, fuse_from_feature returns None and the participant
+    records state_declared as OFFLINE, exactly how cognitive_load degrades for a
+    non-EEG packet. Any error degrades to OFFLINE, never crashes the bus.
+    """
+    try:
+        return state_declared.fuse_from_feature(packet, now=now)
+    except Exception as exc:  # noqa: BLE001 — skeleton must never crash the bus.
+        return _offline_estimate("state_declared", now=now, reason=f"axis error: {exc!r}")
+
+
 # Registry of the live axes. Selection is content-agnostic: every registered axis
 # is asked on each FeaturePacket; each returns its estimate or None (which the
 # participant records as OFFLINE).
@@ -163,6 +178,7 @@ AXIS_REGISTRY: dict[str, AxisCombiner] = {
     "visual_context": _visual_combiner,
     arousal_inferred.AXIS: _arousal_inferred_combiner,
     affect_prosody.AXIS: _affect_prosody_combiner,
+    state_declared.AXIS: _state_declared_combiner,
 }
 
 

@@ -21,6 +21,8 @@ from ..belief_state import AxisEstimate
 # Stages where the user is actually asleep (vs. just in bed or awake-in-bed).
 ACTIVE_SLEEP_STAGES = {"core", "deep", "rem", "asleep", "asleep_legacy"}
 
+SOURCE = "apple_health_sleep_stage"
+
 
 def classify_sleep_stage(*, stage: str, duration_s: int, source: str) -> dict[str, Any]:
     """Wrap an Apple Health sleep label into our axis value shape."""
@@ -74,7 +76,7 @@ def fuse_recent(
         value=cls,
         timestamp=ts,
         confidence=0.95,  # AH labels are direct watch output
-        source="apple_health_sleep_stage",
+        source=SOURCE,
         meta_context="sleep" if cls["active"] else None,
         fresh_for_seconds=600,  # 10min — stages are slow
     )
