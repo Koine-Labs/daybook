@@ -9,6 +9,15 @@ deleted `cue_decision` / `realtime` modules. Next: rebuild the Pi/satellite path
 against `NetworkTransport`, prove one real EXG/mic/camera packet reaches the Mac
 bus, then start cold-start calibration + explicit self-report + outcome logging.
 
+## 2026-05-30 (later) — Label ledger + `state_declared` SHIPPED — the labeling/cold-start substrate begins (#17 steps 1+2)
+
+First build of commitment **#17** ("Labels are provenance-scoped priors, not truth by default"). The substrate that lets future sensor data become *meaningful* — every label now carries a recorded origin, and the first high-value label source (explicit self-report) is live. Built design → TDD → 3-lens adversarial review → fix → theory-aligner gate via ultracode workflows; committed on `feat/label-ledger`.
+- **#1 evidence ledger** — migration `0011` `label_observations` (axis/value/confidence[CHECK 0..1]/source/provenance/consent_scope/i_model_id/meta_context/observed_at/created_at + 2 indexes), **applied to Neon** (`damp-dream-13887026`). `labels/` package: `LabelSource` 8-source taxonomy (ground_truth · self_report · observed_outcome · heuristic · literature_prior · demographic_prior · llm_literature_bootstrap · clinician), `LabelRecord`, crash-safe ledger (atomic batch `record_labels`, off-taxonomy-resilient `read_labels`), and `classify_source` retrofitting the 7 live axes onto the taxonomy.
+- **#2 `state_declared`** — the **8th live L3 axis** and first real `Intent.EXPLICIT` bus path (resolves the twice-deferred gap). L1 `sensors/declare_adapter.py` (consent `self_report_v1` on the ENVELOPE, #11) → L2 `features/declaration.py` (LLM `chat_structured` + deterministic quick-pick fallback) → L3 `fusion/axes/state_declared.py` (`scaffold=False` honest ground truth; empty claims → OFFLINE, no hollow belief) → per-claim `self_report` labels keyed to **canonical inferred axes** (`arousal`→`arousal_inferred`) so the #5 calibration join is real. Surfaces: `python -m state.declare "…"` + `POST /state/declare`.
+- **Verified:** full CI-mirror suite **342 passed / 3 skipped DB-free**; `labels state` **38 passed** against live Neon; live e2e — `state.declare "I'm so wired and anxious right now"` wrote → read-back → cleaned **2 self_report labels** (`arousal_inferred`, `valence`). Theory-aligner: **ALIGNED-WITH-GAPS**, the one gap (migration not yet applied) since closed.
+- **#3/#4/#5 designed in parallel** (specs on disk: `literature-priors` 0012, `cold-start` 0013, `fusion-ablation` 0014). Cohesion verdict: **parallel scaffold, sequential wire-up #3→#4→#5**; migrations pre-allocated, frozen ledger API. The back-half forks worktrees off merged `main`.
+- **Honest gaps (non-blocking):** persist path (`fusion/writer.py`) still raises without `DATABASE_URL` (pre-existing; CLI persist needs a DB); quick-pick is a coarse offline lexicon (LLM is the real path, stamped `classifier:"quickpick"`); `canonical_axis` maps only `arousal`→`arousal_inferred` today (grows as inferred axes land).
+
 ## 2026-05-30 — Repo audit: where we stand
 
 **Built and verified:**
