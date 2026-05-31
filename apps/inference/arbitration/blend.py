@@ -34,6 +34,7 @@ class BlendResult:
     population_value: float
     population_variance: float
     demographics_applied: bool
+    population_seeded: bool = False  # True only when a real cold_start_profiles row anchors the population pole
 
 
 def calibration_state_for(

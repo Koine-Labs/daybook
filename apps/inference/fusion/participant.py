@@ -182,15 +182,40 @@ AXIS_REGISTRY: dict[str, AxisCombiner] = {
 }
 
 
+# A calibration reader maps (user_id, axis) -> a cold-start arbitration BlendResult
+# (commitment #4). Injected so the participant import stays DB-free and existing
+# tests keep their byte-identical default behaviour; the live assembly passes
+# arbitration.get_calibration.
+CalibrationReader = Callable[[str, str], object]
+
+
 class FusionParticipant:
     """L3 organ: fuses inbound FeaturePackets into a per-user BeliefState."""
 
     registry: dict[str, AxisCombiner]
     _beliefs: dict[str, BeliefState]
 
-    def __init__(self, registry: dict[str, AxisCombiner] | None = None) -> None:
+    def __init__(
+        self,
+        registry: dict[str, AxisCombiner] | None = None,
+        *,
+        calibration_reader: CalibrationReader | None = None,
+    ) -> None:
         self.registry = registry if registry is not None else dict(AXIS_REGISTRY)
         self._beliefs = {}
+        self._calibration_reader = calibration_reader
+
+    def _enrich(self, est: AxisEstimate, user_id: str, now: datetime) -> AxisEstimate:
+        """Attach cold-start calibration (#4) to a live estimate; crash-safe no-op on error."""
+        if self._calibration_reader is None:
+            return est
+        try:
+            from .calibration import apply_calibration
+
+            calib = self._calibration_reader(user_id, est.axis)
+            return apply_calibration(est, calib)
+        except Exception:  # noqa: BLE001 — calibration is enrichment; never crash fusion.
+            return est
 
     def belief_for(self, user_id: str) -> BeliefState:
         """Return (creating if needed) the persistent BeliefState for a user."""
@@ -210,6 +235,8 @@ class FusionParticipant:
             est = combiner(packet, now)
             if est is None:
                 est = _offline_estimate(axis, now=now, reason="no fresh data")
+            else:
+                est = self._enrich(est, packet.user_id, now)
             belief.update(est)
         return belief
 
@@ -228,8 +255,18 @@ class FusionParticipant:
         bus.publish(TOPIC_BELIEF, outbound)
 
 
-def register(bus: MessageBus, *, participant: FusionParticipant | None = None) -> FusionParticipant:
-    """Subscribe an L3 FusionParticipant to TOPIC_FEATURE; return it for inspection."""
-    part = participant or FusionParticipant()
+def register(
+    bus: MessageBus,
+    *,
+    participant: FusionParticipant | None = None,
+    calibration_reader: CalibrationReader | None = None,
+) -> FusionParticipant:
+    """Subscribe an L3 FusionParticipant to TOPIC_FEATURE; return it for inspection.
+
+    When `calibration_reader` is given (and no explicit `participant`), the
+    participant enriches each live estimate with cold-start calibration (#4).
+    Default (no reader) preserves byte-identical behaviour.
+    """
+    part = participant or FusionParticipant(calibration_reader=calibration_reader)
     bus.subscribe(TOPIC_FEATURE, lambda env: part.handle(env, bus))
     return part

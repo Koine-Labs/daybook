@@ -32,6 +32,25 @@ from sensors.declare_adapter import CONSENT_SCOPE, DeclarationBusSink  # noqa: E
 AXIS = l3_state_declared.AXIS
 
 
+def _calibration_reader():
+    """The L3 calibration read seam (#4): arbitration.get_calibration, lazily imported."""
+    from arbitration import get_calibration
+
+    return get_calibration
+
+
+def _recompute_axis(user_id: str, axis: str) -> None:
+    """Trigger cold-start arbitration recompute for one axis (#4); crash-safe.
+
+    Imported lazily so this module's import stays DB-free; the one-way dependency
+    is arbitration -> labels (never the reverse), so calling it here keeps the
+    ledger free of any arbitration import.
+    """
+    from arbitration import recompute_axis
+
+    recompute_axis(user_id, axis)
+
+
 def _build_records(belief: BeliefState) -> list[LabelRecord]:
     """One self_report LabelRecord per declared claim, keyed to the inferred axis."""
     est = belief.estimates.get(AXIS)
@@ -85,6 +104,11 @@ def record_self_report_labels(
     if persist:
         written = labels_ledger.record_labels(records)
         write_axis_estimate(belief.user_id, est)
+        for axis in dict.fromkeys(r.axis for r in records):  # distinct, order-stable
+            try:
+                _recompute_axis(belief.user_id, axis)
+            except Exception:  # noqa: BLE001 — recompute is best-effort; the label write already committed.
+                pass
     else:
         written = len(records)
     if counter is not None:
@@ -101,7 +125,7 @@ def assemble_declaration_arc(
 ) -> None:
     """Register the L2 extractor, the L3 axis, and the self-report belief subscriber."""
     features_participant.register(bus)
-    fusion_participant.register(bus)
+    fusion_participant.register(bus, calibration_reader=_calibration_reader())
     bus.subscribe(
         TOPIC_BELIEF,
         lambda env: record_self_report_labels(env, persist=persist, sink=sink, counter=counter),

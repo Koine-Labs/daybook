@@ -160,6 +160,7 @@ def test_get_calibration_reads_materialized_row(monkeypatch):
         0.1,                 # population_value (joined from profile or stored)
         0.8,                 # population_variance
         False,               # demographics_applied
+        True,                # population_seeded (cold_start_profiles row present)
     )
     cursor = _FakeCursor([row])
     _patch(monkeypatch, read_mod, cursor)
@@ -169,6 +170,7 @@ def test_get_calibration_reads_materialized_row(monkeypatch):
     assert res.w_population == pytest.approx(0.4)
     assert res.calibration_state is CalibrationState.CALIBRATING
     assert res.population_value == 0.1
+    assert res.population_seeded is True
 
 
 def test_get_calibration_missing_row_lazily_seeds_cold_start(monkeypatch):
