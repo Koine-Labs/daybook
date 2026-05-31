@@ -1,6 +1,6 @@
 # Daybook — Big Picture Status
 
-**Last updated: 2026-05-30 — Repo audit / docs sync.** The code spine is real:
+**Last updated: 2026-05-31 — #17 back-half shipped (see next section).** The code spine is real:
 the Python L1-L6 inference suite is green locally (**307 passed**), `pnpm
 typecheck` is green for `@daybook/shared`, and the Koine website production build
 is green. The current gap is no longer architecture-in-code; it is embodiment:
@@ -8,6 +8,58 @@ is green. The current gap is no longer architecture-in-code; it is embodiment:
 deleted `cue_decision` / `realtime` modules. Next: rebuild the Pi/satellite path
 against `NetworkTransport`, prove one real EXG/mic/camera packet reaches the Mac
 bus, then start cold-start calibration + explicit self-report + outcome logging.
+
+## 2026-05-31 — #17 back-half SHIPPED — cold-start arbitration wired into L3 (full 5-step ladder complete)
+
+The labeling/cold-start substrate is complete. Commitment #17 ("Labels are
+provenance-scoped priors, not truth by default") back-half (#3/#4/#5) built off
+merged #1/#2, via parallel ultracode workflow scaffold then sequential controller
+wire-up. theory-aligner: ALIGNED-WITH-GAPS.
+
+- **#3 literature priors** — `literature_priors/` + migration **0012** (applied to
+  Neon). Citation-backed weak-prior registry (candidate to reviewed to live to
+  retired), human-gated LLM extraction (no scraping, dry-run default, corpus-path
+  guarded), promotion gate validating against ledger evidence, single
+  `emit.record_weak_label` chokepoint (source=literature_prior).
+- **#4 cold-start arbitration** — `arbitration/` + migration **0013** (applied).
+  Per-axis population/personal mixing weight `w_personal` + hysteretic
+  `calibration_state` machine; saturating tier-weighted evidence (anti-swamp);
+  opt-in capped uncertainty-widening-only demographics (default OFF). The spec's
+  `SENSOR_INFERRED`/`POPULATION_PRIOR` tiers (absent from the frozen 8-source enum)
+  reconciled to real enum values via module constants — the frozen ledger is never
+  forked.
+- **#5 fusion-ablation** — `ablation/` + migration **0014** (applied). Offline
+  source-set enumeration (no silent caps), pure-numpy metrics, `TRUST_ORDER`
+  grader, beats-best-component + hysteretic promotion, crash-safe `list_promoted`
+  read seam.
+
+**Live L3 wire-up (#4):** `fusion/calibration.py` stamps honest `calibration_state`
++ `w_personal` onto each live `AxisEstimate`; the numeric population-blend is GATED
+on `population_seeded` (cold_start_profiles is empty + its fallback value is a 0.0
+placeholder, so blending would corrupt real readings). `FusionParticipant` takes an
+injected crash-safe `calibration_reader` (default None = byte-identical legacy
+behaviour); the live declaration arc passes `arbitration.get_calibration` and fires
+`recompute_axis` per labeled axis after each ledger write (one-way arbitration to
+labels). TS mirrors for all 11 new tables added to `packages/shared/src/types.ts`.
+
+**Shared primitive:** `labels.group_by_source` added to the frozen package; #4 and
+#5 consume it instead of each reinventing provenance grouping.
+
+**Known deferrals (honest, non-blocking):** (1) #5 `list_promoted` live-honoring —
+the allowlist is empty and `arousal_inferred` is single-source, so there is nothing
+to honor yet (no dead flag-gated code injected into the pure axis). (2)
+`literature_priors/extract.py` passes a dict JSON-schema to
+`ChatClient.chat_structured` which wants a Pydantic model — convert before the first
+real prior-extraction run. (3) `cold_start_profiles` literature defaults not yet
+seeded for the live axes (so `population_seeded` is False everywhere and the blend
+never fires yet). (4) `axis_calibration` PK is `(user_id, axis)` — calibration is
+collapsed across meta-contexts (#14), while `promoted_source_sets` does carry
+`meta_context`; deliberate asymmetry, revisit if per-(axis, meta) cold-start wanted.
+
+Verified: full DB-free + LLM-free suite **601 passed / 1 skipped**; `pnpm typecheck`
+**0 errors**; migrations 0012/0013/0014 applied to Neon `damp-dream-13887026` and
+round-tripped (insert to cascade-delete to clean).
+
 
 ## 2026-05-30 (later) — Label ledger + `state_declared` SHIPPED — the labeling/cold-start substrate begins (#17 steps 1+2)
 
