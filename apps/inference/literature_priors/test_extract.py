@@ -11,15 +11,16 @@ from literature_priors.models import PriorOrigin, PriorStatus
 
 
 class StubClient:
-    """Returns canned structured JSON; records the call. No network."""
+    """Mimics the real ChatClient.chat_structured: validates a canned dict into the
+    Pydantic `schema` and returns the INSTANCE (not a raw dict). No network."""
 
     def __init__(self, payload: dict) -> None:
         self.payload = payload
         self.calls: list[tuple] = []
 
-    def chat_structured(self, *, system: str, user: str, schema: dict) -> dict:
+    def chat_structured(self, *, system: str, user: str, schema):
         self.calls.append((system, user, schema))
-        return self.payload
+        return schema.model_validate(self.payload)
 
 
 _VALID_PAYLOAD = {

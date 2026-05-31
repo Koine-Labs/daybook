@@ -15,41 +15,52 @@ from pathlib import Path
 from typing import Any, Sequence
 from uuid import UUID, uuid4
 
+from pydantic import BaseModel, Field
+
 from .models import LiteraturePrior, PriorOrigin, PriorStatus, Rule, RuleClaim
 
 logger = logging.getLogger(__name__)
 
 SEED_ROOT = Path(__file__).resolve().parent / "seed"
 
-_EXTRACTION_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "priors": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "target_axis": {"type": "string"},
-                    "rule": {"type": "object"},
-                    "claim_summary": {"type": "string"},
-                    "population": {"type": "string"},
-                    "confidence": {"type": "number"},
-                    "known_limitations": {"type": "string"},
-                    "extracted_excerpt": {"type": "string"},
-                },
-                "required": [
-                    "target_axis",
-                    "rule",
-                    "claim_summary",
-                    "population",
-                    "confidence",
-                    "known_limitations",
-                ],
-            },
-        }
-    },
-    "required": ["priors"],
-}
+
+# LLM wire-schema for ChatClient.chat_structured (which takes a Pydantic class and
+# returns a validated INSTANCE). Deliberately lenient — every field defaulted — so the
+# structured call always validates; the SEMANTIC gate (_to_prior + the models'
+# __post_init__ invariants) rejects incomplete/invalid priors, matching "be
+# conservative, drop the malformed."
+class _ExtractedClaim(BaseModel):
+    axis: str | None = None
+    direction: str | None = None
+    value: Any = None
+    magnitude: str = "weak"
+
+
+class _ExtractedRule(BaseModel):
+    feature: str = ""
+    modality: str | None = None
+    operator: str = ""
+    threshold: Any = None
+    window_s: int | None = None
+    claim: _ExtractedClaim = Field(default_factory=_ExtractedClaim)
+    context_gate: dict[str, Any] = Field(default_factory=dict)
+
+
+class _ExtractedPrior(BaseModel):
+    target_axis: str | None = None
+    rule: _ExtractedRule = Field(default_factory=_ExtractedRule)
+    claim_summary: str = ""
+    population: str = ""
+    confidence: float | None = None
+    known_limitations: str = ""
+    extracted_excerpt: str | None = None
+    applicability: dict[str, Any] = Field(default_factory=dict)
+
+
+class ExtractedPriorBatch(BaseModel):
+    """The structured-output schema for one extraction call (a batch of candidates)."""
+
+    priors: list[_ExtractedPrior] = Field(default_factory=list)
 
 
 def _resolve_within_seed(corpus_dir: Path) -> Path:
@@ -135,15 +146,23 @@ def propose_candidates_from_corpus(
         "You extract weak physiological/behavioral priors from curated literature "
         "excerpts. Honesty over completeness: always include known_limitations."
     )
-    result = client.chat_structured(system=system, user=prompt, schema=_EXTRACTION_SCHEMA)
+    result = client.chat_structured(system=system, user=prompt, schema=ExtractedPriorBatch)
+    # Real client returns an ExtractedPriorBatch instance; tolerate a JSON string or
+    # dict for resilience against alternate client shims.
     if isinstance(result, str):
         result = json.loads(result)
+    if isinstance(result, BaseModel):
+        raw_priors = [p.model_dump() for p in result.priors]
+    elif isinstance(result, dict):
+        raw_priors = result.get("priors", [])
+    else:
+        raw_priors = []
 
     proposals: list[LiteraturePrior] = []
-    for raw in result.get("priors", []):
+    for raw in raw_priors:
         try:
             proposals.append(_to_prior(raw, sid))
-        except (KeyError, ValueError) as exc:
+        except (KeyError, ValueError, TypeError) as exc:
             logger.warning("skipping malformed candidate: %s", exc)
 
     if not dry_run:
