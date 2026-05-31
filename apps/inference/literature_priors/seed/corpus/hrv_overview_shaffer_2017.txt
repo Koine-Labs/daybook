@@ -1,0 +1,13 @@
+Source: Shaffer F, Ginsberg JP. An Overview of Heart Rate Variability Metrics and Norms.
+Frontiers in Public Health, 2017;5:258. (curated excerpt — local, no network)
+
+RMSSD (the root mean square of successive RR-interval differences) is the primary
+time-domain index of vagally mediated, beat-to-beat changes in heart rate variability.
+Reductions in RMSSD accompany sympathetic activation and reduced parasympathetic
+(vagal) tone. RMSSD norms vary substantially with age and individual baseline, so
+absolute cut-points do not transfer across people. Short-window RMSSD is sensitive to
+respiration rate, motion artifact, and posture.
+
+[Excerpt curated by a human for the Daybook literature-prior registry. No autonomous
+scraping; this is a hand-selected passage used to seed weak priors that are then
+human-reviewed and validated against ledger evidence before going live.]

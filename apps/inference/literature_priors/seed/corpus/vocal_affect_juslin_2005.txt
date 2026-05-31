@@ -1,0 +1,11 @@
+Source: Juslin PN, Scherer KR. Vocal expression of affect. In: The New Handbook of
+Methods in Nonverbal Behavior Research, 2005. (curated excerpt — local)
+
+High-arousal affective states are reliably marked by increased speech rate and elevated
+high-frequency spectral energy in the voice. These acoustic cues generalize across
+cultures but show heavy language, dialect, and individual-baseline variation, and are
+sensitive to microphone characteristics and speaker distance. Speech rate also rises
+with task urgency independent of affect, so the cue is weak on its own.
+
+[Human-curated passage for the literature-prior registry. The derived prior is
+population-scoped to "general" and validated against ledger evidence before promotion.]

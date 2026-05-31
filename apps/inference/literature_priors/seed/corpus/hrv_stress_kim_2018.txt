@@ -1,0 +1,12 @@
+Source: Kim H-G, et al. Stress and Heart Rate Variability: A Meta-Analysis of the
+Literature. Psychiatry Investigation, 2018;15(3):235-245. (curated excerpt — local)
+
+Across the pooled studies, acute psychological stress was associated with decreased
+high-frequency (HF) HRV power, indicating reduced parasympathetic activity and a shift
+toward sympathetic dominance. Tonic heart-rate elevation co-occurred with sympathetic
+arousal when metabolic demand (physical exertion) was controlled for. Effect sizes were
+heterogeneous across stress paradigms; HF-HRV estimates are strongly modulated by
+respiration rate and posture, and short measurement windows are noisy.
+
+[Human-curated passage for the literature-prior registry. Priors derived from this
+excerpt are weak, population-scoped, and must pass the promotion gate.]
