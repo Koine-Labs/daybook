@@ -1,0 +1,30 @@
+name: state-verify
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/inference
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -e . && pip install pyyaml pytest
+      - name: State Ledger verify (manifest can't lie)
+        env:
+          DATABASE_URL: ""
+        run: python -m state_ledger.verify
+      - name: Render-staleness check (generated outputs match manifest)
+        env:
+          DATABASE_URL: ""
+        run: |
+          python -m state_ledger.render
+          git diff --exit-code docs/STATUS.md docs/state/state.json \
+            || (echo "STATUS.md / state.json are stale vs the manifest — run 'python -m state_ledger.render' and commit." && exit 1)
