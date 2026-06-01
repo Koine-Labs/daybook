@@ -1,0 +1,74 @@
+expected_test_count: 569
+
+capabilities:
+  - id: l1_l6_arc
+    name: "L1->L6 reflex arc (assemble_pipeline)"
+    serves_pillars: [multimodal_fusion, continuous_build]
+    serves_commitments: [10, 14]
+    build_state: built_and_runs
+    alignment: on_track
+    percent_done: 30
+    gaps:
+      - "Runs in one Mac process on synthetic data; never fed a real sensor packet"
+    evidence:
+      modules: ["core.pipeline"]
+      markers: []
+      key_files: ["core/pipeline.py"]
+
+  - id: cognitive_load_axis
+    name: "L3 cognitive_load fusion axis (BCI-derived)"
+    serves_pillars: [multimodal_fusion]
+    serves_commitments: [11, 14]
+    build_state: scaffold
+    alignment: partial
+    percent_done: 25
+    gaps:
+      - "Heuristic, not trained; _ENGAGE_LO/_HI documented-not-fitted; EXG Pill uncalibrated"
+    evidence:
+      modules: ["fusion.participant"]
+      markers:
+        - {pattern: '"scaffold": True', path: "fusion/axes/cognitive_load.py", present: true}
+      key_files: ["fusion/axes/cognitive_load.py"]
+
+  - id: state_declared_axis
+    name: "L3 state_declared axis (explicit self-report)"
+    serves_pillars: [multimodal_fusion, provenance_labels]
+    serves_commitments: [10]
+    build_state: built_and_runs
+    alignment: on_track
+    percent_done: 60
+    gaps:
+      - "Quick-pick fallback is a coarse lexicon; LLM path is the real one"
+    evidence:
+      modules: ["fusion.participant"]
+      markers:
+        - {pattern: '"scaffold": False', path: "fusion/axes/state_declared.py", present: true}
+      key_files: ["fusion/axes/state_declared.py"]
+
+  - id: network_transport
+    name: "NetworkTransport (Pi<->Mac relay)"
+    serves_pillars: [distributed_topology]
+    serves_commitments: [9]
+    build_state: scaffold
+    alignment: drifting
+    percent_done: 35
+    gaps:
+      - "Passes unit tests but orphaned: every runtime builds an in-process bus; Pi daemon is dead"
+    evidence:
+      modules: ["core.bus.network"]
+      markers: []
+      key_files: ["core/bus/network.py"]
+
+  - id: label_ledger
+    name: "Provenance label ledger (#17)"
+    serves_pillars: [provenance_labels]
+    serves_commitments: [1]
+    build_state: built_and_runs
+    alignment: on_track
+    percent_done: 70
+    gaps:
+      - "Cold-start calibration wired only into the declaration arc, not the default waking arc"
+    evidence:
+      modules: ["labels.ledger"]
+      markers: []
+      key_files: ["labels/ledger.py"]
