@@ -1,5 +1,21 @@
 # Daybook — Big Picture Status
 
+<!-- STATE:BEGIN -->
+
+## Current state (generated — do not edit by hand)
+
+_Generated from `docs/state/`. 5 capabilities tracked; suite expects 569 tests._
+
+| Capability | Build state | Alignment | % | Serves |
+|---|---|---|---:|---|
+| L1->L6 reflex arc (assemble_pipeline) | built_and_runs | on_track | 30 | multimodal_fusion, continuous_build |
+| L3 cognitive_load fusion axis (BCI-derived) | scaffold | partial | 25 | multimodal_fusion |
+| L3 state_declared axis (explicit self-report) | built_and_runs | on_track | 60 | multimodal_fusion, provenance_labels |
+| NetworkTransport (Pi<->Mac relay) | scaffold | drifting | 35 | distributed_topology |
+| Provenance label ledger (#17) | built_and_runs | on_track | 70 | provenance_labels |
+
+<!-- STATE:END -->
+
 **Last updated: 2026-05-31 — #17 back-half shipped (see next section).** The code spine is real:
 the Python L1-L6 inference suite is green locally (**307 passed**), `pnpm
 typecheck` is green for `@daybook/shared`, and the Koine website production build

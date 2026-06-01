@@ -1,0 +1,296 @@
+{
+  "pillars": [
+    {
+      "id": "multimodal_fusion",
+      "name": "Always-on multimodal sensing fused into one live state",
+      "description": "Voice/text/gesture/biometric/audio/vision/BCI fused into a per-axis BeliefState",
+      "centrality": "high"
+    },
+    {
+      "id": "semantic_first",
+      "name": "Semantic-first privacy (extract meaning, discard raw)",
+      "description": "Continuous low-bandwidth extraction; raw discarded; cloud only as escalation",
+      "centrality": "high"
+    },
+    {
+      "id": "jepa_prediction",
+      "name": "Prediction in latent space (JEPA world model)",
+      "description": "Encoder + action-conditioned predictor + SIGReg + CEM (LeWM recipe)",
+      "centrality": "high"
+    },
+    {
+      "id": "learned_decisions",
+      "name": "Outcome-driven learned action selection",
+      "description": "Thompson bandit -> CEM; Regis as causally-modeled controlled variable",
+      "centrality": "high"
+    },
+    {
+      "id": "regis_character",
+      "name": "Persistent dual-mode generative Regis",
+      "description": "Witness asleep / Companion awake; PERSONA.md as system prompt",
+      "centrality": "high"
+    },
+    {
+      "id": "i_models",
+      "name": "Three self-discovered I-Models",
+      "description": "user_self / regis_of_user / regis_self emerging via clustering",
+      "centrality": "high"
+    },
+    {
+      "id": "meta_context",
+      "name": "Meta-context biases every layer",
+      "description": "Waking/Sleep + sub-contexts condition L2-L6",
+      "centrality": "high"
+    },
+    {
+      "id": "distributed_topology",
+      "name": "Pi/ESP32 satellites -> Mac inference hub",
+      "description": "NetworkTransport relay is the keystone",
+      "centrality": "high"
+    },
+    {
+      "id": "voice_first",
+      "name": "Voice-first interface",
+      "description": "Audio/bone-conduction TTS primary; screens debug-only",
+      "centrality": "high"
+    },
+    {
+      "id": "fastapi_seam",
+      "name": "Native clients talk only to FastAPI bridge",
+      "description": "HTTP seam is the platform/language boundary",
+      "centrality": "medium"
+    },
+    {
+      "id": "sleep_wedge",
+      "name": "Sleep/dream-recall validation wedge",
+      "description": "Deferred but active; sleep biometrics collected throughout",
+      "centrality": "high"
+    },
+    {
+      "id": "continuous_build",
+      "name": "Continuous build (v1 IS the v3 substrate)",
+      "description": "Build endpoint features now even when hardware lags",
+      "centrality": "high"
+    },
+    {
+      "id": "provenance_labels",
+      "name": "Labels are provenance-scoped priors, not truth",
+      "description": "Literature/LLM/demographic bootstrap; personal evidence supersedes",
+      "centrality": "medium"
+    },
+    {
+      "id": "personal_model_moat",
+      "name": "Moat = longitudinal personal model x speed x ecosystem-agnostic",
+      "description": "Hardware is fungible; the model on your data is not",
+      "centrality": "high"
+    }
+  ],
+  "commitments": [
+    {
+      "id": 1,
+      "title": "I-Model polymorphism",
+      "rule_summary": "Every event entity has i_model_id UUID NULL"
+    },
+    {
+      "id": 2,
+      "title": "Content polymorphism",
+      "rule_summary": "regis_moments.kind is a pluggable discriminator"
+    },
+    {
+      "id": 3,
+      "title": "Wisp-as-interface",
+      "rule_summary": "Audio output is the primary surface"
+    },
+    {
+      "id": 4,
+      "title": "Three distinct I-Models",
+      "rule_summary": "user_self + regis_of_user + regis_self"
+    },
+    {
+      "id": 5,
+      "title": "Regis is dual-mode",
+      "rule_summary": "Witness during sleep / Companion when awake"
+    },
+    {
+      "id": 6,
+      "title": "Self-expanding I-Models",
+      "rule_summary": "I-Models discovered via clustering, not pre-defined"
+    },
+    {
+      "id": 7,
+      "title": "Moment polymorphism",
+      "rule_summary": "regis_moments is the generalized action log"
+    },
+    {
+      "id": 8,
+      "title": "Generative Regis from day one",
+      "rule_summary": "PERSONA.md is the system prompt, not scripted variants"
+    },
+    {
+      "id": 9,
+      "title": "Continuous build, not phased",
+      "rule_summary": "v1 prototype IS the v3 substrate"
+    },
+    {
+      "id": 10,
+      "title": "Input classified by intent AND modality",
+      "rule_summary": "Two orthogonal axes at the L1 boundary"
+    },
+    {
+      "id": 11,
+      "title": "Semantic-first continuous sensing",
+      "rule_summary": "Extract meaning, discard raw, cloud = escalation only"
+    },
+    {
+      "id": 12,
+      "title": "Native clients talk to FastAPI",
+      "rule_summary": "The bridge is the seam"
+    },
+    {
+      "id": 13,
+      "title": "Outcome-driven action selection",
+      "rule_summary": "Learned from observed outcomes (Thompson bandit v1)"
+    },
+    {
+      "id": 14,
+      "title": "Meta-context biases every layer",
+      "rule_summary": "Waking/Sleep condition every layer's interpretation"
+    },
+    {
+      "id": 15,
+      "title": "Regis as modeled controlled variable",
+      "rule_summary": "Counterfactual reasoning via predict(action)"
+    },
+    {
+      "id": 16,
+      "title": "Prediction operates in latent space",
+      "rule_summary": "JEPA-family world model (LeWM recipe)"
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "l1_l6_arc",
+      "name": "L1->L6 reflex arc (assemble_pipeline)",
+      "serves_pillars": [
+        "multimodal_fusion",
+        "continuous_build"
+      ],
+      "serves_commitments": [
+        10,
+        14
+      ],
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
+      "percent_done": 30,
+      "gaps": [
+        "Runs in one Mac process on synthetic data; never fed a real sensor packet"
+      ]
+    },
+    {
+      "id": "cognitive_load_axis",
+      "name": "L3 cognitive_load fusion axis (BCI-derived)",
+      "serves_pillars": [
+        "multimodal_fusion"
+      ],
+      "serves_commitments": [
+        11,
+        14
+      ],
+      "build_state": "scaffold",
+      "alignment": "partial",
+      "percent_done": 25,
+      "gaps": [
+        "Heuristic, not trained; _ENGAGE_LO/_HI documented-not-fitted; EXG Pill uncalibrated"
+      ]
+    },
+    {
+      "id": "state_declared_axis",
+      "name": "L3 state_declared axis (explicit self-report)",
+      "serves_pillars": [
+        "multimodal_fusion",
+        "provenance_labels"
+      ],
+      "serves_commitments": [
+        10
+      ],
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
+      "percent_done": 60,
+      "gaps": [
+        "Quick-pick fallback is a coarse lexicon; LLM path is the real one"
+      ]
+    },
+    {
+      "id": "network_transport",
+      "name": "NetworkTransport (Pi<->Mac relay)",
+      "serves_pillars": [
+        "distributed_topology"
+      ],
+      "serves_commitments": [
+        9
+      ],
+      "build_state": "scaffold",
+      "alignment": "drifting",
+      "percent_done": 35,
+      "gaps": [
+        "Passes unit tests but orphaned: every runtime builds an in-process bus; Pi daemon is dead"
+      ]
+    },
+    {
+      "id": "label_ledger",
+      "name": "Provenance label ledger (#17)",
+      "serves_pillars": [
+        "provenance_labels"
+      ],
+      "serves_commitments": [
+        1
+      ],
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
+      "percent_done": 70,
+      "gaps": [
+        "Cold-start calibration wired only into the declaration arc, not the default waking arc"
+      ]
+    }
+  ],
+  "workstreams": [
+    {
+      "id": "doc-drift-fix",
+      "title": "Fix STATUS.md / CLAUDE.md drift (601->569, remove stale v3 claims)",
+      "status": "done",
+      "owns_paths": [
+        "docs/STATUS.md",
+        "CLAUDE.md"
+      ],
+      "touches_commitments": [],
+      "github_issue": null
+    },
+    {
+      "id": "state-ledger-core",
+      "title": "Build the State Ledger anti-drift core (this plan)",
+      "status": "in_progress",
+      "owns_paths": [
+        "apps/inference/state_ledger/",
+        "docs/state/"
+      ],
+      "touches_commitments": [],
+      "github_issue": null
+    },
+    {
+      "id": "first-real-signal",
+      "title": "One real packet through the live arc (mic-first)",
+      "status": "planned",
+      "owns_paths": [
+        "apps/inference/runtime/waking_arc.py",
+        "apps/inference/voice/"
+      ],
+      "touches_commitments": [
+        3,
+        11,
+        14
+      ],
+      "github_issue": null
+    }
+  ],
+  "expected_test_count": 569
+}
