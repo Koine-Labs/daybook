@@ -56,7 +56,7 @@ never fires yet). (4) `axis_calibration` PK is `(user_id, axis)` — calibration
 collapsed across meta-contexts (#14), while `promoted_source_sets` does carry
 `meta_context`; deliberate asymmetry, revisit if per-(axis, meta) cold-start wanted.
 
-Verified: full DB-free + LLM-free suite **601 passed / 1 skipped**; `pnpm typecheck`
+Verified: full DB-free + LLM-free suite **569 passed / 0 skipped** (re-audited 2026-06-01; the earlier "601 passed / 1 skipped" figure was not reproducible); `pnpm typecheck`
 **0 errors**; migrations 0012/0013/0014 applied to Neon `damp-dream-13887026` and
 round-tripped (insert to cascade-delete to clean).
 
@@ -177,7 +177,7 @@ Four feature commits merged to `main` after the direction reframe, each built de
 
 **Non-blocking gaps logged (merge gate):** the assembled waking arc always HOLDs — `decision/policies/default.py` warrant gate is hardcoded `passed=False`; the real REM predictor (`prediction/feature_participant.py`) and the TTS sink (`output/speaker.py`) are deliberately *off* the default `assemble_pipeline` arc (a runner must attach them). The "Regis speaks end-to-end" proof injects an interject policy via the `decision_policy=` seam.
 
-**Note:** the "v3 always-on vision ~50-55%" table far below is **pre-rebuild and stale** — post-scrap reality is the six-layer bus with one live sensor trickle and no distribution. Don't trust those percentages.
+**Note:** the pre-rebuild "v3 always-on vision ~50-55%" table and the "Regis functionally complete from the neck up" three-sentence summary that used to live in the lower half of this file were **removed 2026-06-01** — a reality audit found them materially over-stated vs the post-rebuild truth (six-layer bus, every sensor lane synthetic, nothing run on hardware). Original text preserved at git tag `v0-pre-rebuild`.
 
 **Next (the keystone):** **`NetworkTransport`** — a SignalPacket relay so a Pi/ESP32 process can publish onto the laptop's bus (the `Transport` seam + JSON codec already exist; needs the inverse `from_dict` deserialization). Then, during the ~10-day EXG-Pill wait, in parallel: wire the continuous-mic pipeline in as a live bus producer, and pre-build the BCI software lane (firmware stub + band-power L2 extractor + `cognitive_load`/arousal L3 axis) on synthetic EEG.
 
@@ -338,8 +338,11 @@ All three are first-class. Without gestures specifically, an always-on companion
 
 ## Historical: what was live pre-rebuild
 
-> This section is preserved from the pre-rebuild status log. For current commands,
-> use `docs/RUNBOOK.md` and the 2026-05-30 audit section at the top of this file.
+> ⚠️ **PRE-REBUILD — LARGELY WRONG, DO NOT TRUST AS CURRENT.** Everything below this
+> line describes the scrapped v0 (apps/ios, apps/chat, mock Pi daemon, batch vision,
+> etc.). Commands here will fail and the Track tables / roadmap predate the rebuild.
+> Kept only for lineage; the original lives at git tag `v0-pre-rebuild`. For what
+> actually runs, read the dated entries at the **top** of this file.
 
 ```bash
 cd "/Users/main-mac/Desktop/Coding/Projects/Koine Labs/Repo/daybook/apps"
@@ -456,24 +459,6 @@ iPhone + Apple Watch as the user's visible surfaces into Regis. Built on the sam
 
 ---
 
-## v3 always-on vision — where we stand
-
-Your v3 vision (single-ear device, walks with you all day, sees what you see, hears your conversations, reads your BCI, comments on news, evolves with you over time) is the long arc. **The substrate is roughly 30-35% built** when weighted across all layers:
-
-| Layer | % of v3 done | Notes (updated after 2026-05-17 evening build) |
-|---|---:|---|
-| Software brain (intelligence, persona, memory, retrieval, LLM) | ~85% | Composer + retrieval + I-Model clusterer/activator/novelty + sleep observer + consolidator all live. |
-| Sensing layer (BCI, vision, mic input, multi-modal) | ~25% | Apple Watch ✓, vision ✓ (Codex multimodal works), mic input ✓ (Whisper). EEG arriving; continuous BCI emotional state classifier still v1.5 work. |
-| I/O layer (voice in/out, vision in, audio routing) | ~80% | Text ✓, voice in ✓ (STT), voice out ✓ (Kokoro TTS), vision in ✓. Now also: **native iOS chat ✓, Apple Watch face ✓ (rest + talk)**. Pending: bone-conduction routing, voice-mode in iOS, WatchConnectivity push. |
-| Autonomous behavior (when to speak, what to notice) | ~15% | Sleep cues fire autonomously. News pull + walking remark are the first non-sleep autonomous triggers. Still need the "should I speak now?" decider that gates ALL autonomous interjections. |
-| Memory + evolution (clustering, activation, consolidation, observers) | ~75% | Clusterer ✓, activator ✓, novelty ✓, sleep observer ✓, chat consolidator ✓. Missing: trait drift on sleep events, nightly cron scheduling. |
-| Hardware form factor | ~5-10% | Bedside rig in progress (Pi chat); wearable form factor is years out. |
-
-**Weighted overall: ~50-55% toward v3** — up from ~30-35% this morning. The build session covered: voice (both directions), vision, news, I-Model evolution, mock firmware for the EEG-arriving day. The remaining 45-50% is mostly: hardware integration, the autonomous-interjection decider (the hardest research problem), and form factor.
-
-See full gap analysis in conversation log (2026-05-17 session). Reproduced as TODO list below.
-
----
 
 ## Roadmap — what comes next, in leverage order
 
@@ -520,14 +505,6 @@ In rough order of blocking severity:
 3. **No TTS pick + audio routing.** Persona is written; need a voice + synth + bone-conduction routing. Blocked on bone-conduction arrival (~3 days).
 4. **No dream-recall measurement habit yet.** Aakash hasn't started the 14-day baseline journal. Without that, v1's success metric has no comparison. **Highest-leverage non-engineering thing he can do tonight.** (Or use `python -m recall.capture --text "..."` each morning to log via the system itself.)
 5. **CLAUDE.md was stale** (old Lullaby narrative) — **fixed 2026-05-17**.
-
----
-
-## What's true *right now*, in three sentences
-
-- **Regis is functionally complete from the neck up.** He talks (chat or voice), listens (voice in or text), speaks aloud (Kokoro TTS), sees (Codex multimodal), reads the world (RSS), remembers (embeddings + observations + traits), evolves (clusterer + activator + novelty + consolidator), and notices things on his own (sleep observer extracts real grounded notes after sessions). Only thing missing is the BCI signal itself (EXG Pill arriving) and the audio routing to bone-conduction hardware (arriving in days).
-- **The ESP32 mock firmware closes the simulation loop.** Even before EXG Pill arrives, the full pipeline can run on synthetic data: mock firmware → Pi daemon → classifier → cue decider → composer → TTS → Mac speakers. When the EXG Pill lands, only the firmware swaps from mock to real ADC reads — nothing else changes.
-- **The single highest-leverage thing right now** is logging daily dreams via `python -m recall.capture --text "..."` — every log embeds, populates the substrate, makes Regis's retrieval increasingly personal. The 14-day baseline starts the moment you do.
 
 ---
 
