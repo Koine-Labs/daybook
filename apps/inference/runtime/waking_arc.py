@@ -4,9 +4,10 @@ Wires the full L1→L6 reflex arc on one in-process bus, with the live microphon
 as the L1 producer:
 
     bus = MessageBus()
-    assemble_pipeline(bus)          # real L3 fusion, real DefaultPolicy (#13
-                                    #   deterministic warrant), default
-                                    #   ComposerRenderer (#8, real Regis voice)
+    assemble_pipeline(bus, ...)     # real L3 fusion (+ cold-start calibration #4
+                                    #   when a DB is configured), real
+                                    #   DefaultPolicy (#13 deterministic warrant),
+                                    #   default ComposerRenderer (#8, Regis voice)
     register_speaker(bus)           # real TTS sink (lazy audio.streaming)
     listen_continuous(bus=bus, meta_context=WAKING)  # always-on mic producer
 
@@ -45,19 +46,38 @@ for p in (str(INF_DIR), str(APPS_DIR)):
 from core.bus.bus import MessageBus
 from core.pipeline import assemble_pipeline
 from core.protocol.enums import MetaContext
+from fusion.participant import CalibrationReader
 from output.speaker import register_speaker
 from sensors.contract import DEFAULT_USER_ID
+
+
+def _calibration_reader() -> CalibrationReader | None:
+    """The L3 calibration read seam (#4), DB-gated so the arc stays runnable DB-free.
+
+    Mirrors state/declare.py's seam (arbitration.get_calibration, lazily imported)
+    but returns None when no DATABASE_URL is configured — get_calibration is
+    crash-safe regardless, yet wiring it without a DB would just stamp every
+    estimate with a fallback cold_start, so the honest DB-free arc skips it.
+    """
+    import db
+
+    if not db.DATABASE_URL:
+        return None
+    from arbitration import get_calibration
+
+    return get_calibration
 
 
 def build_waking_arc(bus: MessageBus | None = None) -> MessageBus:
     """Assemble the production default arc + the real TTS sink onto a bus.
 
-    No injection kwargs: the real DefaultPolicy warrant, the default generative
-    ComposerRenderer, and the real (lazy) TTS speaker are used. Pure wiring — no
-    mic attached yet, so this is import- and call-clean (no audio touched).
+    The real DefaultPolicy warrant, the default generative ComposerRenderer, and
+    the real (lazy) TTS speaker are used; cold-start calibration (#4) is wired
+    into L3 whenever a DATABASE_URL is configured. Pure wiring — no mic attached
+    yet, so this is import- and call-clean (no audio touched).
     """
     bus = bus or MessageBus()
-    assemble_pipeline(bus)        # production default L2→L6 (real DefaultPolicy, ComposerRenderer)
+    assemble_pipeline(bus, calibration_reader=_calibration_reader())
     register_speaker(bus)         # real TTS sink (audio.streaming imported lazily on first speak)
     return bus
 

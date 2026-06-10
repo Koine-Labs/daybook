@@ -31,6 +31,7 @@ INF_DIR = Path(__file__).resolve().parent.parent
 if str(INF_DIR) not in sys.path:
     sys.path.insert(0, str(INF_DIR))
 
+from arbitration.blend import BlendResult, CalibrationState  # noqa: E402
 from core.bus.bus import (TOPIC_ACTION, TOPIC_BELIEF, TOPIC_FEATURE,  # noqa: E402
                           TOPIC_OUTPUT, TOPIC_PREDICTION, TOPIC_SIGNAL, MessageBus)
 from core.pipeline import assemble_pipeline  # noqa: E402
@@ -41,6 +42,7 @@ from core.protocol.payloads import (ActionDecision, FeatureSnapshot,  # noqa: E4
                                      OutputDirective, Prediction, SignalPacket)
 from fusion.belief_state import AxisEstimate  # noqa: E402
 from fusion.participant import AxisCombiner  # noqa: E402
+import fusion.participant as l3  # noqa: E402
 from output.renderer import StubRenderer  # noqa: E402
 from sensors import participant as l1  # noqa: E402
 from sensors.contract import IntentTaggedReading  # noqa: E402
@@ -251,6 +253,75 @@ def test_production_default_renderer_is_composer_and_maps_decision(monkeypatch):
     assert calls[0]["explicit_context"] == (
         "test fixture: gate cleared to exercise the L6 emit path"
     )
+
+
+def _calib(axis: str) -> BlendResult:
+    return BlendResult(
+        axis=axis, w_personal=0.25, w_population=0.75,
+        calibration_state=CalibrationState.CALIBRATING, e_personal=2.0,
+        evidence_by_tier={}, population_value=0.0, population_variance=1.0,
+        demographics_applied=False, population_seeded=False,
+    )
+
+
+def test_assemble_pipeline_calibration_reader_enriches_belief():
+    """The default-arc seam (#4): a fused estimate carries the same calibration
+    stamps (calibration_state + w_personal) that state/declare's arc gets via
+    apply_calibration — proving the reader threads through assemble_pipeline."""
+    calls: list[tuple[str, str]] = []
+
+    def reader(user_id: str, axis: str) -> BlendResult:
+        calls.append((user_id, axis))
+        return _calib(axis)
+
+    bus = MessageBus()
+    assemble_pipeline(
+        bus,
+        fusion_registry=_fresh_axis_registry(),
+        calibration_reader=reader,
+        renderer=StubRenderer(),
+    )
+    seen = _collectors(bus)
+    l1.emit(bus, _sample_reading(), meta_context=MetaContext.WAKING)
+
+    assert seen[TOPIC_BELIEF], "trace never reached L3"
+    est = seen[TOPIC_BELIEF][0].payload.estimates["meta_context"]
+    assert est.value["calibration_state"] == "calibrating"
+    assert est.value["w_personal"] == 0.25
+    assert (USER, "meta_context") in calls
+
+
+def test_assemble_pipeline_without_reader_belief_unenriched():
+    """Regression pin: omitting calibration_reader is byte-identical to today."""
+    bus = MessageBus()
+    assemble_pipeline(bus, fusion_registry=_fresh_axis_registry(), renderer=StubRenderer())
+    seen = _collectors(bus)
+    l1.emit(bus, _sample_reading(), meta_context=MetaContext.WAKING)
+
+    est = seen[TOPIC_BELIEF][0].payload.estimates["meta_context"]
+    assert "calibration_state" not in est.value
+    assert "w_personal" not in est.value
+
+
+def test_assemble_pipeline_forwards_reader_with_default_registry(monkeypatch):
+    captured: dict[str, object] = {}
+    real_register = l3.register
+
+    def recording_register(bus, *, participant=None, calibration_reader=None):
+        captured["participant"] = participant
+        captured["calibration_reader"] = calibration_reader
+        return real_register(bus, participant=participant, calibration_reader=calibration_reader)
+
+    monkeypatch.setattr(l3, "register", recording_register)
+
+    def reader(user_id: str, axis: str) -> BlendResult:
+        return _calib(axis)
+
+    bus = MessageBus()
+    assemble_pipeline(bus, calibration_reader=reader, renderer=StubRenderer())
+
+    assert captured["participant"] is None
+    assert captured["calibration_reader"] is reader
 
 
 if __name__ == "__main__":

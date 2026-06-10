@@ -7,12 +7,13 @@ shared bus so a single SignalPacket emitted at L1 propagates through L2 features
 L3 fusion, L4 prediction, L5 decision, and L6 output. L1 is the producer entry
 point (sensors.participant.emit) and has no input topic to subscribe to.
 
-The two optional injection seams (fusion_registry, decision_policy) default to
-None, in which case the pure production participants run. They exist so a caller
-can drive a deterministic, DB- and network-free arc through the *real* layer code
-(the FusionParticipant and the real L5 DecisionContext/forward machinery), the
-same way each layer's own smoke test drives its real participant with in-memory
-inputs. They never change production behavior when omitted.
+The optional injection seams (fusion_registry, calibration_reader,
+decision_policy) default to None, in which case the pure production participants
+run. They exist so a caller can drive a deterministic, DB- and network-free arc
+through the *real* layer code (the FusionParticipant and the real L5
+DecisionContext/forward machinery), the same way each layer's own smoke test
+drives its real participant with in-memory inputs. They never change production
+behavior when omitted.
 """
 from __future__ import annotations
 
@@ -51,6 +52,7 @@ def assemble_pipeline(
     bus: MessageBus,
     *,
     fusion_registry: dict[str, l3.AxisCombiner] | None = None,
+    calibration_reader: l3.CalibrationReader | None = None,
     decision_policy: Policy | None = None,
     renderer: Renderer | None = None,
 ) -> None:
@@ -62,15 +64,19 @@ def assemble_pipeline(
     so this import never pulls the LLM into the graph at assembly time. The
     renderer stays injectable; tests pass StubRenderer (or monkeypatch
     compose_utterance) so no test path ever touches the network.
+
+    `calibration_reader` threads cold-start arbitration (#4) into L3 the same way
+    state/declare.py's arc does; the default None keeps assembly DB-free and
+    byte-identical to before — the live runtimes pass arbitration.get_calibration.
     """
     l2.register(bus)
 
     fusion_participant = (
-        l3.FusionParticipant(registry=fusion_registry)
+        l3.FusionParticipant(registry=fusion_registry, calibration_reader=calibration_reader)
         if fusion_registry is not None
         else None
     )
-    l3.register(bus, participant=fusion_participant)
+    l3.register(bus, participant=fusion_participant, calibration_reader=calibration_reader)
 
     l4.register(bus)
 
