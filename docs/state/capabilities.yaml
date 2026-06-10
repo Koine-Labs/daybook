@@ -138,7 +138,7 @@ capabilities:
     alignment: on_track
     percent_done: 70
     gaps:
-      - "Frozen baseline; retraining policy undecided; biometric_replay real-data smoke never run"
+      - "Frozen baseline; retraining policy undecided; real-data replay proven 2026-06-10 (775 windows, one real night) but only against the pre-rebuild-snapshot Neon branch — production has ZERO biometric rows (HK restore decision pending)"
     evidence:
       modules: ["prediction.predictors.sleep_classifier"]
       markers: []

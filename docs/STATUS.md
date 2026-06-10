@@ -72,13 +72,30 @@ adversarially reviewed (reviewer re-ran the full suite per branch), merged as
 
 **Known deferrals (honest, non-blocking):** writers exist but no production
 runtime injects them yet (next: inject in hub/waking_arc once DATABASE_URL
-present); `label_outcomes` grader is a read-skeleton; satellite sensor loops
-are synthetic except the mic; arbiter thresholds default-tuned, untested on
-real sleep; `cold_start_profiles` still unseeded (blend never fires);
-biometric_replay still never run on real data. Ledger expanded to 12 tracked
-capabilities (added: cold_start_arbitration, learning_loop_writers,
-meta_arbiter, observers_day_summary, rem_classifier, jepa_predictor,
-i_models_clustering); test pin 581 -> 651.
+present — note `assemble_pipeline` still needs writer seams); `label_outcomes`
+grader is a read-skeleton; satellite sensor loops are synthetic except the mic;
+arbiter thresholds default-tuned, untested on real sleep; `cold_start_profiles`
+still unseeded (blend never fires). Ledger expanded to 12 tracked capabilities
+(added: cold_start_arbitration, learning_loop_writers, meta_arbiter,
+observers_day_summary, rem_classifier, jepa_predictor, i_models_clustering);
+test pin 581 -> 653.
+
+**Same-day postscript — first real-data run + a data-integrity discovery.**
+`python -m runtime.biometric_replay` ran on REAL data for the first time: one
+of Aakash's actual 6.5h sleep sessions, 775 epoch windows of real watch
+HR/HRV/respiration through L1->L2->L4, 775 REM nowcasts (244 over threshold,
+last P(REM)=0.117). BUT it had to run against the **pre-rebuild-snapshot Neon
+branch**: **production has ZERO biometric rows** (0 sleep_sessions, 0
+heart_rate readings) while the snapshot holds the full import (544 sessions,
+667K HR readings, 7.6K stage rows). The 10-yr HK data vanished from production
+sometime after the 2026-05-28 snapshot even though REBUILD_PLAN's D2 wipe is
+marked [NOT STARTED] — exactly the drift class this ledger exists to catch.
+**Decision needed (founder):** restore the rows to production (row-copy from
+the snapshot; a branch-swap would lose migrations 0011-0015), or ratify the
+wipe — the 2026-05-29 reframe made this data load-bearing again
+(biometric_replay, personal resting baseline, affect-axis calibration).
+Also note: sleep-biometric accrual is currently zero (no HK sync has ever run
+on this Mac) — restarting capture is a top priority either way.
 
 ## 2026-05-31 — #17 back-half SHIPPED — cold-start arbitration wired into L3 (full 5-step ladder complete)
 
