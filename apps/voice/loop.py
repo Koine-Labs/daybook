@@ -134,10 +134,11 @@ def listen_continuous(
     downstream by a persistence sink later, and a no-DB node (future Pi) keeps its
     strongest waking sense. Default (`bus=None`) is byte-for-byte today's DB path.
 
-    `meta_context` (a MetaContext, bus-mode only) is the top-level context (#14)
-    the emitted signals ride under; default None lets AudioBusSink choose UNKNOWN.
-    The waking runner passes MetaContext.WAKING so L5/L6 treat the signals as
-    waking (companion posture, voice channel).
+    `meta_context` (bus-mode only) is the top-level context (#14) the emitted
+    signals ride under — a MetaContext constant OR a zero-arg callable returning
+    one (the MetaContextArbiter read seam, resolved per-emit); default None lets
+    AudioBusSink choose UNKNOWN. The waking runner passes the arbiter's
+    `current_meta_context` so L5/L6 follow the live authoritative meta.
     """
     import os
 

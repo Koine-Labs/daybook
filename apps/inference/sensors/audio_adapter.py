@@ -17,7 +17,7 @@ from typing import Any
 from core.bus.bus import MessageBus
 from core.protocol.enums import Intent, MetaContext, Modality
 from sensors.contract import DEFAULT_USER_ID, IntentTaggedReading
-from sensors.participant import emit
+from sensors.participant import MetaContextSource, emit
 
 AUDIO_SOURCE = "mic_listener_v1"          # matches audio_context/writer.SOURCE
 KIND_SOCIAL = "audio_social_context"
@@ -42,12 +42,13 @@ class AudioBusSink:
     SignalPacket onto a MessageBus instead of writing the DB.
 
     `meta_context` is the top-level context (#14) the emitted signals ride under;
-    it defaults to UNKNOWN so existing callers/tests are unchanged. The waking
-    runner passes WAKING so L5's meta-context gate passes and L6 selects voice.
+    it defaults to UNKNOWN so existing callers/tests are unchanged. A constant
+    works, but the waking runner passes the MetaContextArbiter's bound reader so
+    every emission rides the live authoritative meta (resolved per-emit, #14).
     """
 
     def __init__(self, bus: MessageBus, *, user_id: str = DEFAULT_USER_ID,
-                 meta_context: MetaContext = MetaContext.UNKNOWN) -> None:
+                 meta_context: MetaContextSource = MetaContext.UNKNOWN) -> None:
         self.bus = bus
         self.user_id = user_id
         self.meta_context = meta_context
