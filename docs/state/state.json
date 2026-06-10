@@ -282,7 +282,7 @@
       "status": "planned",
       "owns_paths": [
         "apps/inference/runtime/waking_arc.py",
-        "apps/inference/voice/"
+        "apps/voice/"
       ],
       "touches_commitments": [
         3,

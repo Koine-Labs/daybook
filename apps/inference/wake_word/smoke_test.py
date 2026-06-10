@@ -16,6 +16,7 @@ Run:
 """
 from __future__ import annotations
 
+import importlib.util
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -81,6 +82,9 @@ def test_wake_event_roundtrip() -> None:
 
 
 def test_wake_word_detector_loads() -> None:
+    if importlib.util.find_spec("openwakeword") is None:
+        import pytest
+        pytest.skip("[voice] extra not installed (openwakeword)")
     print("\n[Test 3] VoiceWakeWordDetector loads + returns None on silence")
     detector = VoiceWakeWordDetector(wake_word="hey_jarvis", threshold=0.5)
     model = detector.get_model()

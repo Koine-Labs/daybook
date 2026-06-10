@@ -15,16 +15,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install deps
-        run: pip install -e . && pip install pyyaml pytest
+      - name: Install uv
+        run: pip install uv
+      # Deps only, never the project: apps/inference is a flat module layout run
+      # via PYTHONPATH (same convention as ci.yml — `pip install -e .` has no
+      # package for hatchling to build and fails).
+      - name: Install inference deps
+        run: uv pip install --system -r pyproject.toml --extra dev
       - name: State Ledger verify (manifest can't lie)
-        env:
-          DATABASE_URL: ""
         run: python -m state_ledger.verify
       - name: Render-staleness check (generated outputs match manifest)
-        env:
-          DATABASE_URL: ""
         run: |
           python -m state_ledger.render
-          git diff --exit-code docs/STATUS.md docs/state/state.json \
-            || (echo "STATUS.md / state.json are stale vs the manifest — run 'python -m state_ledger.render' and commit." && exit 1)
+          # Pathspecs from the repo root — `git diff docs/...` resolved against
+          # this job's apps/inference cwd would be fatal-ambiguous every run.
+          if ! git -C "$GITHUB_WORKSPACE" diff --exit-code -- docs/STATUS.md docs/state/state.json; then
+            echo "STATUS.md / state.json are stale vs the manifest — run 'python -m state_ledger.render' and commit."
+            exit 1
+          fi

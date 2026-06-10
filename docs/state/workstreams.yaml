@@ -12,13 +12,13 @@ workstreams:
     status: in_progress
     owns_paths: ["apps/inference/state_ledger/", "docs/state/"]
     touches_commitments: []
-    branch: null
+    branch: feat/state-ledger-core
     worktree: null
     github_issue: null
   - id: first-real-signal
     title: "One real packet through the live arc (mic-first)"
     status: planned
-    owns_paths: ["apps/inference/runtime/waking_arc.py", "apps/inference/voice/"]
+    owns_paths: ["apps/inference/runtime/waking_arc.py", "apps/voice/"]
     touches_commitments: [3, 11, 14]
     branch: null
     worktree: null
