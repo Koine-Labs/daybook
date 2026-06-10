@@ -4,11 +4,16 @@ L1 is the nervous system's entry point — no input topic, so there is no inboun
 envelope to inherit from. `emit` builds the envelope directly: fresh trace_id,
 a meta_context hint (UNKNOWN by default; L2+ refine it, #14), and a consent_scope
 chosen per-modality (#11) from the existing CONSENT_SCOPES registry.
+
+`meta_context` may be a MetaContext constant OR a zero-arg callable returning one
+(the MetaContextArbiter read seam, #14) — resolved at emission time so producers
+ride the live authoritative meta, never a frozen construction-time value.
 """
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import Callable
 
 from consent import CONSENT_SCOPES
 from core.bus.bus import TOPIC_SIGNAL, MessageBus
@@ -16,6 +21,8 @@ from core.protocol.enums import MetaContext, Modality, NodeRole, PayloadType
 from core.protocol.envelope import MessageEnvelope
 from core.protocol.payloads import SignalPacket
 from sensors.contract import IntentTaggedReading
+
+MetaContextSource = MetaContext | Callable[[], MetaContext]
 
 L1_ROLE = NodeRole.WISP_EDGE
 
@@ -40,7 +47,7 @@ def consent_scope_for(reading: IntentTaggedReading) -> str:
 def build_signal_envelope(
     reading: IntentTaggedReading,
     *,
-    meta_context: MetaContext = MetaContext.UNKNOWN,
+    meta_context: MetaContextSource = MetaContext.UNKNOWN,
 ) -> MessageEnvelope:
     """Wrap a reading's SignalPacket in a fresh L1 envelope (no inbound to inherit)."""
     packet: SignalPacket = reading.to_signal_packet()
@@ -49,7 +56,7 @@ def build_signal_envelope(
         type=PayloadType.SIGNAL,
         source_role=L1_ROLE,
         occurred_at=datetime.now(timezone.utc),
-        meta_context=meta_context,
+        meta_context=meta_context() if callable(meta_context) else meta_context,
         consent_scope=consent_scope_for(reading),
         trace_id=str(uuid.uuid4()),
         payload=packet,
@@ -61,7 +68,7 @@ def emit(
     bus: MessageBus,
     reading: IntentTaggedReading,
     *,
-    meta_context: MetaContext = MetaContext.UNKNOWN,
+    meta_context: MetaContextSource = MetaContext.UNKNOWN,
 ) -> MessageEnvelope:
     """Publish a reading as a SignalPacket envelope on TOPIC_SIGNAL; return it."""
     env = build_signal_envelope(reading, meta_context=meta_context)

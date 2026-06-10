@@ -8,13 +8,20 @@ as the L1 producer:
                                     #   deterministic warrant), default
                                     #   ComposerRenderer (#8, real Regis voice)
     register_speaker(bus)           # real TTS sink (lazy audio.streaming)
-    listen_continuous(bus=bus, meta_context=WAKING)  # always-on mic producer
+    arbiter = register_meta_arbiter(bus)             # (meta, sub) authority (#14)
+    listen_continuous(bus=bus, meta_context=arbiter.current_meta_context)
 
 The mic loop (voice.loop.listen_continuous) constructs an AudioBusSink + a
 ContinuousProcessor and emits privacy-gated audio_social_context / audio_prosody
-/ audio_ambient SignalPackets onto TOPIC_SIGNAL under WAKING. They flow L2→L6
-through the assembled arc; a social-context transition that clears the L5
-warrant makes Regis remark (voice channel, companion posture — #3/#5/#14).
+/ audio_ambient SignalPackets onto TOPIC_SIGNAL. They flow L2→L6 through the
+assembled arc; a social-context transition that clears the L5 warrant makes
+Regis remark (voice channel, companion posture — #3/#5/#14).
+
+The meta the signals ride under is ARBITER-SOURCED, not hardcoded (#14): the
+MetaContextArbiter subscribes to TOPIC_BELIEF, folds every L3 BeliefState into
+its hysteresis state machine, and the sink reads it per-emit through the bound
+`current_meta_context` seam. It starts WAKING (fail-safe default) and without
+sustained sleep evidence never flips — default behavior is unchanged.
 
 NOT on the CI path: this needs a real microphone, the [voice] extra (torch/
 audio/whisper), and a TTS device — none present in CI. CI runs only
@@ -42,9 +49,11 @@ for p in (str(INF_DIR), str(APPS_DIR)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+from typing import Callable
+
 from core.bus.bus import MessageBus
 from core.pipeline import assemble_pipeline
-from core.protocol.enums import MetaContext
+from fusion.meta_arbiter import register as register_meta_arbiter
 from output.speaker import register_speaker
 from sensors.contract import DEFAULT_USER_ID
 
@@ -62,17 +71,20 @@ def build_waking_arc(bus: MessageBus | None = None) -> MessageBus:
     return bus
 
 
-def run(*, user_id: str = DEFAULT_USER_ID) -> None:
+def run(*, user_id: str = DEFAULT_USER_ID, listen_fn: Callable[..., None] | None = None) -> None:
     """Build the arc and block in the live mic loop (hardware-dependent).
 
     The mic + audio stack are imported lazily inside listen_continuous, so this
     function only touches hardware when actually called — never at import time.
+    `listen_fn` is the test seam: when injected, voice.loop is never imported.
     """
-    from voice.loop import listen_continuous  # light module import; lazies audio internally
+    if listen_fn is None:
+        from voice.loop import listen_continuous as listen_fn  # light import; lazies audio internally
 
     bus = build_waking_arc()
+    arbiter = register_meta_arbiter(bus)
     print("Waking arc up — Regis is listening (Ctrl-C to stop).", flush=True)
-    listen_continuous(bus=bus, user_id=user_id, meta_context=MetaContext.WAKING)
+    listen_fn(bus=bus, user_id=user_id, meta_context=arbiter.current_meta_context)
 
 
 def main() -> None:
