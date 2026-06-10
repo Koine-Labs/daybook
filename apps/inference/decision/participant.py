@@ -16,6 +16,7 @@ from core.protocol.enums import PayloadType
 from core.protocol.envelope import MessageEnvelope
 from core.protocol.payloads import Prediction
 
+from decision.outcome_log import DecisionLogWriter
 from decision.policy import DecisionContext
 from decision.registry import select_policy
 
@@ -44,12 +45,20 @@ def decide(env: MessageEnvelope) -> MessageEnvelope:
                             source_role=SOURCE_ROLE)
 
 
-def register(bus: MessageBus) -> None:
-    """Subscribe the L5 decision handler to the prediction topic."""
+def register(bus: MessageBus, *, writer: DecisionLogWriter | None = None) -> None:
+    """Subscribe the L5 decision handler to the prediction topic.
+
+    `writer` is the optional learning-loop seam (#13): when provided, every
+    ActionDecision (hold AND interject) is persisted to interject_decisions;
+    default None keeps the DB-free behavior exactly.
+    """
 
     def _handler(env: MessageEnvelope) -> None:
         if not isinstance(env.payload, Prediction):
             return  # not ours; degrade, never crash the bus
-        bus.publish(TOPIC_ACTION, decide(env))
+        out = decide(env)
+        bus.publish(TOPIC_ACTION, out)
+        if writer is not None:
+            writer.write(out.payload, trigger_kind=f"prediction.{env.payload.axis}")
 
     bus.subscribe(TOPIC_PREDICTION, _handler)
