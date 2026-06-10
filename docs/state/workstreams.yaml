@@ -9,10 +9,18 @@ workstreams:
     github_issue: null
   - id: state-ledger-core
     title: "Build the State Ledger anti-drift core (this plan)"
-    status: in_progress
+    status: done
     owns_paths: ["apps/inference/state_ledger/", "docs/state/"]
     touches_commitments: []
     branch: feat/state-ledger-core
+    worktree: null
+    github_issue: null
+  - id: embodiment-wave-1
+    title: "NetworkTransport adoption + learning-loop writers + calibration-into-arc + meta-arbiter/observers"
+    status: done
+    owns_paths: ["apps/inference/runtime/", "apps/pi/", "apps/inference/prediction/prediction_log.py", "apps/inference/decision/outcome_log.py", "apps/inference/fusion/meta_arbiter.py", "apps/inference/fusion/observers/"]
+    touches_commitments: [9, 13, 14, 15, 16]
+    branch: feat/embodiment-wave-1
     worktree: null
     github_issue: null
   - id: first-real-signal

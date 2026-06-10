@@ -28,6 +28,7 @@ from core.protocol.enums import MetaContext, Modality, PayloadType
 from core.protocol.envelope import MessageEnvelope
 from features.snapshot import FeatureSnapshot
 
+from .prediction_log import PredictionLogWriter, feature_inputs
 from .predictors.sleep_classifier import DEFAULT_PREDICTOR, REM_AXIS
 
 SOURCE_ROLE = role_for("L4.prediction")
@@ -60,8 +61,18 @@ def _feature_dict(snapshot: FeatureSnapshot) -> dict[str, Any] | None:
     return feats
 
 
-def handle_feature(bus: MessageBus, inbound: MessageEnvelope) -> MessageEnvelope | None:
-    """Score one biometric FeatureSnapshot into a "rem" Prediction; else skip."""
+def handle_feature(
+    bus: MessageBus,
+    inbound: MessageEnvelope,
+    *,
+    writer: PredictionLogWriter | None = None,
+) -> MessageEnvelope | None:
+    """Score one biometric FeatureSnapshot into a "rem" Prediction; else skip.
+
+    `writer` is the optional learning-loop seam (#13/#16): when provided, the
+    prediction is persisted to prediction_log; default None keeps the DB-free
+    behavior exactly.
+    """
     payload = inbound.payload
     if not isinstance(payload, FeatureSnapshot):
         return None  # not ours; degrade, never crash the bus
@@ -88,14 +99,20 @@ def handle_feature(bus: MessageBus, inbound: MessageEnvelope) -> MessageEnvelope
         source_role=SOURCE_ROLE,
     )
     bus.publish(TOPIC_PREDICTION, out)
+    if writer is not None:
+        writer.write(
+            pred,
+            meta_context=inbound.meta_context.value,
+            inputs_used=feature_inputs(feats),
+        )
     return out
 
 
-def register(bus: MessageBus) -> None:
-    """Subscribe the feature-based REM participant to TOPIC_FEATURE."""
+def register(bus: MessageBus, *, writer: PredictionLogWriter | None = None) -> None:
+    """Subscribe the feature-based REM participant to TOPIC_FEATURE (optional writer)."""
 
     def _on_feature(env: MessageEnvelope) -> None:
-        handle_feature(bus, env)
+        handle_feature(bus, env, writer=writer)
 
     bus.subscribe(TOPIC_FEATURE, _on_feature)
 

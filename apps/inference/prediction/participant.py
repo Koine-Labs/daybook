@@ -20,6 +20,7 @@ from fusion.belief_state import BeliefState
 
 from . import registry
 from .interface import predict
+from .prediction_log import PredictionLogWriter, estimate_inputs
 
 # Default forecast horizon for the skeleton; fill specs will make this per-axis.
 DEFAULT_HORIZON_SECONDS = 300
@@ -54,8 +55,18 @@ def _predict_axis(
     return pred
 
 
-def handle_belief(bus: MessageBus, inbound: MessageEnvelope) -> list[MessageEnvelope]:
-    """Process one BeliefState envelope, publishing one Prediction per fresh axis."""
+def handle_belief(
+    bus: MessageBus,
+    inbound: MessageEnvelope,
+    *,
+    writer: PredictionLogWriter | None = None,
+) -> list[MessageEnvelope]:
+    """Process one BeliefState envelope, publishing one Prediction per fresh axis.
+
+    `writer` is the optional learning-loop seam (#13/#16): when provided, every
+    non-OFFLINE prediction is persisted to prediction_log; default None keeps
+    the DB-free behavior exactly.
+    """
     if not isinstance(inbound.payload, BeliefState):
         return []  # not ours; degrade, never crash the bus
     bs: BeliefState = inbound.payload
@@ -81,13 +92,19 @@ def handle_belief(bus: MessageBus, inbound: MessageEnvelope) -> list[MessageEnve
         )
         bus.publish(TOPIC_PREDICTION, out)
         published.append(out)
+        if writer is not None:
+            writer.write(
+                pred,
+                meta_context=meta_context,
+                inputs_used=estimate_inputs(bs.get(axis, now=now)),
+            )
     return published
 
 
-def register(bus: MessageBus) -> None:
-    """Subscribe the L4 participant to TOPIC_BELIEF."""
+def register(bus: MessageBus, *, writer: PredictionLogWriter | None = None) -> None:
+    """Subscribe the L4 participant to TOPIC_BELIEF (optional prediction_log writer)."""
 
     def _on_belief(env: MessageEnvelope) -> None:
-        handle_belief(bus, env)
+        handle_belief(bus, env, writer=writer)
 
     bus.subscribe(TOPIC_BELIEF, _on_belief)

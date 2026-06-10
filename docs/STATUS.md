@@ -4,26 +4,81 @@
 
 ## Current state (generated — do not edit by hand)
 
-_Generated from `docs/state/`. 5 capabilities tracked; suite expects 581 tests._
+_Generated from `docs/state/`. 12 capabilities tracked; suite expects 653 tests._
 
 | Capability | Build state | Alignment | % | Serves |
 |---|---|---|---:|---|
-| L1->L6 reflex arc (assemble_pipeline) | built_and_runs | on_track | 30 | multimodal_fusion, continuous_build |
+| L1->L6 reflex arc (assemble_pipeline) | built_and_runs | on_track | 35 | multimodal_fusion, continuous_build |
 | L3 cognitive_load fusion axis (BCI-derived) | scaffold | partial | 25 | multimodal_fusion |
 | L3 state_declared axis (explicit self-report) | built_and_runs | on_track | 60 | multimodal_fusion, provenance_labels |
-| NetworkTransport (Pi<->Mac relay) | scaffold | drifting | 35 | distributed_topology |
-| Provenance label ledger (#17) | built_and_runs | on_track | 70 | provenance_labels |
+| NetworkTransport (Pi<->Mac relay) | built_and_runs | on_track | 60 | distributed_topology |
+| Provenance label ledger (#17) | built_and_runs | on_track | 80 | provenance_labels |
+| Cold-start arbitration (population/personal blend + calibration states) | built_and_runs | on_track | 60 | provenance_labels, personal_model_moat |
+| Learning-loop writers (L4 prediction_log + L5 decision outcomes) | built_and_runs | on_track | 45 | learned_decisions, jepa_prediction |
+| Meta-context switching authority (Waking<->Sleep hysteresis) | built_and_runs | on_track | 40 | meta_context |
+| L3 post-session observers (regis_observations writer) | built_and_runs | on_track | 30 | regis_character, i_models |
+| REM nowcaster (trained XGBoost, L4-wrapped, SLEEP-gated) | built_and_runs | on_track | 70 | sleep_wedge, jepa_prediction |
+| JEPA world model (L4 latent prediction, LeWM recipe) | scaffold | partial | 10 | jepa_prediction, learned_decisions |
+| Self-expanding I-Models (clustering engine) | absent | not_started | 5 | i_models, personal_model_moat |
 
 <!-- STATE:END -->
 
-**Last updated: 2026-05-31 — #17 back-half shipped (see next section).** The code spine is real:
-the Python L1-L6 inference suite is green locally (**307 passed**), `pnpm
-typecheck` is green for `@daybook/shared`, and the Koine website production build
-is green. The current gap is no longer architecture-in-code; it is embodiment:
-`apps/pi/daemon.py` is still a v0 daemon and fails immediately because it imports
-deleted `cue_decision` / `realtime` modules. Next: rebuild the Pi/satellite path
-against `NetworkTransport`, prove one real EXG/mic/camera packet reaches the Mac
-bus, then start cold-start calibration + explicit self-report + outcome logging.
+**Last updated: 2026-06-10 — State Ledger live + embodiment wave 1 shipped (see next
+section).** The full DB-free suite is **651 passed / 0 failed** and — for the first
+time — CI runs ALL of it (the old dir list silently dropped ~272 tests). The Pi
+path is rebuilt: `apps/pi/daemon.py` is a tombstone, `apps/pi/satellite.py` +
+`runtime/{hub,satellite}.py` are the live NetworkTransport entrypoints. Next:
+the first-real-signal run (`python -m runtime.waking_arc` with a real mic), EXG
+Pill calibration, and a real Mac<->Pi LAN relay.
+
+## 2026-06-10 — State Ledger merged (PR #39) + embodiment wave 1 (4 parallel builds, adversarially reviewed)
+
+**State Ledger is live on main.** `docs/state/` manifest -> `state_ledger/`
+verify/render -> per-PR CI gates. Two CI bugs fixed on the way in (render-staleness
+pathspec resolved against the wrong cwd; `pip install -e .` on a flat layout), plus
+the big one: **ci.yml ran only 309 of the pinned tests** — now it runs full
+collection, and a first-ever full CI run immediately caught a real cross-platform
+bug (ablation promotion test was BLAS-dependent: identical synthetic sources made
+combo-vs-single a float coin flip — promoted on macOS Accelerate, not Ubuntu
+OpenBLAS). De-flaked with a margin-bearing synthetic.
+
+**Embodiment wave 1** — four builders in parallel worktrees, each branch
+adversarially reviewed (reviewer re-ran the full suite per branch), merged as
+`feat/embodiment-wave-1`:
+
+- **NetworkTransport adoption** — `runtime/hub.py` (Mac hub: HubLink + full
+  assemble_pipeline arc), `runtime/satellite.py` (SatelliteLink + `--sensors
+  eeg,audio,vision,watch` loop registry), `apps/pi/satellite.py` (thin Pi
+  delegate; v0 daemon.py now a tombstone). E2E loopback test proves satellite
+  packet -> wire -> hub L2->L6 arc -> directive back. Found+fixed a real wire bug:
+  `WatchBusSink` put raw datetimes in payloads, killing the JSON codec — now
+  ISO-8601 at the sink seam. `AI_PI_CONTRACT.md` historical bulk trimmed.
+- **Learning-loop writers (#13/#15/#16)** — `prediction/prediction_log.py`
+  persists every non-OFFLINE L4 forecast (NaN-sanitized JSONB, action-conditioning
+  kind per #15); `decision/outcome_log.py` persists every L5 decision (hold AND
+  interject) with the whole gate_trace as the labelable context; both crash-safe,
+  optional-injection (default None = exact prior behavior). Migration **0015**
+  (applied to Neon; `prediction_log` reshaped — verified 0 rows before DROP —
+  `interject_decisions` + mode/content_kind). The flywheel can now accrue.
+- **Cold-start calibration -> default arc** — `assemble_pipeline()` gains
+  `calibration_reader`; `waking_arc` passes `arbitration.get_calibration`
+  DB-gated. Closes the label_ledger capability gap (declaration-arc-only).
+- **Meta-context arbiter (#14) + observers (D8)** — `fusion/meta_arbiter.py`:
+  hysteretic Waking<->Sleep authority (5-consecutive-observation SLEEP entry,
+  fail-safe WAKING), wired into `waking_arc` so the mic loop's meta is
+  arbiter-sourced (was hardcoded WAKING); producers accept callable meta sources.
+  `fusion/observers/day_summary.py`: first post-rebuild `regis_observations`
+  writer (heuristic session aggregation) — Regis accumulates memory again.
+
+**Known deferrals (honest, non-blocking):** writers exist but no production
+runtime injects them yet (next: inject in hub/waking_arc once DATABASE_URL
+present); `label_outcomes` grader is a read-skeleton; satellite sensor loops
+are synthetic except the mic; arbiter thresholds default-tuned, untested on
+real sleep; `cold_start_profiles` still unseeded (blend never fires);
+biometric_replay still never run on real data. Ledger expanded to 12 tracked
+capabilities (added: cold_start_arbitration, learning_loop_writers,
+meta_arbiter, observers_day_summary, rem_classifier, jepa_predictor,
+i_models_clustering); test pin 581 -> 651.
 
 ## 2026-05-31 — #17 back-half SHIPPED — cold-start arbitration wired into L3 (full 5-step ladder complete)
 

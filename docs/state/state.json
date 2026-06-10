@@ -181,9 +181,9 @@
       ],
       "build_state": "built_and_runs",
       "alignment": "on_track",
-      "percent_done": 30,
+      "percent_done": 35,
       "gaps": [
-        "Runs in one Mac process on synthetic data; never fed a real sensor packet"
+        "Never fed a real sensor packet; hub/satellite entrypoints exist but unproven across real machines"
       ]
     },
     {
@@ -229,11 +229,11 @@
       "serves_commitments": [
         9
       ],
-      "build_state": "scaffold",
-      "alignment": "drifting",
-      "percent_done": 35,
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
+      "percent_done": 60,
       "gaps": [
-        "Passes unit tests but orphaned: every runtime builds an in-process bus; Pi daemon is dead"
+        "Loopback-proven only (e2e satellite->hub arc test); never run Mac<->Pi over a real LAN; satellite sensor loops are synthetic except the mic"
       ]
     },
     {
@@ -247,9 +247,135 @@
       ],
       "build_state": "built_and_runs",
       "alignment": "on_track",
+      "percent_done": 80,
+      "gaps": [
+        "list_promoted has no live fusion consumer yet (single-source axes; nothing to honor)"
+      ]
+    },
+    {
+      "id": "cold_start_arbitration",
+      "name": "Cold-start arbitration (population/personal blend + calibration states)",
+      "serves_pillars": [
+        "provenance_labels",
+        "personal_model_moat"
+      ],
+      "serves_commitments": [
+        1,
+        14
+      ],
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
+      "percent_done": 60,
+      "gaps": [
+        "cold_start_profiles unseeded \u2014 population_seeded False everywhere, blend never fires; literature prior extraction never run"
+      ]
+    },
+    {
+      "id": "learning_loop_writers",
+      "name": "Learning-loop writers (L4 prediction_log + L5 decision outcomes)",
+      "serves_pillars": [
+        "learned_decisions",
+        "jepa_prediction"
+      ],
+      "serves_commitments": [
+        13,
+        15,
+        16
+      ],
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
+      "percent_done": 45,
+      "gaps": [
+        "Writers are optional kwargs not yet injected by production runtimes (assemble_pipeline has no writer seams yet); label_outcomes grader is a read-skeleton; zero rows accrued"
+      ]
+    },
+    {
+      "id": "meta_arbiter",
+      "name": "Meta-context switching authority (Waking<->Sleep hysteresis)",
+      "serves_pillars": [
+        "meta_context"
+      ],
+      "serves_commitments": [
+        14
+      ],
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
+      "percent_done": 40,
+      "gaps": [
+        "Never flipped on real sleep data; entry/exit thresholds default-tuned, not fitted; single-observation SLEEP exit is noise-sensitive",
+        "Hub + waking_arc only: satellite sinks still stamp WAKING at capture (no meta downlink/re-stamp yet)"
+      ]
+    },
+    {
+      "id": "observers_day_summary",
+      "name": "L3 post-session observers (regis_observations writer)",
+      "serves_pillars": [
+        "regis_character",
+        "i_models"
+      ],
+      "serves_commitments": [
+        4,
+        6
+      ],
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
+      "percent_done": 30,
+      "gaps": [
+        "Heuristic v1, no LLM distillation; not scheduled (no nightly job invokes it); trait drift still absent; rows embedding-less (invisible to similarity retrieval until an embed pass lands)"
+      ]
+    },
+    {
+      "id": "rem_classifier",
+      "name": "REM nowcaster (trained XGBoost, L4-wrapped, SLEEP-gated)",
+      "serves_pillars": [
+        "sleep_wedge",
+        "jepa_prediction"
+      ],
+      "serves_commitments": [
+        14,
+        16
+      ],
+      "build_state": "built_and_runs",
+      "alignment": "on_track",
       "percent_done": 70,
       "gaps": [
-        "Cold-start calibration wired only into the declaration arc, not the default waking arc"
+        "Frozen baseline; retraining policy undecided; biometric_replay real-data smoke never run"
+      ]
+    },
+    {
+      "id": "jepa_predictor",
+      "name": "JEPA world model (L4 latent prediction, LeWM recipe)",
+      "serves_pillars": [
+        "jepa_prediction",
+        "learned_decisions"
+      ],
+      "serves_commitments": [
+        15,
+        16
+      ],
+      "build_state": "scaffold",
+      "alignment": "partial",
+      "percent_done": 10,
+      "gaps": [
+        "StubPredictor persistence placeholders only; no encoder/SIGReg/CEM machinery; waits on the data flywheel (prediction_log accrual)"
+      ]
+    },
+    {
+      "id": "i_models_clustering",
+      "name": "Self-expanding I-Models (clustering engine)",
+      "serves_pillars": [
+        "i_models",
+        "personal_model_moat"
+      ],
+      "serves_commitments": [
+        4,
+        6
+      ],
+      "build_state": "absent",
+      "alignment": "not_started",
+      "percent_done": 5,
+      "gaps": [
+        "Engine scrapped at 8dd0a33, never rebuilt; only i_model_id plumbing + DB tables (0002/0003/0007) survive"
       ]
     }
   ],
@@ -268,12 +394,33 @@
     {
       "id": "state-ledger-core",
       "title": "Build the State Ledger anti-drift core (this plan)",
-      "status": "in_progress",
+      "status": "done",
       "owns_paths": [
         "apps/inference/state_ledger/",
         "docs/state/"
       ],
       "touches_commitments": [],
+      "github_issue": null
+    },
+    {
+      "id": "embodiment-wave-1",
+      "title": "NetworkTransport adoption + learning-loop writers + calibration-into-arc + meta-arbiter/observers",
+      "status": "done",
+      "owns_paths": [
+        "apps/inference/runtime/",
+        "apps/pi/",
+        "apps/inference/prediction/prediction_log.py",
+        "apps/inference/decision/outcome_log.py",
+        "apps/inference/fusion/meta_arbiter.py",
+        "apps/inference/fusion/observers/"
+      ],
+      "touches_commitments": [
+        9,
+        13,
+        14,
+        15,
+        16
+      ],
       "github_issue": null
     },
     {
@@ -292,5 +439,5 @@
       "github_issue": null
     }
   ],
-  "expected_test_count": 581
+  "expected_test_count": 653
 }
