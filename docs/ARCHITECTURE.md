@@ -207,6 +207,22 @@ LeWM specifically is chosen as the v1 target because it solves the collapse prob
 
 **Lineage.** Added 2026-05-24 after independent research surfaced LeWM (le-wm.github.io) as a practical, single-GPU, end-to-end JEPA recipe that resolves the historical collapse problem with a single regularizer. Before #16, commitment #15 specified the destination (modeled influence) without committing to architectural shape; v1 implementations would have defaulted to per-axis regression with hand-tuned action-conditioning, which doesn't compose into the world-model substrate the destination requires. #16 locks in latent-space prediction as the architectural shape from day one, so v1 placeholder implementations evolve naturally toward the JEPA destination rather than being thrown away. The decision converges with #6 and #11 — Daybook independently arrived at JEPA-shaped commitments because *any* always-on empath substrate that processes continuous biometric signal converges on "predict in latent space, not signal space."
 
+### 17. Labels are provenance-scoped priors, not truth by default
+
+**Rule.** Every label-like datum carries provenance. The system must distinguish ground truth, self-report, observed outcome, heuristic pseudo-label, literature prior, demographic prior, LLM literature bootstrap, and future clinician/expert label. These sources may all help training, calibration, or cold-start behavior, but they are not epistemically equal and must not be mixed as if they were the same kind of truth.
+
+**Why.** Daybook needs labels before it has months of personal data, especially for a new user. Literature-derived findings and LLM-extracted research summaries can provide a useful starting map: blink-rate ranges associated with attentional state, HRV-arousal relationships, EEG bandpower patterns, prosody-affect correlations, sleep-stage feature distributions, and so on. Demographic baselines can refine that starting map when the user explicitly provides or consents to those attributes. But none of that says what this specific person is experiencing in this specific moment. Treating priors as truth would make the system confidently wrong; treating them as provenance-scoped priors lets the system be useful on day one while still learning the person.
+
+**Cold-start policy.** A new user starts with a blend of: population priors from literature and validation cohorts, optional demographic priors, device/session calibration, and user-provided onboarding facts. As personal evidence accumulates — self-reports, observed outcomes, Apple Health history, repeated sensor patterns, and Regis-action outcomes — each axis shifts from population-weighted to person-weighted. The mixing weight is per-axis and is itself part of the model state.
+
+**LLM/literature extraction.** LLMs may be used to extract candidate label rules from papers, datasets, and validated domain references. Those outputs land as `LLM_literature_bootstrap` priors or pseudo-label generators, not as final labels. Each extracted rule must retain citation/provenance, target axis, applicable population, confidence, and known limits. Promotion from pseudo-label rule to training signal requires validation against instrumented, self-reported, or outcome-based evidence.
+
+**Demographic baselines.** Demographics are allowed only as opt-in, provenance-marked priors or uncertainty modifiers. They cannot hard-classify a user's internal state, cannot override personal data, and must be auditable because they carry bias and fairness risk. The architecture's default direction is: demographics help initialize uncertainty; personal signal replaces them.
+
+**Training implication.** L3 fusion and L4 prediction training weight labels by provenance and confidence. Instrumented ground truth and explicit self-report are high-value calibration sources; observed behavioral outcomes train action selection and counterfactual branches; literature/LLM/demographic labels provide cold-start priors and weak supervision. The label record must preserve `axis`, `value`, `confidence`, `source`, `provenance`, `consent_scope`, and `created_at` so downstream models can decide how much to trust it.
+
+**Lineage.** Added 2026-05-30 after the labeling/cold-start design discussion: the user proposed LLM-extracted literature labels as a baseline, with demographic baselines once enough data exists. The commitment locks in the safe version of that idea: use them early, but keep their provenance visible and let personal evidence supersede them.
+
 ### Commitment review process
 
 Commitments are inviolable rules new code must honor, but they are not immutable. They may be **split** (as #13 → #13 + #15 in v0.8), **refined** (clarified scope, sharper rule), or **superseded** (replaced by a different formulation) when:
@@ -377,8 +393,10 @@ This is what makes v2 *shippable* rather than aspirational. Without hierarchical
 | `arousal_inferred` | smoothed-recent | HRV literature (population) + Apple Health 10y baseline (personal) |
 | `sleep_stage` | smoothed-recent (categorical) | PSG validation studies (population) + HK sleep labels (personal) |
 | `valence_inferred` | smoothed-recent | prosody-emotion literature (population) + accumulated paired data (personal) |
-| `attention_inferred` | smoothed-recent | BCI alpha-band norms (population) + per-session calibration (personal) |
+| `attention_inferred` | smoothed-recent | blink-rate / EOG / EEG attention literature (population) + per-session calibration (personal) |
 | `meta_context` | smoothed-recent (categorical, hysteresis) | sleep + activity feature distributions from prior cohorts (population) + user's own history (personal) |
+
+**Source-set fusion evaluation.** EEG+EOG is not architecturally special — it is one source set among many. The same evaluation pattern applies to `EEG`, `EOG`, `ECG_watch`, `mic`, `EEG+EOG`, `EOG+mic`, `EEG+ECG_watch`, `EEG+EOG+mic`, and any future modality combination. Live L3 fusers should not brute-force every permutation on every tick. Instead, an offline fusion-ablation harness enumerates candidate source sets against provenance-scoped labels and proxy outcomes, measures whether the combination improves calibration or prediction beyond its individual components, and only promotes the useful combinations into live fusers. The desktop PC/GPU is the right place for this search; the Pi/Mac hot path reads the promoted rules.
 
 **Swappable combinator slot.** The architectural shape (per-axis storage, snapshot policy, combinator interface) is invariant across v1 and v2. Migrating an axis from deterministic to Bayesian is a swap of the combinator implementation behind the existing interface — no external contract change for consumers.
 
@@ -582,6 +600,8 @@ Predictor training optimizes for calibration alongside (or constrained by) accur
 - Axes with **estimator-vs-estimator** comparison (calibration is aspirational): inferred axes like `arousal_inferred`, `valence_inferred`. The "actual state at horizon time" comes from L3's fuser, which is itself an estimator. Calibration measured this way tells us whether the predictor matches the fuser — not whether either matches reality.
 
 Per-axis predictor entries declare their ground-truth source and a calibration-meaningfulness flag. Calibration metrics are honest about which axes they can validate genuinely and which are reporting predictor-fuser agreement. Self-report integration (mood reports, dream recalls, explicit declarations) is one of the routes for upgrading aspirational calibration to meaningful calibration over time.
+
+**Label provenance.** L4 training reads labels through the provenance taxonomy in commitment #17. In practice, this means a row derived from Apple Health sleep stages, an explicit "I feel focused" self-report, an ignored Regis interjection, a blink-rate literature prior, and an LLM-extracted attention heuristic are all different training objects. They may touch the same target axis, but they carry different weights, confidence, and calibration meaning. The prediction layer is allowed to learn from weak labels, but it must preserve the difference between "this was observed," "this was declared," "this was an outcome," and "this was inferred from published priors."
 
 **Calibration state surfaced per axis.** Each predictor reports a `calibration_state` per axis: `cold_start` (no data, using fallback), `calibrating` (data accumulating, predictor learning), `calibrated` (sufficient data, predictor stable within target calibration tolerance). Downstream consumers — especially L6 / UI — read this state to surface honest framing ("Regis is still learning your baseline for [X]") rather than treating predictions as fully reliable. The state is part of the prediction's provenance; it is a system-wide epistemic property, not a product polish concern.
 
@@ -900,10 +920,22 @@ Expected structure:
 
 ## 10. Open questions + references
 
-*Status: TODO.* The honest list of what we don't yet know — design decisions deferred, labeling strategies undecided, evaluation harnesses unbuilt. Plus links to subsystem deep dives and per-feature design docs as they're written:
+*Status: active design log.* The honest list of what we don't yet know — design decisions deferred, label-provenance mechanics not yet implemented, and evaluation harnesses unbuilt. Plus links to subsystem deep dives and per-feature design docs as they're written.
+
+Current open questions:
+
+- **Label store shape.** Do labels live in a new `label_observations` table, as typed rows in existing event tables, or both? The architecture requires provenance, confidence, consent scope, target axis, and source lineage either way.
+- **Literature extraction workflow.** Which papers/datasets are trusted sources, how are LLM-extracted rules reviewed, and what threshold promotes a rule from weak prior to live pseudo-label generator?
+- **Demographic priors.** Which demographic attributes, if any, are worth collecting, what consent language is required, and how do we prevent demographics from hard-coding biased assumptions?
+- **Self-report capture.** What is the lowest-friction way for a user to declare state without turning the product into a survey app?
+- **Fusion-ablation harness.** What source-set search space is practical for the desktop PC, and what metrics decide whether `EEG+EOG+mic` beats `EEG+EOG` or `EOG` alone for a target axis?
+
+References and planned subsystem docs:
 
 - `docs/Architecture/FUSION.md` (planned)
 - `docs/Architecture/SENSING.md` (planned)
+- `docs/Architecture/LABELING.md` (planned)
+- `docs/Architecture/PREDICTION.md` (planned)
 - `docs/design/<feature>.md` (per-feature, as-needed)
 
 ---
@@ -922,32 +954,34 @@ This index is the **bridge between ARCHITECTURE.md (ideal) and STATUS.md (realit
 
 ### Layer-implementation gaps
 
-- **L2 not centralized:** signal processing scattered across modality-specific modules (mic listener for prosody, `embeddings/` for text, `classifier/` for biometrics). Ideal: `apps/inference/features/` as the single home with per-modality submodules.
-- **`feature_engine.py` is a legacy L2 stab:** `apps/inference/feature_engine.py` (+ `main.py` import + `tests/test_feature_engine.py`) implements real-time biometric/audio feature extraction from the prior FastAPI-inference-server era. Not wired into the current pipeline (chat/wisp/recall/daybook.py don't import it). Decision pending: fold its logic into the eventual `apps/inference/features/` reorganization, or retire it. Until then, do not wire new code against it.
-- **Body-bridge L1→L3 shortcut:** body-bridge reads raw HR/HRV from L1 and applies heuristics directly. Ideal: formal L2 features (heartpy / neurokit2) producing FeatureSnapshot → L3 fusion.
-- **Fusion engine doesn't exist as a separate concept:** today the substrate reads scattered data + body-bridge is the only synthesizer. Ideal: dedicated L3 fusion engine that combines all modality features into a unified `BeliefState`.
-- **L4 (Prediction) has no components:** zero predictive heads exist; no predictor registry; no `prediction_log` table. Ideal (per commitment #16): a shared JEPA world model (encoder + action-conditioned predictor) with per-axis projection heads (arousal at t+30min, REM probability, sleep onset, etc.), plus stand-alone per-axis predictors for axes that don't share the world model (sleep classifier, event-shaped binary axes). v1 scaffolds land as per-axis stand-alones with the world-model interface already in place; the shared world model lands when paired-data volume permits.
-- **Meta-context biases not implemented at L2–L4:** commitment #14 declares cross-layer biasing; today only L5/L6 (persona — Witness vs Companion) honors this. Ideal: every layer applies meta-context bias.
+- **End-to-end hardware relay not proven:** sensor adapters and transport primitives exist, but the real prototype loop — external device/Pi producer → Mac inference process → BeliefState → Regis behavior — has not been proven with physical hardware.
+- **L2 feature pipeline only partially centralized:** `apps/inference/features/` now holds biometric, audio-social, BCI, and vision-scene extractors. Remaining work is wiring every live capture/import path through the same `FeatureSnapshot` contract instead of one-off shortcuts.
+- **L3 fusion scaffold exists, full fusion engine does not:** `apps/inference/fusion/` has `BeliefState`, loader/writer primitives, and live axis modules (`meta_context`, `sleep_stage`, `audio_social_context`, `cognitive_load`, `visual_context`, `arousal_inferred`, `affect_prosody`). Missing: one declarative fuser registry with source-set weights, provenance-aware priors, Bayesian v2 combiners, and offline-ablation promotion.
+- **L4 scaffold exists, world model does not:** prediction interface/registry/stubs and the REM classifier wrapper exist; `prediction_log` schema exists. Missing: broad per-axis predictors, prediction-error training passes, calibrated action-conditioning, and JEPA/SIGReg world-model machinery.
+- **Meta-context bias is partial:** `meta_context` is an L3 axis and some prediction/policy paths gate on it. The ideal per-context extraction/fusion/prediction behavior is not yet applied consistently across all L2-L4 modules.
 
 ### Modality coverage gaps
 
-- **Vision ingestion:** ⚪ unimplemented (ESP32-CAM available).
-- **BCI ingestion + features:** ⚪ unimplemented (BioAmp EXG Pill incoming).
+- **Vision ingestion:** code lane exists (`sensors/vision_adapter.py`, `vision/perception.py`, `features/vision_scene.py`, `fusion/axes/visual_context.py`), but continuous real-camera runtime and ESP32-CAM integration are not proven.
+- **BCI ingestion + features:** code lane exists (`sensors/eeg_adapter.py`, `bci/bandpower.py`, `features/bci.py`, `fusion/axes/cognitive_load.py`), but the EXG Pill is not wired into the live prototype and no EOG blink / EMG clench calibration dataset exists yet.
+- **Apple Watch live path:** Apple Health import/replay and watch adapter contracts exist; live low-latency Watch → Daybook streaming remains unproven.
 - **Deliberate gestures:** ⚪ schema in `user_actions`, no ingestion code yet.
-- **Involuntary gestures (EMG/EOG):** ⚪ unimplemented — needs BCI hardware or vision.
+- **Involuntary gestures (EOG/EMG):** architecture and BCI feature lane can absorb them, but blink-rate / muscle-signal extraction is not implemented against real hardware.
 
 ### Learning gaps
 
-- **Online learning loops:** only the Thompson bandit learns from data; no other components improve over time. Ideal: every predictor + decider learns from outcomes.
-- **No labeled training data pipeline:** future trained models require labels; no auto-labeling infrastructure exists. Ideal: multi-modal-LLM auto-labeling pass + self-report capture.
-- **Treatment-effect estimation (commitment #15):** bandit produces paired (action, outcome) data but counterfactual reasoning ("if Regis does X, predicted t+1 = ?") isn't implemented yet. Ideal: causal model consumed by L4's `predict(axis, horizon, action)` interface.
+- **General label provenance pipeline:** not built. Existing labels are narrow (Apple Health sleep stages, REM classifier training labels, schema fields for action outcomes). There is no unified label store, self-report axis, literature/LLM extraction workflow, demographic-prior store, or provenance-weighted training loader yet.
+- **Online learning loops:** not broadly active. The repo has schemas and seams for outcome-driven learning, but predictors and policies do not yet improve continuously from labeled outcomes. Ideal: every predictor + decider learns from provenance-scoped labels and observed outcomes.
+- **Fusion-ablation harness:** not built. We do not yet enumerate source sets (`EEG`, `EOG`, `EEG+EOG`, `EOG+mic`, etc.) offline and promote only the combinations that improve calibration.
+- **Cold-start onboarding / per-user baselines:** not built. New users currently rely on generic defaults plus whatever imported device history exists; the architecture requires a formal cold-start profile that blends literature priors, optional demographics, device calibration, and early self-report.
+- **Treatment-effect estimation (commitment #15):** the schemas and seams can accumulate paired (action, outcome) data, but counterfactual reasoning ("if Regis does X, predicted t+1 = ?") isn't implemented yet. Ideal: causal model consumed by L4's `predict(axis, horizon, action)` interface.
 - **JEPA world model (commitment #16):** no encoder/predictor/SIGReg machinery exists. v1 predictors land as per-axis regression scaffolds with the L4 interface shaped for the world-model destination (every prediction logs provenance distinguishing placeholder vs calibrated action-conditioning). Ideal: shared encoder + action-conditioned predictor + projection heads, trained end-to-end via the LeWM recipe on accumulated (state, action, next-state) triples. Estimated 4–8 weeks of real interaction data before the world-model implementation supersedes per-axis scaffolding.
-- **CEM-style L5 planning (commitment #16, L5 implication):** L5 today selects actions via the Thompson bandit (`learned_decider.py`) or fixed-weight scoring. The world-model planner — sample candidate actions, query L4 for predicted next-state embedding per candidate, pick the closest to a goal embedding — depends on a calibrated world model and is unimplemented.
+- **CEM-style L5 planning (commitment #16, L5 implication):** L5 today selects actions via fixed-weight/default policies and explicit warrants. The world-model planner — sample candidate actions, query L4 for predicted next-state embedding per candidate, pick the closest to a goal embedding — depends on a calibrated world model and is unimplemented.
 
 ### Documentation gaps
 
-- **Smoke tests for trait_decay + cluster_dormancy:** convention from CLAUDE.md says "smoke test before declaring done" — these nightly jobs ship without them.
-- **Subsystem deep-dive docs** (`docs/Architecture/FUSION.md`, etc.): planned but unwritten.
+- **Architecture body current-state pass:** the gap index now reflects the rebuilt L1-L6 scaffolds, but some descriptive sections above still need a full post-rebuild cleanup pass.
+- **Subsystem deep-dive docs** (`docs/Architecture/FUSION.md`, `docs/Architecture/LABELING.md`, `docs/Architecture/PREDICTION.md`, etc.): planned but unwritten.
 
 
 ## How this document gets written

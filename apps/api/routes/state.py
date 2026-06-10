@@ -25,6 +25,8 @@ from api.schemas import (
     BodySeriesPoint,
     BodySeriesResponse,
     BodySummary,
+    DeclareRequest,
+    DeclareResponse,
     SensorIngestResponse,
     SensorReadingsBatch,
 )
@@ -307,6 +309,28 @@ def body_series(
     ]
 
     return BodySeriesResponse(days=days, points=points)
+
+
+@router.post("/declare", response_model=DeclareResponse)
+def declare_state_route(
+    body: DeclareRequest,
+    user_id: str = Depends(current_user_id),
+) -> DeclareResponse:
+    """Record an explicit state declaration as a self-reported belief + ledger labels (#17)."""
+    from state.declare import declare_state
+
+    try:
+        result = declare_state(body.text, user_id=user_id, offline=body.offline)
+    except Exception as exc:  # noqa: BLE001 — degrade, don't 500 the client.
+        raise HTTPException(status_code=502, detail=f"declaration pipeline failed: {exc}")
+    return DeclareResponse(
+        axis=result["axis"],
+        claims=result["claims"],
+        raw_text=result["raw_text"],
+        classifier=result["classifier"],
+        labels=result["labels"],
+        persisted=result["persisted"],
+    )
 
 
 # ---------------------------------------------------------------------------

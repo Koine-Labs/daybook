@@ -1,0 +1,12 @@
+Source: representative EEG cognitive-workload literature (theta/beta ratio).
+(curated excerpt — local, no network)
+
+Frontal-midline theta power increases with working-memory and sustained-attention
+demand, while beta-band changes yield a rising frontal theta/beta ratio under
+increasing cognitive load. The measure is electrode-placement sensitive and easily
+contaminated by ocular and muscle artifacts. Critically, the theta/beta ratio also
+rises with drowsiness, so an elevated ratio must be disambiguated from low-arousal
+states before being read as cognitive load.
+
+[Human-curated passage. Derived priors are weak and gated to a waking, non-drowsy
+sub-context; they are validated against ledger evidence before promotion.]

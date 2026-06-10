@@ -21,6 +21,9 @@ dependencies = [
     # Postgres + env loading (added 2026-05-17 for Daybook v0)
     "psycopg[binary,pool]>=3.2",
     "python-dotenv>=1.0",
+    # state_ledger imports yaml directly (present transitively via
+    # uvicorn[standard]; declared explicit).
+    "PyYAML>=6.0",
 ]
 
 [project.optional-dependencies]

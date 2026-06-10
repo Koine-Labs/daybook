@@ -14,4 +14,5 @@ CONSENT_SCOPES: dict[str, str] = {
     "voice": "mic_continuous_v1",  # Week 3 continuous-mic opt-in
     "eeg": "eeg_continuous_v1",    # BioAmp EXG Pill onboarding — BCI continuous neural stream
     "vision": "camera_continuous_v1",  # continuous semantic vision lane — scene-only, raw pixels discarded (#11)
+    "self_report": "self_report_v1",   # explicit state declaration (Intent.EXPLICIT, #10/#17)
 }

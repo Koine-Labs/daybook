@@ -268,3 +268,28 @@ class BodySeriesPoint(BaseModel):
 class BodySeriesResponse(BaseModel):
     days: int
     points: list[BodySeriesPoint]
+
+
+# ---------------------------------------------------------------------------
+# State declaration (#17) — explicit self-report -> state_declared belief
+# ---------------------------------------------------------------------------
+
+
+class DeclareRequest(BaseModel):
+    text: str = Field(min_length=1)
+    offline: bool = False
+
+
+class ClaimOut(BaseModel):
+    axis: str
+    value: float | str
+    confidence: float
+
+
+class DeclareResponse(BaseModel):
+    axis: str | None
+    claims: list[ClaimOut] = []
+    raw_text: str
+    classifier: str | None = None
+    labels: int
+    persisted: bool

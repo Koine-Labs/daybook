@@ -37,11 +37,15 @@ jobs:
       # (Policy #1 pause-on-other-voice) is load-bearing, and a stale bytecode
       # cache can make a green suite mask a real regression — so CI runs from
       # source only.
-      - name: Run core + layer suite without DATABASE_URL
+      # No directory args: the run is full collection, exactly what the State
+      # Ledger pins via expected_test_count. A curated dir list silently dropped
+      # ~272 tests (ablation/arbitration/labels/literature_priors/audio_context/
+      # vision/state/state_ledger) from CI while the ledger still counted them.
+      - name: Run full DB-free suite (everything the ledger pins)
         working-directory: apps/inference
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python -m pytest core sensors features fusion prediction decision output bci -q
+        run: python -m pytest -q
 
   typecheck:
     name: TypeScript typecheck

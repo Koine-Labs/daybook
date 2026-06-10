@@ -1,0 +1,12 @@
+Source: Coan JA, Allen JJB. Frontal EEG asymmetry as a moderator and mediator of
+emotion. Biological Psychology, 2004;67(1-2):7-49. (curated excerpt — local)
+
+Greater relative right frontal cortical activity (operationalized as right>left frontal
+alpha asymmetry) has been linked to withdrawal-related and negative affect within the
+approach/withdrawal model. However, the literature is contested: test-retest
+reliability is poor, results are reference-montage dependent, and trait-versus-state
+contributions are difficult to separate. This relationship should be treated as a very
+weak prior and never acted on in isolation.
+
+[Human-curated passage. The derived prior is intentionally assigned low confidence with
+an explicit limitation, per the registry's honesty discipline.]

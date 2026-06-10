@@ -1,0 +1,39 @@
+[
+  {
+    "citation": "Shaffer F, Ginsberg JP. An Overview of Heart Rate Variability Metrics and Norms. Front Public Health. 2017;5:258.",
+    "doi": "10.3389/fpubh.2017.00258",
+    "url": "https://doi.org/10.3389/fpubh.2017.00258",
+    "corpus_path": "seed/corpus/hrv_overview_shaffer_2017.txt",
+    "source_kind": "review",
+    "population_note": "healthy adults; HRV norms across age bands"
+  },
+  {
+    "citation": "Kim H-G, et al. Stress and Heart Rate Variability: A Meta-Analysis. Psychiatry Investig. 2018;15(3):235-245.",
+    "doi": "10.30773/pi.2017.08.17",
+    "url": "https://doi.org/10.30773/pi.2017.08.17",
+    "corpus_path": "seed/corpus/hrv_stress_kim_2018.txt",
+    "source_kind": "review",
+    "population_note": "adults; acute and chronic stress paradigms"
+  },
+  {
+    "citation": "Lin CT, et al. EEG-Based Assessment of Cognitive Workload: Theta/Beta Ratio. (representative cognitive-load EEG literature).",
+    "url": "https://doi.org/10.1016/j.ijpsycho.2018.07.007",
+    "corpus_path": "seed/corpus/theta_beta_cognitive_load.txt",
+    "source_kind": "paper",
+    "population_note": "healthy adults; frontal-midline EEG during workload tasks"
+  },
+  {
+    "citation": "Coan JA, Allen JJB. Frontal EEG asymmetry as a moderator and mediator of emotion. Biol Psychol. 2004;67(1-2):7-49.",
+    "doi": "10.1016/j.biopsycho.2004.03.002",
+    "url": "https://doi.org/10.1016/j.biopsycho.2004.03.002",
+    "corpus_path": "seed/corpus/frontal_alpha_asymmetry_coan_2004.txt",
+    "source_kind": "review",
+    "population_note": "adults; contested approach/withdrawal model"
+  },
+  {
+    "citation": "Juslin PN, Scherer KR. Vocal expression of affect. In: The New Handbook of Methods in Nonverbal Behavior Research. 2005.",
+    "corpus_path": "seed/corpus/vocal_affect_juslin_2005.txt",
+    "source_kind": "textbook",
+    "population_note": "general; cross-cultural vocal-affect acoustics"
+  }
+]

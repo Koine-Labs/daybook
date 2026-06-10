@@ -1,0 +1,25 @@
+workstreams:
+  - id: doc-drift-fix
+    title: "Fix STATUS.md / CLAUDE.md drift (601->569, remove stale v3 claims)"
+    status: done
+    owns_paths: ["docs/STATUS.md", "CLAUDE.md"]
+    touches_commitments: []
+    branch: null
+    worktree: null
+    github_issue: null
+  - id: state-ledger-core
+    title: "Build the State Ledger anti-drift core (this plan)"
+    status: in_progress
+    owns_paths: ["apps/inference/state_ledger/", "docs/state/"]
+    touches_commitments: []
+    branch: feat/state-ledger-core
+    worktree: null
+    github_issue: null
+  - id: first-real-signal
+    title: "One real packet through the live arc (mic-first)"
+    status: planned
+    owns_paths: ["apps/inference/runtime/waking_arc.py", "apps/voice/"]
+    touches_commitments: [3, 11, 14]
+    branch: null
+    worktree: null
+    github_issue: null

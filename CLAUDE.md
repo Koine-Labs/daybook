@@ -4,12 +4,15 @@ This file orients Claude Code sessions working in this repo. Read this first, th
 
 > **REBUILD IN PROGRESS (started 2026-05-27).** The v0 implementation has been substantially scrapped (commits `6aae6f5` + `8dd0a33`) to make room for the architecture-aligned rebuild described in `docs/ARCHITECTURE.md` and sequenced in `docs/REBUILD_PLAN.md`. Sections below — especially the repo layout and quick-start commands — describe pre-scrap structure and are progressively out of date. **For what actually runs tonight, read `docs/STATUS.md` first.** Phase 0 safety net: tag `v0-pre-rebuild` at `22f6ffb`, Neon branch `pre-rebuild-snapshot`.
 >
-> **2026-05-30 audit:** the L1-L6 code spine has now landed and is locally green
-> (`apps/inference` pytest: 307 passed; `pnpm typecheck`: green). The stale part
-> is no longer the core architecture but the old product/runtime surfaces:
-> `apps/pi/daemon.py` still imports deleted v0 modules, and the deleted
-> `apps/chat`, `apps/ios`, `apps/inference/realtime.py`, and
-> `apps/inference/cue_decision.py` paths must not be treated as current.
+> **2026-06-01 audit:** the L1-L6 code spine is real and locally green — full
+> DB-free/LLM-free suite **569 passed / 0 skipped**, `pnpm typecheck` green. But it
+> has **never run against a real sensor** (EXG Pill / camera / mic / Pi relay are all
+> synthetic or in-process), and the most differentiating layers (L4 JEPA predictor,
+> L5 learned decider) are explicit stubs. **The "Repository layout" and "Quick start"
+> sections below are PRE-REBUILD and largely WRONG:** `apps/ios` and `apps/chat` were
+> deleted; `apps/pi/daemon.py` crashes on import (deleted `realtime` / `cue_decision`
+> modules); `python -m chat.cli` no longer exists. Trust `docs/STATUS.md` (top, dated
+> entries) for what actually runs, not the layout/commands here.
 
 ## What this project is
 

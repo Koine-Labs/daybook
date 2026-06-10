@@ -655,3 +655,232 @@ export interface InterjectDecision {
   userOutcome: InterjectUserOutcome | null;
   createdAt: ISODateTime;
 }
+
+// =============================================================================
+// LABEL LEDGER — provenance-scoped calibration labels (commitment #17)
+// =============================================================================
+
+/**
+ * The eight #17 label-provenance tiers. Mirrors the Python `LabelSource` enum
+ * (apps/inference/labels/provenance.py). An epistemic ladder, not an order here.
+ */
+export type LabelSource =
+  | "ground_truth"
+  | "self_report"
+  | "observed_outcome"
+  | "heuristic"
+  | "literature_prior"
+  | "demographic_prior"
+  | "llm_literature_bootstrap"
+  | "clinician";
+
+/**
+ * One provenance-bearing calibration label keyed to an axis. Mirrors migration
+ * 0011's `label_observations` table (the DB source of truth).
+ */
+export interface LabelObservation {
+  id: UUID;
+  userId: UserID;
+  /** Target axis the label speaks to, e.g. 'arousal_inferred', 'fatigue'. */
+  axis: string;
+  /** Scalar / category / distribution claimed for the axis. */
+  value: Record<string, unknown> | number | string;
+  /** [0,1] strength of THIS label. */
+  confidence: number;
+  source: LabelSource;
+  /** Source-specific lineage (citation, model, declaration_text, classifier, ...). */
+  provenance: Record<string, unknown>;
+  consentScope: string;
+  iModelId?: IModelID | null;
+  /** Commitment #14 (waking/sleep) when known. */
+  metaContext?: string | null;
+  /** When the labeled moment occurred. */
+  observedAt: ISODateTime;
+  /** When the row was written. */
+  createdAt: ISODateTime;
+}
+
+// ---------------------------------------------------------------------------
+// Commitment #17 back-half (migrations 0012/0013/0014). DB is the source of
+// truth; these mirror the new tables. See docs/superpowers/specs/2026-05-30-*.
+// ---------------------------------------------------------------------------
+
+// #3 Literature-prior registry (migration 0012).
+export type LiteraturePriorStatus = 'candidate' | 'reviewed' | 'live' | 'retired';
+export type LiteraturePriorOrigin = 'llm_literature_bootstrap' | 'hand_entered' | 'seed';
+
+export interface LiteratureSource {
+  id: string;
+  citation: string;
+  doi: string | null;
+  url: string | null;
+  corpus_path: string | null;
+  source_kind: string; // 'paper' | 'dataset' | 'textbook' | 'review'
+  population_note: string | null;
+  added_by: string;
+  created_at: string;
+}
+
+export interface LiteraturePrior {
+  id: string;
+  target_axis: string;
+  /** feature-condition -> claimed-value rule (see spec §3.1). */
+  rule: Record<string, unknown>;
+  claim_summary: string;
+  population: string;
+  applicability: Record<string, unknown>;
+  confidence: number; // [0,1]
+  known_limitations: string;
+  source_id: string;
+  origin: LiteraturePriorOrigin;
+  extracted_excerpt: string | null;
+  status: LiteraturePriorStatus;
+  superseded_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LiteraturePriorPromotion {
+  id: string;
+  prior_id: string;
+  from_status: LiteraturePriorStatus;
+  to_status: LiteraturePriorStatus;
+  evidence_user_id: string | null;
+  evidence_axis: string;
+  evidence_label_count: number;
+  evidence_sources: string[];
+  validation_metric: string;
+  validation_score: number | null;
+  passed: boolean;
+  decided_by: string;
+  rationale: string | null;
+  created_at: string;
+}
+
+// #4 Cold-start arbitration (migration 0013).
+export type CalibrationState = 'cold_start' | 'calibrating' | 'calibrated';
+
+export interface ColdStartProfile {
+  id: string;
+  user_id: string;
+  axis: string;
+  i_model_id: string | null;
+  population_value: number;
+  population_variance: number;
+  literature_source: string | null;
+  e_half: number;
+  e_cs_enter: number;
+  e_cs_exit: number;
+  e_cal_enter: number;
+  e_cal_exit: number;
+  tier_trust: Record<string, number> | null;
+  tier_halflife_s: Record<string, number> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AxisCalibration {
+  id: string;
+  user_id: string;
+  axis: string;
+  i_model_id: string | null;
+  w_personal: number; // [0,1]; 0 = fully population
+  calibration_state: CalibrationState;
+  e_personal: number;
+  evidence_by_tier: Record<string, unknown>;
+  demographics_applied: boolean;
+  computed_at: string;
+  updated_at: string;
+}
+
+export interface AxisCalibrationHistory {
+  id: string;
+  user_id: string;
+  axis: string;
+  i_model_id: string | null;
+  w_personal: number;
+  calibration_state: CalibrationState;
+  prev_state: CalibrationState | null;
+  e_personal: number;
+  evidence_by_tier: Record<string, unknown>;
+  reason: string | null;
+  recorded_at: string;
+}
+
+export interface DemographicPrior {
+  id: string;
+  axis: string;
+  cohort_key: string;
+  cohort_value: string;
+  value_shift: number;
+  variance_scale: number;
+  max_abs_shift: number;
+  source: string;
+  bias_notes: string | null;
+  enabled: boolean; // default OFF
+  created_at: string;
+}
+
+export interface UserDemographics {
+  id: string;
+  user_id: string;
+  cohort_key: string;
+  cohort_value: string;
+  consented: boolean;
+  consented_at: string | null;
+  created_at: string;
+}
+
+// #5 Offline fusion-ablation harness (migration 0014).
+export type PromotedSourceSetStatus = 'candidate' | 'promoted' | 'demoted';
+
+export interface PromotedSourceSet {
+  id: string;
+  user_id: string | null; // NULL = population default
+  axis: string;
+  meta_context: string | null;
+  source_set: string[]; // canonical sorted, e.g. ['eeg','eog','mic']
+  weights: Record<string, number>;
+  status: PromotedSourceSetStatus;
+  metric_name: string;
+  metric_value: number | null;
+  component_best: number | null;
+  margin: number | null;
+  n_eval_pairs: number;
+  win_streak: number;
+  promoted_run_id: string | null;
+  i_model_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AblationRun {
+  id: string;
+  user_id: string | null;
+  started_at: string;
+  finished_at: string | null;
+  backend: string; // 'mac_scaffold' | 'desktop_gpu'
+  axes_evaluated: string[];
+  config: Record<string, unknown>;
+  manifest: Record<string, unknown>;
+  git_sha: string | null;
+  status: 'running' | 'complete' | 'failed';
+  created_at: string;
+}
+
+export interface AblationResult {
+  id: string;
+  run_id: string;
+  user_id: string | null;
+  axis: string;
+  meta_context: string | null;
+  source_set: string[];
+  metrics: Record<string, number>;
+  n_train_pairs: number;
+  n_eval_pairs: number;
+  grader: string;
+  label_sources: string[];
+  beat_components: boolean | null;
+  dropped_reason: string | null; // null = graded
+  created_at: string;
+}

@@ -19,6 +19,10 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 
+# Agent tooling (session-local, never committed)
+.claude/
+AGENTS.md
+
 # Python
 __pycache__/
 *.pyc

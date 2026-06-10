@@ -1,0 +1,116 @@
+[
+  {
+    "target_axis": "arousal_inferred",
+    "source_citation": "Shaffer F, Ginsberg JP. An Overview of Heart Rate Variability Metrics and Norms. Front Public Health. 2017;5:258.",
+    "claim_summary": "RMSSD (vagally-mediated HRV) decrease indicates a shift toward higher autonomic arousal.",
+    "population": "healthy adults",
+    "confidence": 0.4,
+    "known_limitations": "Confounded by respiration rate, physical motion, posture, and caffeine; RMSSD is highly individual so absolute thresholds do not transfer between people.",
+    "extracted_excerpt": "RMSSD reflects vagally mediated changes in HRV; reductions accompany sympathetic activation and reduced parasympathetic tone.",
+    "rule": {
+      "feature": "hrv_rmssd",
+      "modality": "biometric",
+      "operator": "decrease",
+      "threshold": null,
+      "window_s": 60,
+      "claim": {"axis": "arousal_inferred", "direction": "increase", "value": null, "magnitude": "weak"},
+      "context_gate": {"meta_context": "waking"}
+    },
+    "applicability": {"age_min": 18, "age_max": 75, "meta_context": "waking"}
+  },
+  {
+    "target_axis": "arousal_inferred",
+    "source_citation": "Kim H-G, et al. Stress and Heart Rate Variability: A Meta-Analysis. Psychiatry Investig. 2018;15(3):235-245.",
+    "claim_summary": "Reduced high-frequency HRV power reflects sympathetic dominance consistent with stress/arousal.",
+    "population": "adults",
+    "confidence": 0.35,
+    "known_limitations": "HF-HRV is strongly modulated by respiration rate and posture; short-window estimates are noisy; effect sizes vary widely across stress paradigms.",
+    "extracted_excerpt": "Across studies, acute stress was associated with decreased HF-HRV power, indicating reduced parasympathetic activity.",
+    "rule": {
+      "feature": "hf_hrv_power",
+      "modality": "biometric",
+      "operator": "decrease",
+      "threshold": null,
+      "window_s": 120,
+      "claim": {"axis": "arousal_inferred", "direction": "increase", "value": null, "magnitude": "weak"},
+      "context_gate": {"meta_context": "waking"}
+    },
+    "applicability": {"age_min": 18, "meta_context": "waking"}
+  },
+  {
+    "target_axis": "arousal_inferred",
+    "source_citation": "Kim H-G, et al. Stress and Heart Rate Variability: A Meta-Analysis. Psychiatry Investig. 2018;15(3):235-245.",
+    "claim_summary": "Sustained elevated heart rate (outside exercise) indicates increased arousal.",
+    "population": "general",
+    "confidence": 0.3,
+    "known_limitations": "Strong exercise/physical-exertion confound; must be gated to a non-exercise sub-context. Also raised by caffeine, fever, dehydration, and medication.",
+    "extracted_excerpt": "Tonic heart-rate elevation co-occurs with sympathetic arousal when metabolic demand is controlled for.",
+    "rule": {
+      "feature": "hr_bpm",
+      "modality": "biometric",
+      "operator": "gt",
+      "threshold": 95.0,
+      "window_s": 120,
+      "claim": {"axis": "arousal_inferred", "direction": "increase", "value": null, "magnitude": "weak"},
+      "context_gate": {"meta_context": "waking", "sub_context": "non_exercise"}
+    },
+    "applicability": {"meta_context": "waking", "excludes": ["beta_blockers"]}
+  },
+  {
+    "target_axis": "cognitive_load",
+    "source_citation": "Lin CT, et al. EEG-Based Assessment of Cognitive Workload: Theta/Beta Ratio. (representative cognitive-load EEG literature).",
+    "claim_summary": "Elevated frontal-midline theta/beta ratio indicates higher cognitive load.",
+    "population": "healthy adults",
+    "confidence": 0.35,
+    "known_limitations": "Highly electrode-placement sensitive; contaminated by ocular/muscle artifacts; theta/beta also tracks drowsiness, so it must be disambiguated from low-arousal states.",
+    "extracted_excerpt": "Frontal-midline theta increases and beta changes yield a rising theta/beta ratio under increasing working-memory demand.",
+    "rule": {
+      "feature": "theta_beta_ratio",
+      "modality": "bci",
+      "operator": "ratio_gt",
+      "threshold": 1.5,
+      "window_s": 30,
+      "claim": {"axis": "cognitive_load", "direction": "increase", "value": null, "magnitude": "weak"},
+      "context_gate": {"meta_context": "waking"}
+    },
+    "applicability": {"age_min": 18, "age_max": 65, "meta_context": "waking"}
+  },
+  {
+    "target_axis": "affect_valence",
+    "source_citation": "Coan JA, Allen JJB. Frontal EEG asymmetry as a moderator and mediator of emotion. Biol Psychol. 2004;67(1-2):7-49.",
+    "claim_summary": "Relatively greater right-than-left frontal alpha (right>left) is associated with withdrawal/negative affect.",
+    "population": "adults",
+    "confidence": 0.2,
+    "known_limitations": "Contested literature with poor test-retest reliability; reference-montage dependent; trait vs state confound. Treat as a very weak prior; do not act on it alone.",
+    "extracted_excerpt": "Greater relative right frontal activity (right>left alpha asymmetry) has been linked to withdrawal-related negative affect, though findings are inconsistent.",
+    "rule": {
+      "feature": "frontal_alpha_asymmetry",
+      "modality": "bci",
+      "operator": "gt",
+      "threshold": 0.0,
+      "window_s": 60,
+      "claim": {"axis": "affect_valence", "direction": "decrease", "value": null, "magnitude": "weak"},
+      "context_gate": {"meta_context": "waking"}
+    },
+    "applicability": {"age_min": 18, "meta_context": "waking"}
+  },
+  {
+    "target_axis": "arousal_inferred",
+    "source_citation": "Juslin PN, Scherer KR. Vocal expression of affect. In: The New Handbook of Methods in Nonverbal Behavior Research. 2005.",
+    "claim_summary": "Faster speech rate and higher high-frequency vocal energy accompany increased arousal.",
+    "population": "general",
+    "confidence": 0.3,
+    "known_limitations": "Heavy language, dialect, and individual-baseline variation; microphone and distance dependent; speech rate also rises with task urgency independent of affect.",
+    "extracted_excerpt": "High-arousal affective states are reliably marked by increased speech rate and elevated high-frequency spectral energy.",
+    "rule": {
+      "feature": "speech_rate_wpm",
+      "modality": "audio",
+      "operator": "gt",
+      "threshold": 170.0,
+      "window_s": 30,
+      "claim": {"axis": "arousal_inferred", "direction": "increase", "value": null, "magnitude": "weak"},
+      "context_gate": {"meta_context": "waking"}
+    },
+    "applicability": {"meta_context": "waking"}
+  }
+]
