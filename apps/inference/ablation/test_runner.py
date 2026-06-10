@@ -25,8 +25,14 @@ def _make_pairs(n: int, combo_helps: bool):
     out = []
     for i in range(n):
         t = i / (n - 1)
-        eeg = t if not combo_helps else (t * 0.5)
-        eog = 0.5 if not combo_helps else (t * 0.5)
+        # combo_helps must give the pair a wide, BLAS-independent margin: each
+        # source carries half the truth plus an alternating residual the other
+        # cancels. Identical sources (the old t*0.5 both) made combo-vs-single
+        # a floating-point coin flip — promoted on macOS Accelerate, not on
+        # Ubuntu OpenBLAS.
+        d = 0.15 if i % 2 == 0 else -0.15
+        eeg = t if not combo_helps else (t * 0.5 + d)
+        eog = 0.5 if not combo_helps else (t * 0.5 - d)
         out.append(
             GradedPair(
                 observed_at=_T0 + timedelta(minutes=i),
