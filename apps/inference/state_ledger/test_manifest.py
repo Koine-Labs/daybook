@@ -12,9 +12,13 @@ def test_loads_real_manifest():
     assert len(m.commitments) == 16
     assert any(p.id == "multimodal_fusion" for p in m.pillars)
     assert m.expected_test_count > 0
+    # Structural only — judgment values (build_state/alignment) are the
+    # manifest's CONTENT and legitimately change; pinning them here would make
+    # every honest re-audit fail its own ledger tests.
     caps = {c.id: c for c in m.capabilities}
-    assert caps["l1_l6_arc"].build_state is BuildState.BUILT_AND_RUNS
-    assert caps["network_transport"].alignment is Alignment.DRIFTING
+    assert "l1_l6_arc" in caps and "network_transport" in caps
+    assert all(isinstance(c.build_state, BuildState) for c in m.capabilities)
+    assert all(isinstance(c.alignment, Alignment) for c in m.capabilities)
 
 
 def test_rejects_bad_build_state(tmp_path):

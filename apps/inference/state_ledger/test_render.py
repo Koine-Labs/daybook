@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from state_ledger import render
-from state_ledger.manifest import load_manifest
+from state_ledger.manifest import Alignment, BuildState, load_manifest
 
 
 def test_status_block_has_markers_and_caps():
@@ -38,5 +38,5 @@ def test_state_json_shape():
     assert {"pillars", "commitments", "capabilities", "workstreams",
             "expected_test_count"} <= set(data)
     cap = next(c for c in data["capabilities"] if c["id"] == "network_transport")
-    assert cap["build_state"] == "scaffold"
-    assert cap["alignment"] == "drifting"
+    assert cap["build_state"] in {s.value for s in BuildState}
+    assert cap["alignment"] in {a.value for a in Alignment}
