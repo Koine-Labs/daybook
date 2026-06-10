@@ -4,7 +4,7 @@
 
 ## Current state (generated — do not edit by hand)
 
-_Generated from `docs/state/`. 12 capabilities tracked; suite expects 651 tests._
+_Generated from `docs/state/`. 12 capabilities tracked; suite expects 653 tests._
 
 | Capability | Build state | Alignment | % | Serves |
 |---|---|---|---:|---|

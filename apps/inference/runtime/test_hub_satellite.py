@@ -232,3 +232,54 @@ def test_pi_satellite_entrypoint_resolves_imports():
                           capture_output=True, text=True, timeout=30)
     assert proc.returncode == 0
     assert "--sensors" in proc.stdout
+
+
+# ---------------------------------------------------------------------------
+# Hub wiring parity with waking_arc (#14 arbiter + #17 calibration, no sockets).
+# ---------------------------------------------------------------------------
+
+class _DummyLink:
+    def __init__(self, **kwargs):
+        pass
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+
+def test_build_hub_wires_arbiter_and_calibration(monkeypatch):
+    import db
+    from arbitration import get_calibration
+
+    monkeypatch.setattr(db, "DATABASE_URL", "postgresql://fake/db")
+    monkeypatch.setattr(hub, "HubLink", _DummyLink)
+    assembled: dict[str, object] = {}
+    arbiters: list[MessageBus] = []
+    monkeypatch.setattr(hub, "assemble_pipeline",
+                        lambda bus, **kw: assembled.update(kw))
+    monkeypatch.setattr(hub, "register_speaker", lambda bus, **kw: None)
+    monkeypatch.setattr(hub, "register_meta_arbiter",
+                        lambda bus: arbiters.append(bus) or object())
+
+    bus, _link = hub.build_hub(host="127.0.0.1", port=1, key=_KEY)
+
+    assert assembled["calibration_reader"] is get_calibration
+    assert arbiters == [bus]
+
+
+def test_build_hub_calibration_none_without_database_url(monkeypatch):
+    import db
+
+    monkeypatch.setattr(db, "DATABASE_URL", None)
+    monkeypatch.setattr(hub, "HubLink", _DummyLink)
+    assembled: dict[str, object] = {}
+    monkeypatch.setattr(hub, "assemble_pipeline",
+                        lambda bus, **kw: assembled.update(kw))
+    monkeypatch.setattr(hub, "register_speaker", lambda bus, **kw: None)
+    monkeypatch.setattr(hub, "register_meta_arbiter", lambda bus: object())
+
+    hub.build_hub(host="127.0.0.1", port=1, key=_KEY)
+
+    assert assembled["calibration_reader"] is None

@@ -39,9 +39,11 @@ from core.bus.bus import MessageBus
 from core.bus.network import HubLink, NetworkTransport
 from core.pipeline import assemble_pipeline
 from decision.policy import Policy
+from fusion.meta_arbiter import register as register_meta_arbiter
 from fusion.participant import AxisCombiner
 from output.renderer import Renderer
 from output.speaker import Speak, register_speaker
+from runtime.waking_arc import _calibration_reader
 
 ENV_HOST = "DAYBOOK_HUB_HOST"
 ENV_PORT = "DAYBOOK_HUB_PORT"
@@ -75,8 +77,13 @@ def build_hub(
         fusion_registry=fusion_registry,
         decision_policy=decision_policy,
         renderer=renderer,
+        calibration_reader=_calibration_reader(),
     )
     register_speaker(bus, speak=speak)
+    # Hub-side meta authority (#14) — same as waking_arc's. Inbound satellite
+    # packets still carry their capture-time stamp (WAKING-frozen until a meta
+    # downlink exists); the arbiter at least tracks the hub's own belief.
+    register_meta_arbiter(bus)
     return bus, link
 
 

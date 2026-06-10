@@ -3,6 +3,9 @@
 `IntentTaggedReading` is the modality + intent envelope (commitment #10) that
 every L1 capture source produces, before it rides the bus as a SignalPacket.
 Semantic-first (#11): only meaningful extractions, never raw bytes.
+Payloads must be wire-safe JSON: datetimes go in as ISO-8601 strings, never raw
+datetime objects — NetworkTransport's codec rejects them (WatchBusSink learned
+this the hard way; L2 extractors accept both shapes).
 """
 from __future__ import annotations
 

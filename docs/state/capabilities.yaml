@@ -1,4 +1,4 @@
-expected_test_count: 651
+expected_test_count: 653
 
 capabilities:
   - id: l1_l6_arc
@@ -95,7 +95,7 @@ capabilities:
     alignment: on_track
     percent_done: 45
     gaps:
-      - "Writers are optional kwargs not yet injected by production runtimes; label_outcomes grader is a read-skeleton; zero rows accrued"
+      - "Writers are optional kwargs not yet injected by production runtimes (assemble_pipeline has no writer seams yet); label_outcomes grader is a read-skeleton; zero rows accrued"
     evidence:
       modules: ["prediction.prediction_log", "decision.outcome_log"]
       markers: []
@@ -110,6 +110,7 @@ capabilities:
     percent_done: 40
     gaps:
       - "Never flipped on real sleep data; entry/exit thresholds default-tuned, not fitted; single-observation SLEEP exit is noise-sensitive"
+      - "Hub + waking_arc only: satellite sinks still stamp WAKING at capture (no meta downlink/re-stamp yet)"
     evidence:
       modules: ["fusion.meta_arbiter"]
       markers: []
@@ -123,7 +124,7 @@ capabilities:
     alignment: on_track
     percent_done: 30
     gaps:
-      - "Heuristic v1, no LLM distillation; not scheduled (no nightly job invokes it); trait drift still absent"
+      - "Heuristic v1, no LLM distillation; not scheduled (no nightly job invokes it); trait drift still absent; rows embedding-less (invisible to similarity retrieval until an embed pass lands)"
     evidence:
       modules: ["fusion.observers.day_summary"]
       markers: []
