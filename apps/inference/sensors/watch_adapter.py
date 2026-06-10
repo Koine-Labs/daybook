@@ -183,15 +183,23 @@ class WatchBusSink:
         user_id: str | None = None,
         i_model_id: str | None = None,
     ) -> MessageEnvelope:
-        """Build the features/biometric.py payload and emit it as a SignalPacket."""
+        """Build the features/biometric.py payload and emit it as a SignalPacket.
+
+        Datetimes are serialized to ISO-8601 strings at this seam — the canonical
+        wire shape features/biometric.py documents — so the payload JSON-encodes
+        on NetworkTransport exactly as it rides InProcessTransport.
+        """
         payload: dict[str, Any] = {
-            "epoch_start_at": epoch_start_at,
-            "readings": list(readings),
+            "epoch_start_at": _to_utc(epoch_start_at).isoformat(),
+            "readings": [
+                {**r, "recorded_at": _to_utc(r["recorded_at"]).isoformat()}
+                for r in readings
+            ],
         }
         if session_started_at is not None:
-            payload["session_started_at"] = session_started_at
+            payload["session_started_at"] = _to_utc(session_started_at).isoformat()
         if hr_mean_history is not None:
-            payload["hr_mean_history"] = list(hr_mean_history)
+            payload["hr_mean_history"] = [float(v) for v in hr_mean_history]
         reading = IntentTaggedReading(
             modality=Modality.BIOMETRIC.value,
             intent=Intent.CONTINUOUS.value,
