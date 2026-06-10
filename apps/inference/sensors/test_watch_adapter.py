@@ -8,6 +8,7 @@ full L1->L2->L4 REM arc with the real trained model (no DB, no network).
 """
 from __future__ import annotations
 
+import json
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,6 +20,7 @@ if str(INF_DIR) not in sys.path:
     sys.path.insert(0, str(INF_DIR))
 
 from core.bus.bus import TOPIC_FEATURE, TOPIC_PREDICTION, TOPIC_SIGNAL, MessageBus  # noqa: E402
+from core.protocol.decode import envelope_from_dict  # noqa: E402
 from core.protocol.enums import Intent, MetaContext, Modality  # noqa: E402
 from core.protocol.envelope import MessageEnvelope  # noqa: E402
 from core.protocol.payloads import FeatureSnapshot, Prediction, SignalPacket  # noqa: E402
@@ -365,3 +367,23 @@ def test_windowed_real_stream_drives_predictions_end_to_end_no_db():
         )
     assert len(preds) == len(windows) == 6
     assert all(p.payload.axis == "rem" for p in preds)
+
+
+def test_emit_window_payload_is_wire_safe():
+    """The exact frame NetworkTransport.send_remote builds must JSON round-trip.
+
+    The sink claims transport-agnosticism, so datetimes must leave it as the
+    ISO-8601 strings features/biometric.py documents as the canonical wire
+    shape — a raw datetime in the payload kills the satellite link's encoder.
+    """
+    bus = MessageBus()
+    sink = WatchBusSink(bus, meta_context=MetaContext.SLEEP)
+    window = synthesize_biometric_window(epoch_start_at=BASE, index=3)
+    env = sink.emit_window(**window)
+
+    frame = json.dumps({"topic": TOPIC_SIGNAL, "env": env.to_dict()})
+    decoded = envelope_from_dict(json.loads(frame)["env"])
+    payload = decoded.payload.payload
+    assert payload["epoch_start_at"] == BASE.isoformat()
+    assert payload["readings"], "window lost its readings on the wire"
+    assert all(isinstance(r["recorded_at"], str) for r in payload["readings"])

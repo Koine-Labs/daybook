@@ -1,82 +1,27 @@
-# Daybook Pi Daemon
+# Daybook Pi Satellite
 
-The bedside service that runs on the Raspberry Pi.
-
-Reads sensor packets from ESP32 modules, runs realtime sleep-stage classification (via `apps/inference/`), and fires wisp cues through the configured cue emitters.
-
-Multi-modal by design: pluggable sensor sources (HR/HRV/respiration from ESP32 + EXG Pill, future CAM, future mic) and pluggable cue emitters (stdout for testing, audio for bone-conduction, haptic for vibration motor).
-
-## How it fits
-
-```
-┌────────────────────────────────────┐
-│  ESP32 (sensors over USB serial)   │
-└───────────────┬────────────────────┘
-                │ JSON lines
-                ↓
-┌────────────────────────────────────┐
-│  apps/pi/daemon.py                 │
-│  ├─ SensorSource threads → queue   │
-│  ├─ DB writer thread (sensor_*)    │
-│  ├─ Predictor (30s cadence)        │
-│  │   └─ RealtimeClassifier         │
-│  │   └─ CueDecider                 │
-│  └─ CueEmitter on fire             │
-└────────────────────────────────────┘
-```
-
-See `apps/AI_PI_CONTRACT.md` for the API contract this daemon builds against.
-
-## Install (on the Pi)
-
-```bash
-# Use the inference venv — it has the heavy deps (xgboost, numpy, psycopg)
-cd /home/koine-labs/code/daybook/apps/inference
-uv venv --python 3.11
-source .venv/bin/activate
-uv pip install -e .
-
-# Add Pi-specific deps to the same venv
-cd ../pi
-uv pip install -e .
-```
-
-## Configure
-
-The daemon reads `apps/inference/.env.local` for `DATABASE_URL`. Other config is via CLI args or `apps/pi/config.toml` (optional, defaults work for v0).
+The Pi is a **sensor satellite**, not a second brain: it connects a
+`SatelliteLink` to the Mac hub over WebSocket and streams semantic
+`SignalPacket`s (eeg bandpower, audio context, visual scenes). The Mac-side
+L1-L6 pipeline owns fusion, prediction, decision, Regis rendering, and
+persistence. See `apps/AI_PI_CONTRACT.md` for the full contract + env vars.
 
 ## Run
 
-### v0 — mock sensors, stdout cues (no hardware required)
-
 ```bash
-cd apps/pi
-python -m daemon --sensors mock --cues stdout --duration-minutes 5
+# On the Mac (hub):
+cd apps/inference && DAYBOOK_HUB_KEY=<shared-key> python -m runtime.hub
+
+# On the Pi (satellite):
+DAYBOOK_HUB_URL=ws://<mac-ip>:8787 DAYBOOK_HUB_KEY=<shared-key> \
+    python apps/pi/satellite.py --sensors eeg
 ```
 
-You'll see:
-- Mock HR readings being generated every ~90 seconds
-- Every 30s, the predictor logs P(REM)
-- After ~60 min (or sooner with `--mock-fast-forward`), cues start to fire to stdout
+`--sensors` is comma-separated from `{eeg, audio, vision, watch}`.
 
-### v1 — ESP32 serial + stdout cues
+## Layout
 
-```bash
-python -m daemon --sensors esp32:/dev/ttyUSB0 --cues stdout
-```
-
-### Future — full bedside stack
-
-```bash
-python -m daemon \
-    --sensors esp32:/dev/ttyUSB0,esp32_cam:/dev/ttyUSB1 \
-    --cues audio,haptic:/dev/ttyUSB0
-```
-
-## Systemd (eventual)
-
-`/etc/systemd/system/daybook-pi.service` (template in `deploy/`). Not used in v0.
-
-## Open questions (from contract)
-
-See `apps/AI_PI_CONTRACT.md` § "Open questions for the hardware chat" — sensor transport, NTP, audio device, process model, bedside UI.
+- `satellite.py` — the entrypoint; thin delegate to `apps/inference/runtime/satellite.py`.
+- `daemon.py` — tombstone for the v0 bedside sleep daemon (removed 2026-06-10;
+  see git history). `config.py`, `session.py`, `cues/`, `sensors/`, `firmware/`,
+  and `tests/` are v0 leftovers kept for parts salvage only.
